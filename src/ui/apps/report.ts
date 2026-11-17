@@ -101,6 +101,7 @@ export const reportApp: AppDef = {
       clear(root);
       if (g.st.finished) {
         debrief(root, ctx);
+        root.scrollTop = 0;
         return;
       }
       root.appendChild(h('p.intro', null, t('report.intro')));

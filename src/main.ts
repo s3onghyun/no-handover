@@ -66,8 +66,10 @@ const ctx: UiCtx = {
   wm,
   toast(content, onClick) {
     const el = h('div.toast', { role: 'status', onclick: () => (onClick?.(), el.remove()) });
-    if (typeof content === 'string') el.innerHTML = content;
+    if (typeof content === 'string') el.textContent = content;
     else el.appendChild(content);
+    // collapse identical toasts (e.g. several pins in a row) into the newest one
+    for (const old of [...toasts.children]) if (old.textContent === el.textContent) old.remove();
     toasts.appendChild(el);
     setTimeout(() => el.remove(), 9000);
     while (toasts.childElementCount > 4) toasts.firstElementChild?.remove();
