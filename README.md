@@ -9,7 +9,7 @@
 ```sh
 npm install        # 한 번만. 이후 아래 명령은 모두 오프라인으로 동작
 npm run dev        # http://localhost:5173  개발 서버
-npm test           # 단위 테스트 64개 (node --test, TypeScript 타입 제거 내장 기능 사용)
+npm test           # 단위 테스트 74개 (node --test, TypeScript 타입 제거 내장 기능 사용)
 ```
 
 그 밖에:
@@ -18,14 +18,15 @@ npm test           # 단위 테스트 64개 (node --test, TypeScript 타입 제�
 |---|---|
 | `npm run build` | 타입 검사 + 정적 빌드 → `dist/` (약 0.3 MB, 어떤 정적 호스트나 폴더에서도 열림. `base: './'`) |
 | `npm run preview` | `dist/`를 로컬에서 서빙 |
-| `npm run e2e` | `dist/`를 띄우고 실제 브라우저(playwright-core + `~/.cache/ms-playwright`의 headless shell)로 오프닝 브리핑을 끝까지 보고(약 31초), 오늘 할 일 세 칸을 체크하고, 은재의 history 한 줄에서 출발해 사건을 푼다. 두 번째 창에서 Esc 건너뛰기, ❓ 다시 보기, 음소거 유지를 확인한다. `E2E_SHOTS=<폴더>`를 주면 스크린샷 6장 저장 |
+| `npm run e2e` | `dist/`를 띄우고 실제 브라우저(playwright-core + `~/.cache/ms-playwright`의 headless shell)로 오프닝 브리핑을 끝까지 보고(약 31초), 오늘 할 일 세 칸을 체크하고, 은재의 history 한 줄에서 출발해 사건을 푼다. 두 번째 창에서 Esc 건너뛰기, ❓ 다시 보기, 음소거 유지를 확인한다. `E2E_SHOTS=<폴더>`를 주면 스크린샷 6장 저장. 이어서 `scripts/e2e-audio.mjs`가 소리를 확인한다(아래 「소리」) |
+| `npm run audio:render -- <폴더>` | ZzFX 효과음을 WAV로 렌더해 저장: `ui-set.wav`(UI 소리 전부, 5초), `fallbacks.wav`(진동·타이핑 대체음). 게임을 열지 않고 들어 볼 때 |
 
 URL 옵션(플레이테스트 진행자용): `?fresh=1` 저장 지우고 처음부터, `?nudge=2` 동료 넛지 대기 시간(분, 기본 10), `?rate=16` 게임 시계 배속(기본 16 = 45분 플레이에 09:00→21:00), `?lang=en` UI 영어(사건 본문은 한국어), `?briefing=0` 오프닝 브리핑 없이 시작, `?bspeed=2` 브리핑 배속. 작업 표시줄의 📋 에서도 일부를 바꿀 수 있다.
 
 ## 들어 있는 것
 
 - **첫 3분**: 잠금 해제 → 약 31초짜리 오프닝 브리핑(월요일 09:00 잠금 화면, 박지훈의 음성 메시지 카드와 타이핑되는 자막, 오미래의 메일 알림, Esc·건너뛰기로 생략, ❓에서 다시 보기) → 터미널이 열린 채 `crontab -`가 깜빡이고 창이 숨 쉬듯 빛나는 바탕화면 + 오른쪽 위 "오늘 할 일" 포스트잇(체크 3개: 열린 터미널 확인, 선배가 마지막에 친 명령 찾기, 증거 3개 보드에 올리기). 셋 다 체크되면 포스트잇이 메모장으로 접혀 들어가고 펄스·힌트 줄이 멈춘다.
-- **소리**: `src/audio/` — 큐 id → 파일 목록(manifest) + AudioManager(WebAudio). 아직 음원 파일은 없다: 효과음은 오실레이터로 만든 작은 자리표시 소리(메시지 딩, 메일, 진동, 체크, 완료, 오류, 핀), 음악·환경음·목소리는 무음. 파일이 오면 `public/audio/<폴더>/<id>.ogg|.mp3`에 넣고 manifest의 `src`만 채우면 된다(큐 시트: 저장소 밖 `data/infra-mystery-game/audio-cues.md`). 첫 클릭에서 오디오가 열리고(브라우저 자동 재생 규칙), 작업 표시줄 🔊 음소거와 음량 막대는 localStorage에 남는다.
+- **소리**: UI 효과음 12개는 파일 없이 브라우저에서 ZzFX로 합성해 지금 바로 들린다. 음악·환경음·목소리는 메인이 파일을 보내 주면 폴더에 넣는 것만으로 나온다(코드 수정 없음). 첫 클릭(어디든)에서 소리가 켜진다. 자세한 것은 아래 「소리」.
 - **데스크톱 셸**: 잠금 화면 → 은재의 바탕화면(나무 의자 사진, 포스트잇 3장), 아이콘, 작업 표시줄, 알림 센터(🔔), 힌트(💡), 도움말(❓), 소리(🔊), 플레이테스트(📋), 게임 시계와 21:00 마감.
 - **앱**: 터미널(탭 14개 중 5개 살아 있음), 메신저(은재 PC 세션 + 내 계정, 채널·DM·삭제된 메시지 표시·보내지 않은 메시지), 메일(내 메일 + 은재 메일, 임시보관함 초안 11개 중 2개 열림), 도윤 메모장, 증거 보드, 원인 보고서/해설, 대시보드 스냅샷(ASCII).
 - **시뮬레이션 셸** (`src/engine/shell.ts`): 호스트 4대(pay-api-01, bastion, pay-cfg, review-web)의 가상 파일시스템. 실제 문법과 출력 형식으로 약 40개 명령: `ls cd pwd cat less head tail grep wc sort uniq find history journalctl crontab -l git log/show/branch/status df free ulimit ss last sudo man help systemctl show/status/cat ps pgrep curl ping ssh exit getent id whoami hostname date uptime echo clear`. 파이프, `; && ||`, 따옴표, `$(...)`, `$VAR`, `~`, 글롭, `2>/dev/null`, `.bashrc` 별칭(`밤`, `fds`, `왜`…), `!!`, Tab 자동완성, ↑/↓. 오타는 "혹시 'crontab' 인가요?"로, 쓰기·편집·재시작은 "조사 모드(읽기 전용)"라는 세계관 안의 설명으로 막는다. `sudo`는 읽기 명령만 허용하고 허용 여부와 상관없이 `/var/log/auth.log`에 남는다.
@@ -40,12 +41,12 @@ URL 옵션(플레이테스트 진행자용): `?fresh=1` 저장 지우고 처음�
 ```
 src/engine/   types.ts(사건 스키마) build.ts(월드 생성) vfs.ts parser.ts shell.ts manpages.ts
               hints.ts(사다리) objectives.ts(오늘 할 일) scoring.ts game.ts(DOM 없는 오케스트레이터: 단서, 트리거, 저장, 로그)
-src/audio/    manifest.ts(큐 id → 파일) audio.ts(AudioManager, 자리표시 소리)
+src/audio/    manifest.ts(큐 id → 파일·ZzFX 파라미터) audio.ts(AudioManager) unlock.ts(첫 제스처 잠금 해제) vendor/zzfx.ts(MIT)
 src/cases/    friday-1802.ts  ← 사건 하나 = 데이터 파일 하나
 src/ui/       wm.ts(창 관리자) dom.ts style.css briefing.ts(오프닝) objectives.ts(오늘 할 일 포스트잇) apps/*.ts
 src/i18n.ts   UI 문자열 표 (ko 먼저, en 같은 키)
 tests/        node:test 단위 테스트 + 데이터로 푸는 시나리오
-scripts/e2e.mjs  실제 브라우저 e2e
+scripts/e2e.mjs  실제 브라우저 e2e   scripts/e2e-audio.mjs  소리 e2e   scripts/audio-render.ts  WAV 렌더
 public/characters/  캐릭터 아트 (아래 참고)
 ```
 
@@ -58,6 +59,30 @@ public/characters/  캐릭터 아트 (아래 참고)
 - 알려진 차이(당분간 그대로): 서진의 이어폰이 양쪽 다 끼워져 있고 휴대폰 화면이 위를 향한다.
 - 이미지 경로는 사건 데이터의 `people.<id>.avatar / avatarSmall / portrait`에 있다. 파일이 없으면 이니셜 원으로 대체된다.
 
+## 소리
+
+`src/audio/`. 큐 id(21개)는 저장소 밖 `data/infra-mystery-game/audio-cues.md`의 큐 시트와 같다.
+
+**큐마다 재생 순서**: ① 파일(`.ogg` 먼저, 없거나 못 읽으면 `.mp3`) → ② ZzFX 합성(`manifest.ts`의 `zzfx` 배열이 있을 때) → ③ 무음. 파일이 없는 것은 정상이다(404나 개발 서버의 HTML 응답은 "없음"으로 처리).
+
+**파일을 넣는 곳** (이름 = 큐 id, 코드 수정 없이 다음 빌드부터 재생):
+
+| 폴더 | 파일 |
+|---|---|
+| `public/audio/music/` | `amb.office`, `music.briefing`, `music.reveal`, `music.tension` |
+| `public/audio/voice/` | `voice.briefing-jihun`, `voice.nudge-idle-1` … `voice.nudge-idle-4` |
+| `public/audio/sfx/` | `sfx.ring`, `sfx.typing` (CC0 파일이 오면 ZzFX 대체음을 덮어씀), 그 밖의 `sfx.*`도 같은 이름이면 ZzFX보다 먼저 쓰인다 |
+
+예: `public/audio/music/amb.office.ogg`와 `public/audio/music/amb.office.mp3`. 하나만 있어도 된다. 다른 경로를 쓰려면 그 큐에 `src: [...]`를 적는다.
+
+**ZzFX 효과음** (파일 0, [ZzFX](https://github.com/KilledByAPixel/ZzFX) 1.4.0 MIT를 `src/audio/vendor/zzfx.ts`에 옮겨 넣음): `sfx.ding` `sfx.mail` `sfx.error` `sfx.tick` `sfx.done` `sfx.pin` `sfx.pulse` `sfx.key` `sfx.window-open` `sfx.window-close`, 그리고 파일이 올 때까지 `sfx.ring`(진동 두 번) `sfx.typing`(1.6초 루프). 한 가족으로 맞췄다: 사인 기반, 2–6 ms 어택, 짧은 감쇠, 저역 통과 필터. 최대 음량 100 %에서 피크 −18…−12 dBFS(`sfx.key`는 −24, `sfx.typing`은 −22로 더 작게). 소리를 바꾸려면 `manifest.ts`의 숫자 배열만 고친다. 배열은 [ZzFX 디자이너](https://killedbyapixel.github.io/ZzFX/)에 그대로 붙여 넣고 다시 꺼낼 수 있다. `hits`는 같은 소리를 여러 번(시각, 음량, 반음) 울린다. 범위는 `tests/zzfx.test.ts`가 지킨다.
+
+**자동 재생 규칙**: 브라우저는 사용자 제스처 전에는 소리를 막는다. 페이지 어디든 첫 `pointerdown`/`keydown`/`touchend`에서 AudioContext를 만들고 켠다(잠금 해제 버튼만이 아니다). 그 전에 요청된 루프(환경음)와 10초 안의 음악·목소리는 켜지는 즉시 재생되고, UI 효과음은 버린다. Safari가 다시 멈추면(백그라운드, 전화) 탭이 다시 보일 때와 다음 클릭에서 되살린다. 음소거 상태여도 잠금은 풀린다. 아직 켜지지 않았으면 화면 아래에 "아무 곳이나 클릭하면 소리가 켜집니다"가 보인다. 켜진 시각은 플레이 로그에 `audio-unlock`(`ms` 페이지 로드 후, `via` 이벤트, `muted`)으로 남는다. 작업 표시줄 🔊 음소거와 음량 막대는 localStorage에 남는다.
+
+**들어 보기**: `npm run audio:render -- /tmp/nh` 후 `/tmp/nh/ui-set.wav`. 또는 게임에서 브라우저 콘솔에 `__audio.play('sfx.done')`.
+
+**확인**: `npm run e2e`의 두 번째 단계(`scripts/e2e-audio.mjs`)가 `dist/`의 임시 복사본에 시험용 톤 두 개(`amb.office.ogg`, `voice.briefing-jihun.mp3`)를 넣고 띄운 뒤, 데스크톱 Chrome의 자동 재생 규칙을 걸고 잠금 화면 빈 곳을 클릭해 AudioContext가 `running`인지, `sfx.ding`이 실제 출력(AnalyserNode)에 나오는지, 넣은 파일이 코드 수정 없이 재생되는지, 음소거 상태에서도 잠금이 풀리는지 본다. 임시 복사본은 끝나면 지운다.
+
 ## 의존성과 라이선스
 
 런타임 의존성은 없다(빌드 결과물은 순수 HTML/CSS/JS). 개발 의존성:
@@ -68,6 +93,12 @@ public/characters/  캐릭터 아트 (아래 참고)
 | typescript | ~5.8.3 | Apache-2.0 | 타입 검사 |
 | @types/node | ^22 | MIT | 테스트·스크립트 타입 |
 | playwright-core | 1.64.1 (고정) | Apache-2.0 | e2e 전용, 브라우저는 내려받지 않고 로컬 캐시 사용 |
+
+벤더링한 코드(소스를 저장소에 복사, npm 의존성 아님):
+
+| 코드 | 버전 | 라이선스 | 위치 | 용도 |
+|---|---|---|---|---|
+| ZzFX (Frank Force) | 1.4.0 | MIT, Copyright (c) 2019 Frank Force. 고지는 파일 머리에 그대로 둠 | `src/audio/vendor/zzfx.ts` | UI 효과음 합성 |
 
 전이 의존성: esbuild, rollup, postcss, nanoid, fdir, picomatch, tinyglobby, undici-types(MIT), picocolors(ISC), source-map-js(BSD-3-Clause). vitest는 설치 시점의 버전에 미해결 보안 권고가 있어 빼고, Node 22 내장 `node --test`와 타입 제거 기능으로 대신했다.
 
