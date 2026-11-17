@@ -6,7 +6,9 @@
 // wiki outage to Doyun as a "look only" exercise; Eunjae goes into a handover meeting until 10:30
 // and leaves their PC open on a read-only investigation session. Eunjae never speaks live
 // (characters.md §8-3): only the mail sent before the meeting, ~/README.txt, and `#` lines in
-// ~/.bash_history. Live voices are Seojin (nudges, reply) and Jihoon (lunch, wrong-answer nudge).
+// ~/.bash_history. Live voices are Seojin (briefing, idle nudges, reply) and Jihoon, who walks the
+// player along the rail (the next command at each step, one redirect per step when off track).
+// The first command is pre-typed and succeeds: `history` (web-escape analysis §9 #1, #7).
 //
 // One cause: the wiki's thumbnail worker retries a broken PDF with no delay and writes the whole
 // traceback to /var/log/wiki/wiki.log every time. That file has no logrotate rule; overnight it
@@ -336,6 +338,8 @@ export const caseZeroWiki: CaseFile = {
     { at: '2026-11-10T09:21:03', emits: [{ kind: 'message', channel: 'pc-dm-seojin', from: 'eunjae', text: '그럼요. 다음 주부터 도윤님 자리인걸요. 조사 세션으로 열어 둘게요. 읽기 전용이라 아무것도 안 망가져요 :)' }] },
     { at: '2026-11-10T09:21:20', emits: [{ kind: 'message', channel: 'pc-dm-seojin', from: 'seojin', text: '고마워요.' }] },
     { at: '2026-11-10T09:25:41', emits: [{ kind: 'message', channel: 'me-dm-seojin', from: 'seojin', text: '오른쪽 위 할 일부터. 막히면 저한테.' }] },
+    { at: '2026-11-10T09:27:10', emits: [{ kind: 'message', channel: 'me-dm-jihoon', from: 'jihoon', text: '도윤님!! 서진님 바쁘셔서 제가 옆에서 봐 드릴게요 ㅋㅋ 저도 위키 써야 돼서요 🙏' }] },
+    { at: '2026-11-10T09:27:18', emits: [{ kind: 'message', channel: 'me-dm-jihoon', from: 'jihoon', text: '터미널에 history 쳐져 있죠? Enter만 누르면 돼요~' }] },
   ],
 
   generators: [],
@@ -381,10 +385,20 @@ export const caseZeroWiki: CaseFile = {
     { id: 'ot', title: '11/02 (월) 입사 OT', lines: ['온콜 = 밤에 전화 받는 사람(?)', 'fd = 에프디(?) → 회사 이름 아님'] },
   ],
 
-  stickies: [
-    { text: '도윤님 —\n막히면 history 🌱', x: 74, y: 62, color: '#C9E4B4' },
-    { text: '조사 세션 (읽기 전용)\n명령 목록은 터미널에서 help', x: 74, y: 80, color: '#E8E6E1' },
-  ],
+  stickies: [{ text: '도윤님 —\n막히면 history 🌱', x: 74, y: 70, color: '#C9E4B4' }],
+
+  // three icons at first (terminal, messenger, mail); the rest appear as the checklist progresses
+  desktop: {
+    icons: [
+      { app: 'terminal' },
+      { app: 'messenger' },
+      { app: 'mail' },
+      { app: 'notes', after: 'df' },
+      { app: 'board', after: 'tail' },
+      { app: 'dashboard', after: 'service' },
+      { app: 'report', after: 'pins' },
+    ],
+  },
 
   notifications: [
     { id: 'n-alert', at: '2026-11-10T08:49', app: '메신저', title: '알림봇 · #인프라', text: '[P3] wiki.nuricloud.example 응답 없음 (HTTP 502)' },
@@ -393,12 +407,11 @@ export const caseZeroWiki: CaseFile = {
 
   terminalTabs: [
     {
-      label: 'wiki-01', host: W, cwd: '/home/eunjae', prefill: 'ls',
+      label: 'wiki-01', host: W, cwd: '/home/eunjae', prefill: 'history',
       scrollback: [
         'Nuri wiki-01 (Ubuntu 22.04 LTS) — 사내 위키',
         '조사 모드 (읽기 전용, 연습용) — 명령 목록: help',
-        'eunjae@wiki-01:~$ # 도윤님, 여기서 시작해요. Enter 를 누르면 ls 가 실행돼요.',
-        'eunjae@wiki-01:~$ # 막히면 history 🌱',
+        'eunjae@wiki-01:~$ # 도윤님, 여기서 시작해요. Enter 를 누르면 제가 장애 때 친 순서가 나와요 🌱',
       ],
     },
   ],
@@ -477,7 +490,7 @@ export const caseZeroWiki: CaseFile = {
 
   // ------------------------------------------------------------------ hints: rung 1 is in the machine; rung 2 Seojin (mentor) after 5 min; rung 3 cheap
   hints: {
-    idleMinutes: 5,
+    idleMinutes: 2,
     idle: [
       { id: 'idle-1', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c0_df'], text: '음. 디스크부터 봐요. df -h. Use% 100%인 줄.' },
       { id: 'idle-2', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c0_du', 'c0_loop'], text: '/var가 찼으면 /var 안에서 제일 큰 것. du -sh /var/log/* 그다음 tail.' },
@@ -497,14 +510,6 @@ export const caseZeroWiki: CaseFile = {
 
   // ------------------------------------------------------------------ live scene
   triggers: [
-    {
-      id: 'seojin-df',
-      when: { clue: 'c0_df' },
-      actions: [
-        { message: { channel: 'me-dm-seojin', from: 'doyun', delaySec: 3, text: '서진님, wiki-01 /var 가 100%예요!! (/ 는 28%)' } },
-        { message: { channel: 'me-dm-seojin', from: 'seojin', delaySec: 14, text: '좋아요. 그럼 /var 안에서 누가 썼는지.' } },
-      ],
-    },
     {
       id: 'jihoon-pdf',
       when: { clue: 'c0_start' },
@@ -570,13 +575,11 @@ export const caseZeroWiki: CaseFile = {
       lockDate: '11월 10일 화요일',
       caller: 'seojin',
       kind: 'voice',
+      // ≤ 20 s in total for the tutorial (web-escape analysis §9-1 #5)
       lines: [
-        { text: '도윤님. 강서진이에요.', pauseMs: 1100 },
-        { text: '위키가 안 열려요. 502. 08:47부터.', pauseMs: 1100 },
-        { text: '은재님 자리 PC에 조사 세션 열어 뒀어요. 읽기 전용.', pauseMs: 1100 },
-        { text: '원인만 찾아요. 고치는 건 제가 해요.', pauseMs: 1100 },
-        { text: '은재님은 10:30까지 회의. 막히면 은재님 history.', pauseMs: 1200 },
-        { text: '할 일은 오른쪽 위에 붙여 뒀어요. 순서대로.', pauseMs: 1400 },
+        { text: '도윤님. 위키 502예요.', pauseMs: 800 },
+        { text: '은재님 PC에 세션 열어 뒀어요. 원인만 찾아요.', pauseMs: 800 },
+        { text: '고치는 건 제가. 할 일은 오른쪽 위.', pauseMs: 1000 },
       ],
       mail: 'brief',
       mailPreview: '…막히면 history 보세요. 제가 장애 볼 때 치는 순서가 거기 그대로 있어요.',
@@ -584,19 +587,44 @@ export const caseZeroWiki: CaseFile = {
     objectives: {
       title: '오늘 할 일 (Case 0)',
       items: [
-        { id: 'ls', text: '터미널에서 ls 쳐 보기', hint: '반짝이는 터미널을 누르고 Enter — 입력창에 ls 가 이미 들어 있어요.', any: [{ cmd: '^\\s*(ls|ll)\\b', host: W }], pulse: 'terminal' },
-        { id: 'df', text: '디스크 확인: df -h', hint: 'df -h 를 치고 Use% 열을 보세요. 100% 인 줄이 있나요? 어디(Mounted on)인가요?', any: [{ clue: 'c0_df' }] },
-        { id: 'tail', text: '가장 큰 로그의 끝 읽기: du, tail', hint: 'du -sh /var/log/* 로 가장 큰 것을 찾고, tail -n 20 <그 안의 파일> 로 끝을 보세요.', any: [{ clue: 'c0_loop' }] },
-        { id: 'service', text: '서비스 상태 보기: systemctl status wiki', hint: 'Active 줄과 맨 아래 몇 줄을 보세요. 멈춘 이유가 거기 있어요.', any: [{ output: 'Active: failed \\(Result: exit-code\\)', host: W }] },
-        { id: 'pins', text: '증거 2개 보드에 올리기 📌', hint: '증거가 되는 줄에 마우스를 올리면 오른쪽에 📌 가 보여요. df -h 의 100% 줄부터.', any: [{ pins: 2 }] },
+        {
+          id: 'history', text: 'Enter — 은재님 history 보기', hint: '반짝이는 터미널을 누르고 Enter. history 가 이미 쳐져 있어요. 노란 줄이 단서예요.',
+          any: [{ cmd: '^\\s*history\\b', host: W }], pulse: 'terminal', next: 'Enter (history)',
+        },
+        {
+          id: 'df', text: '디스크 확인: df -h', hint: 'df -h 를 치고 Use% 열을 보세요. 100% 인 줄이 있나요? 어디(Mounted on)인가요?', any: [{ clue: 'c0_df' }],
+          say: '오 은재 선배 순서 나왔다 ㅋㅋ 그대로 따라 해 봐요~ df -h !!', next: 'df -h',
+        },
+        {
+          id: 'tail', text: '가장 큰 로그의 끝 읽기: du, tail', hint: 'du -sh /var/log/* 로 가장 큰 것을 찾고, tail -n 20 <그 안의 파일> 로 끝을 보세요.', any: [{ clue: 'c0_loop' }],
+          say: '/var 100% ㅋㅋㅋ 꽉 찼네요. 누가 채웠는지: du -sh /var/log/* 그다음 tail -n 20 /var/log/wiki/wiki.log 👍', next: 'du -sh /var/log/*',
+        },
+        {
+          id: 'service', text: '서비스 상태 보기: systemctl status wiki', hint: 'Active 줄과 맨 아래 몇 줄을 보세요. 멈춘 이유가 거기 있어요.', any: [{ output: 'Active: failed \\(Result: exit-code\\)', host: W }],
+          say: '같은 줄이 계속 반복… 😂 위키는 살아 있나? systemctl status wiki 🙏', next: 'systemctl status wiki',
+        },
+        {
+          id: 'pins', text: '증거 2개 보드에 올리기 📌', hint: '증거가 되는 줄에 마우스를 올리면 오른쪽에 📌 가 보여요. df -h 의 100% 줄부터.', any: [{ pins: 2 }],
+          say: '찾았다!! 노란 줄 옆 📌 눌러서 증거 두 개만 보드에 올려 봐요~',
+        },
       ],
       after: ['다음: 📝 원인 보고서 — 원인과 경위 두 칸', '언제부터였는지: journalctl -u wiki', '막히면: history, ~/README.txt'],
     },
   },
 
+  // ------------------------------------------------------------------ the rail (Jihoon walks along)
+  rail: {
+    from: 'jihoon',
+    channel: 'me-dm-jihoon',
+    offRail: '그건 나중에요 ㅋㅋ {next} 부터!!',
+    quiet: ['help', 'man', 'hint', 'clear', 'pwd'],
+    done: '완벽 ㅋㅋ 시각까지 보려면 journalctl -u wiki 그다음 📝 보고서!! 저는 점심 메뉴 고르러 갑니다 🍕',
+    highlightClues: true,
+  },
+
   // ------------------------------------------------------------------ tutorial shell
   shell: {
-    allow: ['ls', 'cd', 'pwd', 'cat', 'head', 'tail', 'grep', 'df', 'du', 'history', 'systemctl', 'journalctl', 'man', 'help', 'clear'],
+    allow: ['ls', 'cd', 'pwd', 'cat', 'head', 'tail', 'grep', 'df', 'du', 'history', 'systemctl', 'journalctl', 'man', 'help', 'hint', 'clear'],
     refuse: "튜토리얼 세션: '{cmd}' 은(는) 오늘 연습 범위 밖이에요 (읽기 전용 조사 세션).\n  쓸 수 있는 명령은 help 로 볼 수 있어요.",
     help: [
       '누리클라우드 조사 모드 셸 — 연습용 읽기 전용 세션 (남은재 계정, wiki-01)',
@@ -606,7 +634,7 @@ export const caseZeroWiki: CaseFile = {
       '  디스크      df -h      du -sh <경로>',
       '  기록        history    journalctl -u <서비스>',
       '  서비스      systemctl status <서비스>',
-      '  기타        man <명령>  help  clear',
+      '  기타        man <명령>  help  hint (💡 힌트 패널)  clear',
       '바꾸는 명령(rm, vim, systemctl restart …)은 조사 모드에서 막혀 있어요.',
       '팁: man du 처럼 예시를 볼 수 있어요. ↑/↓ 이전 명령, Tab 자동완성, 줄 옆 📌 로 증거 보드에 핀.',
     ],

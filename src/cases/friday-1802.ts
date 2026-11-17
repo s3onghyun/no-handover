@@ -955,7 +955,7 @@ done`,
 
   // ------------------------------------------------------------------ hints (rung 2 voices: characters.md §5(i) "2단계 넛지")
   hints: {
-    idleMinutes: 10,
+    idleMinutes: 6,
     idle: [
       { id: 'idle-1', from: 'jihoon', channel: 'me-dm-jihoon', unlessClues: ['c_cron'], text: '도윤님 ㅋㅋ 아직 보고서 중?? 은재 선배는 뭐든 자기 홈에 넣어 두는 스타일이었어요~ history 같은 거 한번 봐요!! 🙏' },
       { id: 'idle-2', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c_cron'], text: '로그 봤어요. 03:15부터. 그 시각에 뭐가 시작됐는지 보세요.' },
