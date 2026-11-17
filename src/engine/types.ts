@@ -13,8 +13,12 @@ export interface Person {
   /** Short avatar text (one syllable) and colour used by the messenger. */
   initial: string;
   color: string;
-  /** Swappable avatar image (path relative to public/, e.g. 'avatars/doyun.png'). Falls back to `initial`. */
+  /** Swappable art (paths relative to public/). Missing images fall back to `initial`. */
   avatar?: string;
+  /** Small avatar for message bubbles (64px). */
+  avatarSmall?: string;
+  /** Full-body portrait (debrief cast cards). */
+  portrait?: string;
   /** Unix login on the case hosts, if any. */
   login?: string;
 }
@@ -305,6 +309,8 @@ export interface DebriefDef {
   cards: CommandCard[];
   closingMail: string;
   doyunLine: string;
+  /** Character cards on the debrief: person id + one line on what they hid and why. */
+  cast?: { who: string; text: string }[];
 }
 
 export interface CaseFile {

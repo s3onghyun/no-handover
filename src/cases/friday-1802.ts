@@ -129,11 +129,11 @@ export const caseFriday1802: CaseFile = {
   owner: 'eunjae',
 
   people: {
-    doyun: { name: '한도윤', role: '인프라팀 · 입사 3주차 (나)', initial: '도', color: '#2F3E5C', login: 'dyhan', avatar: '' },
-    seojin: { name: '강서진', role: '시니어 SRE · 휴가 중', initial: '서', color: '#3A3D42', login: 'sjkang', avatar: '' },
-    jihoon: { name: '박지훈', role: '결제개발팀 리드', initial: '지', color: '#F08A3C', login: 'jhpark', avatar: '' },
-    eunjae: { name: '남은재', role: '수석 엔지니어 · 11/13 퇴사', initial: '은', color: '#6B7350', login: 'eunjae', avatar: '' },
-    mirae: { name: '오미래', role: 'CTO', initial: '미', color: '#7A4B6B', login: 'mroh', avatar: '' },
+    doyun: { name: '한도윤', role: '인프라팀 · 입사 3주차 (나)', initial: '도', color: '#2F3E5C', login: 'dyhan', avatar: 'characters/doyun-avatar.webp', avatarSmall: 'characters/doyun-avatar-64.webp', portrait: 'characters/doyun-full.webp' },
+    seojin: { name: '강서진', role: '시니어 SRE · 휴가 중', initial: '서', color: '#3A3D42', login: 'sjkang', avatar: 'characters/seojin-avatar.webp', avatarSmall: 'characters/seojin-avatar-64.webp', portrait: 'characters/seojin-full.webp' },
+    jihoon: { name: '박지훈', role: '결제개발팀 리드', initial: '지', color: '#F08A3C', login: 'jhpark', avatar: 'characters/jihun-avatar.webp', avatarSmall: 'characters/jihun-avatar-64.webp', portrait: 'characters/jihun-full.webp' },
+    eunjae: { name: '남은재', role: '수석 엔지니어 · 11/13 퇴사', initial: '은', color: '#6B7350', login: 'eunjae', avatar: 'characters/eunjae-avatar.webp', avatarSmall: 'characters/eunjae-avatar-64.webp', portrait: 'characters/eunjae-full.webp' },
+    mirae: { name: '오미래', role: 'CTO', initial: '미', color: '#7A4B6B', login: 'mroh' },
     bot: { name: '알림봇', role: '모니터링', initial: '⚠', color: '#9A9A9A' },
     hr: { name: '인사팀', role: '', initial: '인', color: '#8A8580' },
     security: { name: '보안팀', role: '', initial: '보', color: '#5B6770' },
@@ -1053,5 +1053,11 @@ done`,
     ],
     closingMail: 'closing',
     doyunLine: "보고서에 '누가'는 안 쓰기로 했어요. 대신 '무엇이 그걸 가능하게 했나'를 다섯 줄 썼어요.",
+    cast: [
+      { who: 'doyun', text: '송별회 밤의 부탁을 메모만 해 두고 잊었다. 답은 처음부터 자기 메모장에 있었다. 3주차가 "밤에 도는 것"에서 crontab을 떠올릴 수는 없다.' },
+      { who: 'seojin', text: '되돌리려고 접속했다가 좁은 창에서 승인을 눌렀다. 휴가 중 접속 약속을 어긴 것과 함께 메시지를 지웠다. "그 cron은 몰랐어요. …제가 쓴 런북에."' },
+      { who: 'jihoon', text: '데모 압박 속에서 몇 달째 git-admins로 리뷰를 건너뛰었다. 악의가 아니라 부끄러움과 겁으로 메시지를 지웠다. "확인했습니다." "죄송합니다."' },
+      { who: 'eunjae', text: '아무것도 숨기지 않았다. 말하려던 것을 끝내 보내지 못했을 뿐이다. 17:48의 초안은 아직 임시보관함에 있다.' },
+    ],
   },
 };

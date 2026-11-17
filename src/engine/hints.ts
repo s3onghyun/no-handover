@@ -16,7 +16,7 @@ export interface LadderState {
 }
 
 export class HintLadder {
-  readonly idleMs: number;
+  idleMs: number;
   readonly def: HintsDef;
   state: LadderState;
 
