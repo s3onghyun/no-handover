@@ -170,6 +170,11 @@ try {
   const amb = await meter(page, null, 400);
   assert.ok(amb.peak > 0.01, `ambience loop audible (${amb.peak})`);
   step(`desktop: amb.office loops the dropped test tone (peak ${(20 * Math.log10(amb.peak)).toFixed(1)} dBFS)`);
+  await page.locator('.tin input').fill('pwd');
+  await page.locator('.tin input').press('Enter');
+  await page.waitForFunction(() => window.__audio.history.some((h) => h.id === 'sfx.key'), null, { timeout: 2000 });
+  assert.deepEqual(await page.evaluate(() => window.__audio.history.filter((h) => h.id === 'sfx.key')), [{ id: 'sfx.key', status: 'zzfx' }]);
+  step('Enter in the terminal plays the quiet sfx.key tick');
   await page.close();
 
   // ---- a muted player: the first key press still unlocks; one-shots stay silent until unmuted

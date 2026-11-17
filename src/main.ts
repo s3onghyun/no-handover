@@ -324,6 +324,10 @@ game.on('note', (id) => {
   wm.open('notes', id);
 });
 game.on('friction', () => void audio.play('sfx.error'));
+// a very quiet key tick when a command runs (Enter in the terminal prompt; not while an IME composes)
+desktop.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.isComposing && (e.target as HTMLElement).closest?.('.tin')) void audio.play('sfx.key');
+});
 game.on('pinned', () => void audio.play('sfx.pin'));
 game.on('accuse', (sc) => {
   // the debrief opens once the case is finished (solved, or out of submissions): reveal theme
