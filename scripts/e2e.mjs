@@ -15,7 +15,8 @@
 import { preview } from 'vite';
 import { chromium } from 'playwright-core';
 import assert from 'node:assert/strict';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const shots = process.env.E2E_SHOTS;
@@ -83,9 +84,50 @@ try {
   await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /df -h !!/.test(m.text)), null, { timeout: 5000 });
   step('the pre-typed `history` succeeds on Enter, clue lines are yellow, 지훈 names the next command (df -h)');
 
+  // ---- ask a colleague: the "뭐부터 봐요?" quick reply in the messenger, answered after "입력 중…"
+  await page.locator('.icon[data-app="messenger"]').dblclick();
+  const msgr = page.locator('.window[data-app="messenger"]');
+  await msgr.locator('.side button.item', { hasText: '박지훈' }).click();
+  assert.match(await msgr.locator('.composer .ask-to').innerText(), /박지훈님이 답해요/);
+  await msgr.locator('.ask-chip', { hasText: '뭐부터 봐요?' }).click();
+  await msgr.locator('.msg .text', { hasText: '뭐부터 봐요?' }).waitFor();
+  await msgr.locator('.typing-row.on .typing', { hasText: '박지훈님이 입력 중' }).waitFor({ timeout: 3000 });
+  await shot('polish-02-messenger-typing-ask.png');
+  await msgr.locator('.msg .text', { hasText: '지금은 df -h 요!!' }).waitFor({ timeout: 4000 });
+  assert.equal(await msgr.locator('.typing-row.on').count(), 0, 'typing indicator gone once the line lands');
+  const askLog = await page.evaluate(() => window.__game.st.log.filter((e) => e.type === 'ask'));
+  assert.equal(askLog.length, 1);
+  assert.equal(askLog[0].from, 'jihoon');
+  await msgr.locator('.titlebar button.close').click();
+  step('messenger: the "뭐부터 봐요?" quick reply → "박지훈님이 입력 중…" → 지훈 names the current command (free, logged)');
+
   await run('ls');
   await page.waitForFunction(() => window.__game.st.live.some((m) => m.text === '그건 나중에요 ㅋㅋ df -h 부터!!'), null, { timeout: 5000 });
   step('an off-rail command gets one redirect in 지훈\'s voice');
+
+  // ---- `hint` opens the 💡 panel: 요약 → 방향 → 정답 (asked twice) for the current checklist item
+  await run('hint');
+  const hp = page.locator('.popover.hints');
+  await hp.waitFor();
+  const objSec = hp.locator('.hp-sec[data-key="obj:df"]');
+  assert.equal(await objSec.locator('[data-rung="direction"] button').isDisabled(), true, '방향 waits for 요약');
+  await objSec.locator('[data-rung="summary"] button').click();
+  await objSec.locator('[data-rung="summary"] li', { hasText: '은재님 history 보기' }).waitFor();
+  await objSec.locator('[data-rung="direction"] button').click();
+  await objSec.locator('.hp-dir', { hasText: 'Use% 열' }).waitFor();
+  await objSec.locator('.hp-arm').click();
+  await objSec.locator('.hp-confirm').waitFor();
+  await objSec.locator('.hp-yes').click();
+  await objSec.locator('.hp-answer', { hasText: 'df -h' }).waitFor();
+  const causeSec = hp.locator('.hp-sec[data-key="cause"]');
+  await causeSec.locator('[data-rung="summary"] button').click();
+  await causeSec.locator('[data-rung="direction"] button').click();
+  await causeSec.locator('.hp-dir', { hasText: 'Mounted on' }).waitFor();
+  assert.match(await hp.locator('.hp-record').innerText(), /힌트 3회/);
+  await shot('polish-01-hint-panel.png');
+  await page.mouse.click(700, 300);
+  await hp.waitFor({ state: 'detached' });
+  step('`hint` → 💡 panel: 요약 (free) → 방향 → 정답 behind a second confirm, for the checklist item and the cause slot; record says 힌트 3회');
 
   await run('df -h');
   await todoItem('df').and(page.locator('.done')).waitFor();
@@ -133,6 +175,21 @@ try {
   await page.evaluate(() => document.querySelector('.window[data-app="report"]').classList.add('max'));
   await page.waitForTimeout(400);
   await shot('case0-03-debrief.png');
+  assert.match(await rep0.locator('.record .rec-line').innerText(), /^힌트 3회 · (\d+분 )?\d+초 · 명령 \d+개$/);
+  assert.equal(await rep0.locator('.badge-nohint').count(), 0, 'no badge after hints');
+  assert.equal(await rep0.locator('.scorebox').innerText().then((x) => /−\d/.test(x)), false, 'no hint penalty outside senior mode');
+  await rep0.locator('.cardbox').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(200);
+  const dlDir = mkdtempSync(join(tmpdir(), 'nh-card-'));
+  const [dl] = await Promise.all([page.waitForEvent('download'), rep0.locator('.card-dl').click()]);
+  assert.equal(dl.suggestedFilename(), 'no-handover-case0-wiki.png');
+  const cardPath = join(shots ?? dlDir, shots ? 'result-card-case0.png' : 'card.png');
+  await dl.saveAs(cardPath);
+  const png = readFileSync(cardPath);
+  assert.equal(png.subarray(1, 4).toString(), 'PNG');
+  assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1200, 630]);
+  rmSync(dlDir, { recursive: true, force: true });
+  step('debrief: record "힌트 3회 · 소요 · 명령 수", no penalty; 결과 카드 downloads as a 1200×630 PNG');
   assert.match(await rep0.locator('.nextcase').innerText(), /다음 사건 → Case 3 「금요일 18:02의 작은 변경」/);
   step(`a wrong report gets 서진's short reply and 지훈's nudge; the second solves Case 0 (${total0.replace(/\s+/g, ' ')})`);
 
@@ -228,6 +285,9 @@ try {
   await pinLine(/02:10:07 .*approve/);
   step('sequence and responsibility evidence pinned from four hosts');
 
+  await page.waitForFunction(() => window.__game.st.live.some((m) => /설마/.test(m.text) && m.deletedAt !== undefined), null, { timeout: 15000 });
+  step("지훈's '설마' line arrives in the messenger and is deleted a few seconds later");
+
   await page.locator('.tray-btn[aria-label="알림 센터"]').click();
   await page.locator('.notif', { hasText: '급한 거 아니면' }).click();
   await page.mouse.click(700, 450);
@@ -257,6 +317,16 @@ try {
   await page.evaluate(() => document.querySelector('.window[data-app="report"]').classList.add('max'));
   await page.waitForTimeout(400);
   await shot('04-debrief.png');
+  assert.match(await report.locator('.record .rec-line').innerText(), /^힌트 0회 · /);
+  await report.locator('.badge-nohint', { hasText: '힌트 0회' }).waitFor();
+  await report.locator('.cardbox').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  await shot('polish-03-result-card.png');
+  if (shots) {
+    const [dl3] = await Promise.all([page.waitForEvent('download'), report.locator('.card-dl').click()]);
+    await dl3.saveAs(join(shots, 'result-card-case3.png'));
+  }
+  step('Case 3 debrief: 힌트 0회 badge and the result card');
 
   const log = await page.evaluate(() => window.__game.playtestReport());
   assert.equal(log.summary.solved, true);

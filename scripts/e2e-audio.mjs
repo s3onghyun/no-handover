@@ -162,7 +162,8 @@ try {
     else if (id.startsWith('sfx.')) assert.equal(s, 'zzfx', id);
     else assert.equal(s, 'silent', id);
   }
-  step('resolution: dropped amb.office.ogg and voice.briefing-jihun.mp3 (mp3 fallback) → file; 12 sfx → zzfx; the other 7 → silence');
+  const nSfx = Object.keys(sources).filter((id) => id.startsWith('sfx.')).length;
+  step(`resolution: dropped amb.office.ogg and voice.briefing-jihun.mp3 (mp3 fallback) → file; ${nSfx} sfx → zzfx; the other ${Object.keys(sources).length - nSfx - 2} → silence`);
 
   // ---- start the game: the ambience loop plays the dropped file with no code change
   await page.locator('#boot button.primary').click();
@@ -178,7 +179,30 @@ try {
   await page.waitForFunction(() => window.__audio.history.some((h) => h.id === 'sfx.key'), null, { timeout: 2000 });
   assert.deepEqual(await page.evaluate(() => window.__audio.history.filter((h) => h.id === 'sfx.key')), [{ id: 'sfx.key', status: 'zzfx' }]);
   step('Enter in the terminal plays the quiet sfx.key tick');
+  await page.locator('.tin input').press('l');
+  await page.waitForTimeout(80); // clicks closer than 25 ms are merged
+  await page.locator('.tin input').press('s');
+  await page.waitForFunction(() => window.__audio.history.filter((h) => /^sfx\.key-\d$/.test(h.id)).length >= 2, null, { timeout: 2000 });
+  assert.ok((await page.evaluate(() => window.__audio.history.filter((h) => /^sfx\.key-\d$/.test(h.id)).map((h) => h.status))).every((s) => s === 'zzfx'));
+  step('typing in the terminal plays the key-click variants (sfx.key-1..3, panned)');
+  assert.equal(await page.evaluate(() => window.__audio.isLooping('music.tension')), false, 'no music loop by default');
   await page.close();
+
+  // ---- amb.office without its file (hidden in this temp copy only): the synthesised room tone loops
+  rmSync(join(site, 'audio/music/amb.office.ogg'), { force: true });
+  const p3 = await newPage();
+  await p3.goto(`${url}?fresh=1&briefing=0`);
+  await p3.mouse.click(30, 30);
+  await p3.waitForFunction(() => window.__audio.state() === 'running', null, { timeout: 5000 });
+  assert.equal(await p3.evaluate(() => window.__audio.source('amb.office')), 'synth');
+  await p3.locator('#boot button.primary').click();
+  await p3.waitForFunction(() => window.__audio.isLooping('amb.office') && window.__audio.history.some((h) => h.id === 'amb.office'), null, { timeout: 5000 });
+  assert.deepEqual(await p3.evaluate(() => window.__audio.history.find((h) => h.id === 'amb.office')), { id: 'amb.office', status: 'synth' });
+  await p3.waitForTimeout(1500); // the reveal's pulse and window sounds die away
+  const tone3 = await meter(p3, null, 600);
+  assert.ok(tone3.peak > 0.0005 && tone3.peak < 0.2, `room tone audible but quiet (${tone3.peak})`);
+  step(`no amb.office file: the procedural room tone loops instead (peak ${(20 * Math.log10(tone3.peak)).toFixed(1)} dBFS at the master)`);
+  await p3.close();
 
   // ---- a muted player: the first key press still unlocks; one-shots stay silent until unmuted
   const p2 = await newPage();
