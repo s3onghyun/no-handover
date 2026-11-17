@@ -387,6 +387,7 @@ game.on('accuse', (sc) => {
   // the debrief opens once the case is finished (solved, or out of submissions): reveal theme
   if (game.st.finished) {
     markSolved();
+    skipBtn?.remove(); // solved: no tutorial left to skip
     audio.stopLoop('music.tension', 1500);
     void audio.play('music.reveal', { gain: (sc as ScoreResult).allCorrect ? 1 : 0.8 });
   } else audio.loop('music.tension'); // a wrong report raises the stakes

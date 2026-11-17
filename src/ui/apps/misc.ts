@@ -54,6 +54,7 @@ export const playtestApp: AppDef = {
           objectives: { id: string; t: number | null }[];
           objectivesFoldedAt: number | null;
         };
+        campaign: { known: boolean; playedTutorialFirst?: boolean | null; solvedBefore?: string[]; skippedBefore?: string[] };
       };
       const fm = s.firstMinutes;
       const fac = (key: string, label: string, options?: string[]) => {
@@ -97,6 +98,7 @@ export const playtestApp: AppDef = {
           h('tr', null, h('th', null, '제출'), h('td', null, String(s.submissions.length))),
           h('tr', null, h('th', null, '원인 칸 정답 시각'), h('td', null, mmss(s.causeCorrectAt))),
           h('tr', null, h('th', null, '앱별 시간(초)'), h('td', null, Object.entries(s.appSeconds).map(([k, v]) => `${k} ${v}`).join(' · ') || '—')),
+          h('tr', null, h('th', null, 'Case 0(튜토리얼)을 먼저 했나 (자동)'), h('td', null, !s.campaign.known ? '—' : s.campaign.playedTutorialFirst === null ? '이 사건이 튜토리얼' : s.campaign.playedTutorialFirst ? '예 — 풀고 왔음' : (s.campaign.skippedBefore ?? []).length ? '아니오 — 건너뜀' : '아니오')),
         ),
         h('h4', { style: 'margin:14px 0 4px' }, t('pt.first')),
         h(
@@ -116,6 +118,8 @@ export const playtestApp: AppDef = {
           fac('checkboxes', '체크박스 3개를 이해했나', ['이해함', '일부만', '못 봄 / 이해 못 함']),
           fac('audioPref', '소리 선호', ['켜 두고 싶음', '끄고 싶음', '상관없음']),
           fac('whatToDo', '"처음에 뭘 해야 한다고 생각했어요?" (답 그대로)'),
+          fac('playedCase0', 'Case 0(튜토리얼)을 먼저 했나', ['끝까지 함', '하다가 건너뜀', '처음부터 건너뜀', '안 함 (?case= 로 바로)']),
+          fac('case0Stall', 'Case 0: 어디서 멈췄나 (명령·단계)'),
           fac('firstNote', '첫 3분 메모'),
         ),
         h(

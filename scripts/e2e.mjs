@@ -1,7 +1,10 @@
 // Browser end-to-end run: builds nothing, serves dist/ with `vite preview`, drives the real UI
-// with playwright-core: watches the whole opening briefing, ticks the three "오늘 할 일" boxes,
-// solves case 1 starting from the departed senior's history line, then checks the skip path,
-// the help-menu replay and the persisted mute toggle in a second page.
+// with playwright-core: first launch opens Case 0 (tutorial) — its short briefing, the pre-typed
+// `history`, Jihoon's rail, the five checklist items and icon unlocks, a wrong then a right
+// report — and the debrief's "다음 사건" button opens Case 3 「금요일 18:02」. There it watches
+// the whole opening briefing, ticks the three "오늘 할 일" boxes, solves the case from the
+// departed senior's history line, then checks the skip path, the help-menu replay and the
+// persisted mute toggle in a second page.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
@@ -50,10 +53,100 @@ const todoItem = (id) => page.locator(`.todo li[data-id="${id}"]`);
 try {
   console.log(`e2e against ${url}`);
   await page.goto(`${url}?fresh=1`);
+
+  // ================================================================ Case 0 (tutorial)
+  await page.locator('#boot .caselabel', { hasText: 'Case 0 · 튜토리얼' }).waitFor();
+  assert.match(await page.locator('#boot .skip').innerText(), /튜토리얼 건너뛰기 → Case 3 「금요일 18:02의 작은 변경」/);
+  await shot('case0-01-boot.png');
+  await page.locator('#boot .linkbtn.cases').click();
+  assert.equal(await page.locator('#cases li').count(), 5);
+  assert.equal(await page.locator('#cases li[data-id="friday-1802"].case-locked').count(), 1, 'Case 3 locked until Case 0 is solved');
+  assert.equal(await page.locator('#cases li.case-soon').count(), 3, 'Cases 1, 2, 4 are titled placeholders');
+  await page.locator('#cases button.primary').click();
+  step('first launch: Case 0 · 튜토리얼 lock screen with a skip link; case list shows 5 rungs, Case 3 locked');
+
+  await page.locator('#boot button.primary').click();
+  let t0 = Date.now();
+  await page.locator('#briefing').waitFor();
+  await page.locator('#briefing').waitFor({ state: 'detached', timeout: 30000 });
+  let secs = (Date.now() - t0) / 1000;
+  assert.ok(secs <= 22, `tutorial briefing took ${secs}s`);
+  step(`tutorial briefing (서진, voice message) ends on its own after ${secs.toFixed(1)} s`);
+
+  assert.equal(await page.locator('.icons .icon').count(), 3, 'three icons at first');
+  assert.equal(await page.locator('.tin input').inputValue(), 'history');
+  assert.equal(await page.locator('.todo li').count(), 5);
+  await page.locator('.window[data-app="terminal"] .tout').click();
+  await page.locator('.tin input').press('Enter');
+  await todoItem('history').and(page.locator('.done')).waitFor();
+  await page.locator('.tline.clue', { hasText: '디스크 먼저' }).waitFor();
+  await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /df -h !!/.test(m.text)), null, { timeout: 5000 });
+  step('the pre-typed `history` succeeds on Enter, clue lines are yellow, 지훈 names the next command (df -h)');
+
+  await run('ls');
+  await page.waitForFunction(() => window.__game.st.live.some((m) => m.text === '그건 나중에요 ㅋㅋ df -h 부터!!'), null, { timeout: 5000 });
+  step('an off-rail command gets one redirect in 지훈\'s voice');
+
+  await run('df -h');
+  await todoItem('df').and(page.locator('.done')).waitFor();
+  await page.locator('.icon[data-app="notes"]').waitFor();
+  await pinLine(/100%\s+\/var/);
+  await page.waitForTimeout(300);
+  await shot('case0-02-terminal-df.png');
+  step('df -h: /var 100% (highlighted, pinned); the notebook icon appears');
+
+  await run('du -sh /var/log/*');
+  await page.locator('.tline.clue', { hasText: /^11G\s+\/var\/log\/wiki(?!\/)/ }).waitFor();
+  await run('tail -n 20 /var/log/wiki/wiki.log');
+  await todoItem('tail').and(page.locator('.done')).waitFor();
+  await page.locator('.icon[data-app="board"]').waitFor();
+  await run('systemctl status wiki');
+  await todoItem('service').and(page.locator('.done')).waitFor();
+  const notesWin = page.locator('.window[data-app="notes"] .titlebar button.close');
+  await page.waitForTimeout(400);
+  if (await notesWin.count()) await notesWin.click(); // the memo scene opened the notebook
+  await pinLine(/wiki-server\[51875\]: OSError: \[Errno 28\] No space left on device/);
+  await todoItem('pins').and(page.locator('.done')).waitFor();
+  await page.locator('.todo').waitFor({ state: 'detached', timeout: 6000 });
+  await page.locator('.icon[data-app="report"]').waitFor();
+  step('du → tail → systemctl status → 2 pins: all five boxes tick, the sticky folds, every icon is unlocked');
+
+  await run('journalctl -u wiki --since "2026-11-09 21:00" --until "2026-11-09 21:20"');
+  await pinLine(/21:14:03 .*thumbnail/);
+  await page.evaluate(() => {
+    for (const w of document.querySelectorAll('.window')) w.classList.add('min');
+  });
+  await page.locator('.icon[data-app="report"]').dblclick();
+  const rep0 = page.locator('.window[data-app="report"]');
+  assert.equal(await rep0.locator('section.slot').count(), 2, 'two report slots');
+  assert.match(await rep0.locator('.submitbar .primary-btn').innerText(), /제출 무제한/);
+  await rep0.locator('input[name="slot-cause"]').nth(1).check(); // blames 지훈's PDF
+  await rep0.locator('input[name="slot-sequence"]').nth(0).check();
+  await rep0.locator('.submitbar .primary-btn').click();
+  await rep0.locator('.reply', { hasText: '강서진의 회신' }).waitFor();
+  await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /PDF 하나로/.test(m.text)), null, { timeout: 5000 });
+  await rep0.locator('input[name="slot-cause"]').nth(0).check();
+  await rep0.locator('.submitbar .primary-btn').click();
+  await rep0.locator('.debrief h2').waitFor();
+  const total0 = await rep0.locator('.scorebox .s').nth(1).innerText();
+  assert.match(total0, /\/ 230/);
+  await page.evaluate(() => document.querySelector('.window[data-app="report"]').classList.add('max'));
+  await page.waitForTimeout(400);
+  await shot('case0-03-debrief.png');
+  assert.match(await rep0.locator('.nextcase').innerText(), /다음 사건 → Case 3 「금요일 18:02의 작은 변경」/);
+  step(`a wrong report gets 서진's short reply and 지훈's nudge; the second solves Case 0 (${total0.replace(/\s+/g, ' ')})`);
+
+  await rep0.locator('.nextcase button').click();
+  await page.locator('#boot .caselabel', { hasText: 'Case 3' }).waitFor();
+  assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('no-handover:campaign'))).solved, ['case0-wiki']);
+  assert.equal(await page.locator('#boot .skip').count(), 0);
+  step('debrief → 다음 사건: Case 3 lock screen; Case 0 recorded as solved');
+
+  // ================================================================ Case 3 「금요일 18:02」
   await page.locator('#boot button.primary').click();
 
   // ---- opening briefing, full path (real time, ~30 s)
-  const t0 = Date.now();
+  t0 = Date.now();
   await page.locator('#briefing').waitFor();
   assert.equal(await page.locator('.window[data-app="terminal"]').count(), 0, 'desktop stays hidden during the briefing');
   await page.locator('#briefing[data-step="voice"] .brief-line').nth(1).waitFor({ timeout: 20000 });
@@ -63,7 +156,7 @@ try {
   await page.locator('#briefing[data-step="mail"] .brief-mail', { hasText: '[긴급] 토요일 결제 장애 원인 보고' }).waitFor({ timeout: 40000 });
   step('briefing: CTO mail notification slides in');
   await page.locator('#briefing').waitFor({ state: 'detached', timeout: 30000 });
-  const secs = (Date.now() - t0) / 1000;
+  secs = (Date.now() - t0) / 1000;
   assert.ok(secs >= 28 && secs <= 62, `briefing took ${secs}s`);
   step(`briefing ends on its own after ${secs.toFixed(1)} s`);
 
@@ -169,13 +262,14 @@ try {
   assert.equal(log.summary.solved, true);
   assert.equal(log.summary.rung3.length, 0);
   assert.ok(log.summary.rung1At !== null);
-  step('playtest log: solved, rung 1 reached, no explicit hints');
+  assert.equal(log.summary.campaign.playedTutorialFirst, true);
+  step('playtest log: solved, rung 1 reached, no explicit hints, Case 0 played first');
 
   // ---- second page: skip path, help-menu replay, persisted mute
   const p2 = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
   p2.on('pageerror', (e) => errors.push(String(e)));
   p2.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-  await p2.goto(`${url}?fresh=1`);
+  await p2.goto(`${url}?fresh=1&case=friday-1802`);
   await p2.locator('#boot button.primary').click();
   await p2.locator('#briefing[data-step="ring"]').waitFor({ timeout: 10000 });
   await p2.keyboard.press('Escape');

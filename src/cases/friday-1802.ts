@@ -1,4 +1,4 @@
-// Case 1 — 「금요일 18:02의 작은 변경」
+// Case 3 (was 1화) — 「금요일 18:02의 작은 변경」. Ladder position: docs/campaign-ladder.md.
 // Source of truth: data/infra-mystery-game/characters.md §1 (timeline), §5(i) (traces), §8-2 (E01–E10).
 // All people, hosts, companies and logs are fictional. Read docs/case-format.md before editing.
 //
