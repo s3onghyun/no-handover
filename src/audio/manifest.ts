@@ -6,7 +6,11 @@
 //      music (amb.*, music.*), voice (voice.*) or sfx (sfx.*). Dropping a file there is enough;
 //      no code change. ogg is tried first, mp3 is the fallback for browsers without ogg.
 //   2. `zzfx`: a sound synthesised in the browser with ZzFX (src/audio/vendor/zzfx.ts, MIT).
-//   3. silence.
+//   3. `synth`: a longer procedural sound (amb.office → src/audio/roomtone.ts, seamless loop).
+//   4. silence.
+//
+// Music never loops by default (stings are one-shots, web-escape analysis §9 item 8): a `music.*`
+// cue marked `loop` only loops with `?music=loop`; ambience is the only bed under the desktop.
 //
 // The `zzfx` arrays are the 21 ZzFX parameters (see the table in vendor/zzfx.ts) and paste
 // straight into / out of the ZzFX designer at https://killedbyapixel.github.io/ZzFX/ .
@@ -36,6 +40,8 @@ export interface CueDef {
   hits?: ZzfxHit[];
   /** Loop length in seconds for a looping zzfx cue (hits past the end wrap around). */
   loopLen?: number;
+  /** Procedural stand-in when there is no file and no zzfx (see roomtone.ts). */
+  synth?: 'roomtone';
   /** Where it plays (for the cue sheet and for humans). */
   where: string;
 }
@@ -43,10 +49,10 @@ export interface CueDef {
 // prettier-ignore
 export const MANIFEST = {
   // ---------------------------------------------------------------- music / ambience (files only)
-  'amb.office': { class: 'ambience', loop: true, gain: 0.7, where: '데스크톱 내내 (브리핑 뒤 시작)' },
+  'amb.office': { class: 'ambience', loop: true, gain: 0.7, synth: 'roomtone', where: '데스크톱 내내 (브리핑 뒤 시작). 파일이 없으면 합성 방 톤 (갈색 잡음 + 저역 필터 + 느린 패드)' },
   'music.briefing': { class: 'music', where: '오프닝 브리핑 시작 (잠금 화면 → 음성 메시지)' },
   'music.reveal': { class: 'music', where: '보고서 정답 → 해설 화면' },
-  'music.tension': { class: 'music', loop: true, gain: 0.5, where: '게임 시계 18:00 이후 또는 첫 오답 뒤 (선택)' },
+  'music.tension': { class: 'music', loop: true, gain: 0.5, where: '게임 시계 18:00 이후 또는 첫 오답 뒤 (선택, ?music=loop 일 때만 루프)' },
   // ---------------------------------------------------------------- voice (files only)
   'voice.briefing-jihun': { class: 'voice', where: '오프닝: 지훈의 음성 메시지 (자막과 함께)' },
   'voice.nudge-idle-1': { class: 'voice', where: '2단 넛지 idle-1 (지훈) 도착 시 (선택)' },
@@ -70,6 +76,13 @@ export const MANIFEST = {
     where: '터미널: 없는 명령·차단·문법 오류' },
   'sfx.key': { class: 'ui', zzfx: [0.09, .05, 1800, .001, 0, .02, 0, 1, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, -6000],
     where: '터미널: Enter로 명령 실행 (아주 작게)' },
+  // terminal typing: three key-click variants, one picked at random per key press, slightly panned
+  'sfx.key-1': { class: 'ui', zzfx: [0.07, .05, 2100, .001, 0, .012, 0, 1, 0, 0, 0, 0, 0, 1.6, 0, 0, 0, 1, 0, 0, -6500],
+    where: '터미널: 글자 입력 (키 클릭 1)' },
+  'sfx.key-2': { class: 'ui', zzfx: [0.07, .05, 1500, .001, 0, .016, 0, 1, 0, 0, 0, 0, 0, 2.2, 0, 0, 0, 1, 0, 0, -5200],
+    where: '터미널: 글자 입력 (키 클릭 2, 조금 낮게)' },
+  'sfx.key-3': { class: 'ui', zzfx: [0.06, .05, 2600, .001, 0, .010, 0, 1, 0, 0, 0, 0, 0, 1.2, 0, 0, 0, 1, 0, 0, -7000],
+    where: '터미널: 글자 입력 (키 클릭 3, 가볍게)' },
   'sfx.tick': { class: 'ui', zzfx: [0.25, .03, 1568, .002, .01, .07, 0, 1, 8, 0, 0, 0, 0, 0, 0, 0, 0, .6, .02, 0, -6000], hits: [[0, 1, 0], [.05, .6, 12]],
     where: '오늘 할 일 체크 하나' },
   'sfx.done': { class: 'ui', zzfx: [0.16, .02, 784, .004, .02, .32, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, .6, .05, 0, -5000], hits: [[0, 1, 0], [.075, .9, 4], [.15, .85, 7], [.225, .9, 12]],

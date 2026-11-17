@@ -2,7 +2,9 @@
 //
 //   source -> cue gain -> class gain (music/ambience/voice/sfx/ui) -> master (volume, mute) -> out
 //
-// - Resolution per cue (see manifest.ts): file (ogg, then mp3) -> ZzFX synth -> silence.
+// - Resolution per cue (see manifest.ts): file (ogg, then mp3) -> ZzFX -> procedural synth -> silence.
+// - Music never loops unless `musicLoops` is on (`?music=loop`): stings are one-shots even when a
+//   file is marked loop; ambience is the only loop under the desktop.
 //   Missing files are normal: a 404, an HTML fallback page or an undecodable file just moves on.
 //   Nothing throws.
 // - Browser autoplay rules: the AudioContext is created inside unlock(), which src/audio/unlock.ts
@@ -16,6 +18,7 @@
 
 import { CLASS_GAIN, MANIFEST, cueFiles, type CueDef, type VolumeClass } from './manifest.ts';
 import { zzfxBuildSamples } from './vendor/zzfx.ts';
+import { renderRoomTone } from './roomtone.ts';
 
 // Minimal structural types so tests can pass a fake context. A real AudioContext is cast to this.
 export interface ParamLike {
@@ -42,6 +45,9 @@ export interface SourceLike extends NodeLike {
   start(when?: number): void;
   stop(when?: number): void;
 }
+export interface PannerLike extends NodeLike {
+  pan: ParamLike;
+}
 export interface CtxLike {
   currentTime: number;
   sampleRate: number;
@@ -53,6 +59,8 @@ export interface CtxLike {
   createBufferSource(): SourceLike;
   createBuffer(channels: number, length: number, sampleRate: number): PcmBufferLike;
   decodeAudioData(bytes: ArrayBuffer): Promise<BufferLike>;
+  /** Optional: stereo placement for key clicks (missing = centred). */
+  createStereoPanner?(): PannerLike;
 }
 
 export interface StorageLike {
@@ -72,9 +80,11 @@ export interface AudioDeps {
   now?: () => number;
   /** Random source for the zzfx pitch variation (default Math.random). */
   random?: () => number;
+  /** Let `music.*` cues loop (default false: music is one-shot stings only). */
+  musicLoops?: boolean;
 }
 
-export type PlayStatus = 'file' | 'zzfx' | 'silent' | 'muted' | 'locked' | 'pending' | 'unavailable' | 'unknown';
+export type PlayStatus = 'file' | 'zzfx' | 'synth' | 'silent' | 'muted' | 'locked' | 'pending' | 'unavailable' | 'unknown' | 'off';
 
 export interface PlayHandle {
   status: PlayStatus;
@@ -180,6 +190,7 @@ export class AudioManager {
       base: deps.base ?? './',
       now: deps.now ?? (() => (globalThis.performance ?? Date).now()),
       random: deps.random ?? Math.random,
+      musicLoops: deps.musicLoops ?? false,
     };
     try {
       const p = JSON.parse(deps.storage?.get(PREFS_KEY) ?? 'null') as { muted?: boolean; volume?: number } | null;
@@ -346,16 +357,21 @@ export class AudioManager {
     return !!(await this.load(id));
   }
 
-  /** How a cue would sound right now: 'file', 'zzfx' or 'silent' (needs unlock for files). */
-  async source(id: string): Promise<'file' | 'zzfx' | 'silent'> {
+  /** How a cue would sound right now: 'file', 'zzfx', 'synth' or 'silent' (needs unlock for files). */
+  async source(id: string): Promise<'file' | 'zzfx' | 'synth' | 'silent'> {
     const cue = this.manifest[id];
     if (!cue) return 'silent';
     if (await this.load(id)) return 'file';
-    return cue.zzfx ? 'zzfx' : 'silent';
+    return cue.zzfx ? 'zzfx' : cue.synth ? 'synth' : 'silent';
   }
 
-  /** Play a one-shot cue. Resolves with what actually happened; never rejects. */
-  async play(id: string, opts: { gain?: number } = {}): Promise<PlayHandle> {
+  /** May this cue loop? Music only with `musicLoops` (stings stay one-shots). */
+  private mayLoop(cue: CueDef): boolean {
+    return cue.class !== 'music' || this.deps.musicLoops;
+  }
+
+  /** Play a one-shot cue. Resolves with what actually happened; never rejects. `pan` -1..1 (needs a stereo panner). */
+  async play(id: string, opts: { gain?: number; pan?: number } = {}): Promise<PlayHandle> {
     const cue = this.manifest[id];
     const done = (h: PlayHandle) => (this.history.push({ id, status: h.status }), h);
     if (!cue) return done({ ...NOOP, status: 'unknown' });
@@ -374,11 +390,16 @@ export class AudioManager {
     }
     if (!this.ctx) return done(NOOP);
     if (this.muted && !cue.loop) return done({ ...NOOP, status: 'muted' });
-    return done(await this.start(id, cue, false, opts.gain));
+    return done(await this.start(id, cue, false, opts.gain, opts.pan));
   }
 
-  /** Start a looping cue (idempotent). Before unlock it is remembered and starts on unlock. */
+  /** Start a looping cue (idempotent). Before unlock it is remembered and starts on unlock. Music: see mayLoop. */
   loop(id: string): void {
+    const cue = this.manifest[id];
+    if (cue && !this.mayLoop(cue)) {
+      if (!this.history.some((h) => h.id === id && h.status === 'off')) this.history.push({ id, status: 'off' });
+      return;
+    }
     this.wantedLoops.add(id);
     if (this.unlocked) void this.startLoop(id);
   }
@@ -409,7 +430,7 @@ export class AudioManager {
     this.history.push({ id, status: h.status });
   }
 
-  /** The cue's zzfx sound as a buffer for this context (rendered once, cached). */
+  /** The cue's zzfx (or procedural) sound as a buffer for this context (rendered once, cached). */
   private synth(id: string, cue: CueDef): BufferLike | null {
     if (this.synths.has(id)) return this.synths.get(id)!;
     const ctx = this.ctx!;
@@ -419,23 +440,35 @@ export class AudioManager {
       const b = ctx.createBuffer(1, samples.length, ctx.sampleRate);
       b.getChannelData(0).set(samples);
       buf = b;
+    } else if (cue.synth === 'roomtone') {
+      const [l, r] = renderRoomTone(ctx.sampleRate);
+      const b = ctx.createBuffer(2, l.length, ctx.sampleRate);
+      b.getChannelData(0).set(l);
+      b.getChannelData(1).set(r);
+      buf = b;
     }
     this.synths.set(id, buf);
     return buf;
   }
 
-  private async start(id: string, cue: CueDef, loop: boolean, extraGain = 1): Promise<PlayHandle> {
+  private async start(id: string, cue: CueDef, loop: boolean, extraGain = 1, pan = 0): Promise<PlayHandle> {
     const ctx = this.ctx!;
     const file = await this.load(id);
     const buf = file ?? this.synth(id, cue);
     if (!buf) return { status: 'silent', duration: 0, stop: () => {} };
     const out = ctx.createGain();
     out.gain.value = (cue.gain ?? 1) * extraGain;
-    out.connect(this.classes.get(cue.class) ?? this.master);
+    const dest = this.classes.get(cue.class) ?? this.master;
+    if (pan && ctx.createStereoPanner) {
+      const p = ctx.createStereoPanner();
+      p.pan.value = Math.max(-1, Math.min(1, pan));
+      out.connect(p);
+      p.connect(dest);
+    } else out.connect(dest);
     const src = ctx.createBufferSource();
     src.buffer = buf;
-    src.loop = loop || !!cue.loop;
-    if (!file) {
+    src.loop = (loop || !!cue.loop) && this.mayLoop(cue);
+    if (!file && cue.zzfx) {
       // ZzFX's own per-play randomness, applied as pitch (like upstream ZZFXSound)
       const r = cue.zzfx?.[1] ?? 0.05;
       src.playbackRate.value = 1 + r * (this.deps.random() * 2 - 1);
@@ -444,7 +477,7 @@ export class AudioManager {
     src.start();
     let stopped = false;
     return {
-      status: file ? 'file' : 'zzfx',
+      status: file ? 'file' : cue.zzfx ? 'zzfx' : 'synth',
       duration: buf.duration,
       stop: (fadeMs = 300) => {
         if (stopped) return;

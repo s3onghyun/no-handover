@@ -264,7 +264,7 @@ test('audio: music/voice asked for just before the unlock play on unlock; UI cue
 
 test('audio manifest: ids, classes, files and fallbacks', () => {
   const ids = Object.keys(MANIFEST);
-  assert.equal(ids.length, 21);
+  assert.equal(ids.length, 24);
   for (const [id, c] of Object.entries(MANIFEST) as [string, CueDef][]) {
     assert.match(id, /^(amb|music|voice|sfx)\.[a-z0-9-]+$/, id);
     assert.ok(['music', 'ambience', 'voice', 'sfx', 'ui'].includes(c.class), id);
