@@ -18,7 +18,7 @@ npm test           # 단위 테스트 64개 (node --test, TypeScript 타입 제�
 |---|---|
 | `npm run build` | 타입 검사 + 정적 빌드 → `dist/` (약 0.3 MB, 어떤 정적 호스트나 폴더에서도 열림. `base: './'`) |
 | `npm run preview` | `dist/`를 로컬에서 서빙 |
-| `npm run e2e` | `dist/`를 띄우고 실제 브라우저(playwright-core + `~/.cache/ms-playwright`의 headless shell)로 오프닝 브리핑을 끝까지 보고(약 31초), 오늘 할 일 세 칸을 체크하고, 은재의 history 한 줄에서 출발해 사건을 푼다. 두 번째 창에서 Esc 건너뛰기, ❓ 다시 보기, 음소거 유지를 확인한다. `E2E_SHOTS=<폴더>`를 주면 스크린샷 7장 저장 |
+| `npm run e2e` | `dist/`를 띄우고 실제 브라우저(playwright-core + `~/.cache/ms-playwright`의 headless shell)로 오프닝 브리핑을 끝까지 보고(약 31초), 오늘 할 일 세 칸을 체크하고, 은재의 history 한 줄에서 출발해 사건을 푼다. 두 번째 창에서 Esc 건너뛰기, ❓ 다시 보기, 음소거 유지를 확인한다. `E2E_SHOTS=<폴더>`를 주면 스크린샷 6장 저장 |
 
 URL 옵션(플레이테스트 진행자용): `?fresh=1` 저장 지우고 처음부터, `?nudge=2` 동료 넛지 대기 시간(분, 기본 10), `?rate=16` 게임 시계 배속(기본 16 = 45분 플레이에 09:00→21:00), `?lang=en` UI 영어(사건 본문은 한국어), `?briefing=0` 오프닝 브리핑 없이 시작, `?bspeed=2` 브리핑 배속. 작업 표시줄의 📋 에서도 일부를 바꿀 수 있다.
 
