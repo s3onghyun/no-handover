@@ -34,6 +34,7 @@ clues: 플레이어가 본 출력/연 항목을 정규식으로 감지 → 진�
 | `terminalTabs` | 처음 열려 있는 터미널 탭: `host`, `cwd`, `prefill`(입력창에 남은 글, 1화는 `crontab -`), `scrollback`(잠긴 화면에 남은 줄) |
 | `dashboard` | 대시보드 스냅샷(ASCII 줄 배열) |
 | `clues`, `accusation`, `hints`, `triggers`, `debrief` | 7~11절 |
+| `opening` | 첫 3분: 브리핑 장면과 "오늘 할 일" 체크리스트 (12절, 선택) |
 
 ## 3. hosts
 
@@ -135,11 +136,57 @@ clues: 플레이어가 본 출력/연 항목을 정규식으로 감지 → 진�
 
 `headline`, `story[]`(실제 타임라인), `systemFactors[]`, `principle`(이 사건이 가르치는 원칙 하나), `cards[]`(현업 명령 카드: 제목, 명령, 설명), `closingMail`(엔딩 메일 id), `doyunLine`, `cast[]`(인물 카드).
 
-## 12. 새 사건 체크리스트
+## 12. opening — 첫 3분 (브리핑 + 오늘 할 일)
+
+캡틴의 첫 플레이 피드백("뭘 해야 할지 모르겠네")에서 나온 칸이다. 없으면 예전처럼 잠금 해제 직후 바탕화면이 뜬다.
+
+```ts
+opening: {
+  briefing: {
+    lockTime: '09:00', lockDate: '11월 16일 월요일',
+    caller: 'jihoon', kind: 'voice',            // 'voice' = 음성 메시지, 'call' = 보이스톡
+    voiceCue: 'voice.briefing-jihun',           // src/audio/manifest.ts 의 id. 파일이 있으면 재생하고 자막 속도를 그 길이에 맞춘다
+    lines: [{ text: '도윤님~ 굿모닝요!! 지훈이에요 ㅋㅋ', pauseMs: 1000 }, …],  // 자막 = 메신저 말풍선처럼 한 글자씩
+    mail: 'brief', mailPreview: '…오늘 21:00까지 부탁드립니다.',               // 끝에 미끄러져 들어오는 메일 알림
+  },
+  objectives: {
+    title: '오늘 할 일',
+    items: [
+      { id: 'terminal', text: '열린 터미널 확인', hint: '…터미널 창을 눌러 보세요.', any: [{ interact: 'terminal' }], pulse: 'terminal' },
+      { id: 'last-command', text: '선배가 마지막에 친 명령 찾기', any: [{ clue: 'c_history' }, { output: '갔다 와서 마저', host: 'pay-api-01' }] },
+      { id: 'pins', text: '증거 3개 보드에 올리기', any: [{ pins: 3 }] },
+    ],
+    after: ['다음: …'],   // 접힌 뒤 메모장 "오늘 할 일 ✓" 쪽 아래에 붙는 다음 할 일
+  },
+}
+```
+
+**브리핑** (`src/ui/briefing.ts`): 잠금 화면 3초 → 음성 메시지 카드(진동) 2.2초 → 자막 타이핑(글자당 72ms + 줄마다 `pauseMs`) → 메일 알림 4.2초 → 바탕화면이 드러난다. 1화는 약 31초. 30~60초 안에 들게 줄 길이를 맞춘다(`tests/objectives.test.ts`가 같은 계산으로 검사). Esc나 "건너뛰기"로 언제든 끝나고, ❓ 도움말에서 다시 볼 수 있다. 브리핑 동안은 플레이 시간이 멈추고, 힌트 사다리 2단(대기 넛지) 타이머는 브리핑이 끝난 시각부터 잰다. 대사는 사건 본문이라 사건 파일에, 버튼·라벨은 `src/i18n.ts`에 둔다. 인물 목소리는 `characters.md` §8-1을 따른다(오미래는 메일로만).
+
+**오늘 할 일** (`src/engine/objectives.ts`, 순수 상태 기계): 항목마다 `any` 조건 중 하나가 맞으면 체크된다. 순서와 상관없이 체크될 수 있다.
+
+| 조건 | 언제 맞나 |
+|---|---|
+| `{ interact: '<앱 id>' }` | 그 앱 창 안을 플레이어가 클릭하거나 키를 눌렀을 때 (창이 열리면서 자동으로 포커스되는 것은 세지 않는다) |
+| `{ cmd: '정규식', host? }` | 입력한 명령 줄이 맞을 때. `''`이면 아무 명령 |
+| `{ output: '정규식', host? }` | 명령 출력 줄 하나가 맞을 때 (입력한 줄은 제외) |
+| `{ clue: '<단서 id>' }` | 그 단서를 찾았을 때 |
+| `{ open: '<키>' }` | `mail:brief`, `note:farewell` 등 7절의 open 키를 열었을 때 |
+| `{ pins: n }` | 보드의 핀이 n개 이상이 될 때 |
+
+- `hint`: 지금 차례인(처음으로 안 체크된) 항목 아래에만 작게 보이는 비계(scaffolding). 체크되면 사라진다.
+- `pulse`: 지금 차례인 항목이 이 값을 가지면 그 앱 창(닫혀 있으면 바탕화면 아이콘)이 숨 쉬듯 빛난다. 1화는 첫 항목만 터미널을 가리키고, 터미널의 남은 입력 `crontab -`도 함께 깜빡인다.
+- 체크 하나마다 `sfx.tick`, 셋 다 끝나면 `sfx.done`과 함께 포스트잇이 메모장 아이콘 쪽으로 접혀 들어가고, 메모장 맨 위에 `"<title> ✓"` 쪽이 생긴다. 그 뒤로는 펄스·힌트 줄이 모두 멈춘다.
+- 플레이 로그에는 `objective`, `interact`, `briefing`, `objectives-folded`, `meaningful`(증거를 처음 보여 준 명령) 이벤트가 남고, `summary.firstMinutes`에 모인다(`docs/playtest.md` Q8~Q12).
+
+사건 2를 만들 때는 그 사건의 첫 동선에 맞춰 항목 3개 안팎을 고른다. 첫 항목은 "눈에 보이는 첫 클릭"(`interact` + `pulse`), 둘째는 은재의 흔적 한 줄을 처음 보는 순간(`clue`/`output`), 셋째는 증거 보드 사용(`pins`)이 무난하다.
+
+## 13. 새 사건 체크리스트
 
 1. 원칙 하나를 정한다(캡틴 제약: 리눅스/IT 공통 분모. 1화는 "프로세스별 열린 파일 한도, 소켓도 파일").
 2. 확정 타임라인 표를 먼저 쓰고 `timeline`으로 옮긴다.
 3. 은재 history에 "알아보면 풀리는 한 줄"을 숨기지 않고 둔다.
 4. 칸마다 핵심 단서 2~5개, 각 단서는 서로 다른 명령으로 닿게(같은 명령으로 두 용의자를 동시에 확인하지 않게).
 5. 넛지·트리거 대사는 보이스 치트시트로 검토.
-6. `npm test` (무결성·도달 가능성 테스트), `npm run build && npm run e2e`.
+6. `opening`: 브리핑 대사(30~60초), 오늘 할 일 3개, 새 음성 줄이 있으면 `src/audio/manifest.ts`와 큐 시트(`data/infra-mystery-game/audio-cues.md`)에 id 추가.
+7. `npm test` (무결성·도달 가능성 테스트), `npm run build && npm run e2e`.
