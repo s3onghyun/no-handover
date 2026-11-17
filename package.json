@@ -2,7 +2,7 @@
   "name": "no-handover",
   "private": true,
   "version": "0.1.0",
-  "description": "No Handover (인수인계 없음) — private prototype: browser desktop outage-mystery game (case 1: 금요일 18:02의 작은 변경)",
+  "description": "No Handover (인수인계 없음) — private prototype: browser desktop outage-mystery game (Case 0 tutorial 위키가 안 열려요, Case 3 금요일 18:02의 작은 변경)",
   "type": "module",
   "license": "UNLICENSED",
   "scripts": {

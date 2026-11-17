@@ -1,8 +1,8 @@
 # 사건 데이터 형식 (case format)
 
-사건 하나는 TypeScript 파일 하나다: `src/cases/<id>.ts`가 `CaseFile` 객체 하나를 내보낸다. 타입 정의는 `src/engine/types.ts`에 있고, 편집기가 빠진 칸과 오타를 바로 알려 준다. YAML 대신 TS를 고른 이유는 의존성을 늘리지 않고, 긴 로그 줄이나 반복되는 37건 알림 같은 것을 짧은 함수로 만들 수 있어서다. 엔진 코드는 사건 이름을 하나도 모른다. 두 번째 사건은 파일 하나를 추가하고 `src/main.ts`의 `CASE` 한 줄을 바꾸면 된다.
+사건 하나는 TypeScript 파일 하나다: `src/cases/<id>.ts`가 `CaseFile` 객체 하나를 내보낸다. 타입 정의는 `src/engine/types.ts`에 있고, 편집기가 빠진 칸과 오타를 바로 알려 준다. YAML 대신 TS를 고른 이유는 의존성을 늘리지 않고, 긴 로그 줄이나 반복되는 37건 알림 같은 것을 짧은 함수로 만들 수 있어서다. 엔진 코드는 사건 이름을 하나도 모른다. 새 사건은 파일 하나를 추가하고 `src/cases/index.ts`의 사다리(`CAMPAIGN`, 5절 사다리는 [`campaign-ladder.md`](campaign-ladder.md))에 그 사건을 한 줄로 붙이면 된다. 잠금·건너뛰기·다음 사건 규칙은 `src/engine/campaign.ts`.
 
-> 읽는 순서 추천: ① `timeline` ② `clues` ③ `accusation` ④ `hints` ⑤ `triggers` ⑥ `debrief`. 1화의 실제 예시는 `src/cases/friday-1802.ts`.
+> 읽는 순서 추천: ① `timeline` ② `clues` ③ `accusation` ④ `hints` ⑤ `triggers` ⑥ `debrief`. Case 3(예전 1화)의 실제 예시는 `src/cases/friday-1802.ts`, 튜토리얼은 `src/cases/case-0-wiki.ts`.
 
 ## 1. 큰 그림
 
@@ -24,17 +24,20 @@ clues: 플레이어가 본 출력/연 항목을 정규식으로 감지 → 진�
 |---|---|
 | `id`, `title`, `subtitle` | 저장 키와 화면 표시용 |
 | `company`, `domain` | 회사 가칭과 메일 도메인(`.example`만 쓸 것) |
-| `clock` | `start`(게임 시작 = 월 09:00), `deadline`(21:00), `tz` |
+| `clock` | `start`(게임 시작 = 월 09:00), `deadline`(21:00), `tz`, `rate`(게임 시계 배속, 기본 16. Case 0은 6 = 10분 플레이에 1시간) |
 | `player`, `owner` | 플레이어 인물 id(도윤), PC 주인 id(은재) |
 | `people` | 인물표. `name`, `role`, `initial`, `color`, `login`(서버 계정), `avatar`/`avatarSmall`/`portrait`(이미지 경로, 없으면 이니셜) |
 | `hosts` | 서버들 (3절) |
 | `timeline` | 사건의 확정 타임라인 (4절) |
 | `generators` | 잡음 생성기 (5절) |
 | `channels`, `mails`, `notes`, `stickies`, `notifications` | 메신저 채널, 메일, 도윤 메모장, 바탕화면 포스트잇, 알림 센터 (6절) |
-| `terminalTabs` | 처음 열려 있는 터미널 탭: `host`, `cwd`, `prefill`(입력창에 남은 글, 1화는 `crontab -`), `scrollback`(잠긴 화면에 남은 줄) |
+| `terminalTabs` | 처음 열려 있는 터미널 탭: `host`, `cwd`, `prefill`(입력창에 남은 글. Case 3은 `crontab -`, Case 0은 **반드시 성공하는** `history`), `scrollback`(잠긴 화면에 남은 줄) |
 | `dashboard` | 대시보드 스냅샷(ASCII 줄 배열) |
 | `clues`, `accusation`, `hints`, `triggers`, `debrief` | 7~11절 |
 | `opening` | 첫 3분: 브리핑 장면과 "오늘 할 일" 체크리스트 (12절, 선택) |
+| `shell`, `rail`, `desktop` | 튜토리얼 장치: 허용 명령 목록, 레일(동료가 다음 명령을 알려 줌), 아이콘 해금 (13절, 선택) |
+| `boot` | 잠금 화면 문구 `status`, `unlock`(버튼), `note`. 없으면 Case 3의 보안팀 문구 |
+| `deadTabs` | 끊긴 원격 세션으로 보이는 터미널 탭 이름들(분위기용) |
 
 ## 3. hosts
 
@@ -57,6 +60,7 @@ clues: 플레이어가 본 출력/연 항목을 정규식으로 감지 → 진�
 - 파일의 소유자를 안 쓰면 `/home/<이름>/…`은 그 사람, 나머지는 root. 권한은 8진 문자열(`'600'`).
 - `private: true`인 파일은 처음 `cat`할 때 도윤이 한 번 망설인다(같은 명령을 다시 치면 열림, 로그에 남음).
 - `binary: '설명'`이면 `cat` 대신 설명이 나온다(PDF, 엑셀).
+- `size: 바이트`는 내용보다 훨씬 큰 파일의 겉보기 크기다(Case 0의 11G 로그: 내용은 앞뒤 수십 줄). `ls -l`, `du`가 이 값을 쓰고, 50 MB가 넘는 파일은 `cat`이 "너무 커요, tail로 끝만"이라고 세계관 안에서 거절한다.
 - `/etc/group`, `/etc/passwd`, `/etc/hostname`, `/proc/<pid>/…`, `/var/spool/cron/crontabs/<사용자>`, systemd 유닛 파일은 자동 생성된다.
 - git 커밋: `sha`(40자), `parent`, `author`(인물 id), `authorDate`, `commitDate`, `subject`, `body`(트레일러 포함), `diff`. 리뷰 트레일러가 없다는 사실 자체가 단서가 되게 `body`를 비워 둔다.
 
@@ -93,7 +97,7 @@ clues: 플레이어가 본 출력/연 항목을 정규식으로 감지 → 진�
 - `channels`: `account: 'pc'`(은재 PC 세션) 또는 `'me'`(도윤 자신, 넛지가 오는 곳), `kind: 'channel' | 'dm'`, `with`(DM 상대), `draft`(입력창에 남은 보내지 않은 글), `collapseFrom`(알림 37건 접기).
 - `mails`: `account`, `folder: 'inbox' | 'drafts'`, `later: true`면 트리거로 나중에 도착, `locked`면 잠긴 초안(비밀번호 힌트 문구).
 - `notes`: 도윤 메모장 쪽. `highlight`(트리거로 강조될 줄 번호)와 `reveal`(그 아래 덧붙는 도윤의 한 줄).
-- `notifications`: OS 알림 센터 미리보기. 1화는 02:12에 지워진 서진 메시지 원문이 여기 남는다.
+- `notifications`: OS 알림 센터 미리보기. Case 3은 02:12에 지워진 서진 메시지 원문이 여기 남는다.
 
 ## 7. clues — 단서 감지
 
@@ -114,11 +118,14 @@ clues: 플레이어가 본 출력/연 항목을 정규식으로 감지 → 진�
 - `slots[].type: 'single'`: 보기 중 `correct: true` 하나.
 - `type: 'multi'`: 보기마다 `weight`(+ 시스템 요인과 은폐, − 사람을 범인으로 지목). 양수 합이 `pass` 이상이고 음수를 하나도 고르지 않아야 정답. 점수는 양수 합 대비 비율 × 100.
 - `blames: '<인물 id>'`: 이 보기를 고르면 그 사람의 목소리로 2단 넛지가 온다.
-- `maxSubmissions`: 3.
+- `maxSubmissions`: 3. `0`이면 무제한(Case 0).
+- `slots`는 세 칸 중 필요한 것만 둔다(Case 0은 `cause`, `sequence` 두 칸). 점수 만점은 칸 수 × 100 + 증거 보너스 30.
+- `intro`(보고서 맨 위 한 줄)와 `reply`(`from`, `partial`의 `{n}`/`{total}`, `sign`)로 "오미래 CTO의 회신" 틀을 사건에 맞게 바꾼다(Case 0은 서진).
 
 ## 9. hints — 사다리
 
-- `idleMinutes`: 원인 칸이 안 풀린 채 핵심 단서 진전이 없으면 이 시간 뒤 `idle[]`를 차례로 보낸다(`unlessClues`를 이미 다 찾았으면 건너뜀). 하나 보낸 뒤 다시 같은 시간을 기다린다.
+- `idleMinutes`: 원인 칸이 안 풀린 채 핵심 단서 진전이 없으면 이 시간 뒤 `idle[]`를 차례로 보낸다(`unlessClues`를 이미 다 찾았으면 건너뜀). 하나 보낸 뒤 다시 같은 시간을 기다린다. Case 0은 2분, 본편은 6분. **직전 1분 안에 아무 단서라도 찾았으면 보류**한다(곧 풀 사람을 끊지 않기, `HOLD_MS`).
+- 터미널에서 `hint`를 치면 💡 패널이 열린다(모든 사건).
 - `wrong`: 잘못 고발했을 때. 키는 지목당한 인물 id, 없으면 `default`. 각각 한 번만.
 - `explicit`: 칸별 명시 힌트, 순서대로, `cost`만큼 감점.
 - 넛지 대사는 `characters.md` §8-1 보이스 치트시트를 따른다. 은재는 넛지를 주지 않는다(은재의 넛지는 이미 기계 안에 있다).
@@ -161,7 +168,7 @@ opening: {
 }
 ```
 
-**브리핑** (`src/ui/briefing.ts`): 잠금 화면 3초 → 음성 메시지 카드(진동) 2.2초 → 자막 타이핑(글자당 72ms + 줄마다 `pauseMs`) → 메일 알림 4.2초 → 바탕화면이 드러난다. 1화는 약 31초. 30~60초 안에 들게 줄 길이를 맞춘다(`tests/objectives.test.ts`가 같은 계산으로 검사). Esc나 "건너뛰기"로 언제든 끝나고, ❓ 도움말에서 다시 볼 수 있다. 브리핑 동안은 플레이 시간이 멈추고, 힌트 사다리 2단(대기 넛지) 타이머는 브리핑이 끝난 시각부터 잰다. 대사는 사건 본문이라 사건 파일에, 버튼·라벨은 `src/i18n.ts`에 둔다. 인물 목소리는 `characters.md` §8-1을 따른다(오미래는 메일로만).
+**브리핑** (`src/ui/briefing.ts`): 잠금 화면 3초 → 음성 메시지 카드(진동) 2.2초 → 자막 타이핑(글자당 72ms + 줄마다 `pauseMs`) → 메일 알림 4.2초 → 바탕화면이 드러난다. Case 3은 약 31초. 본편은 30~60초, Case 0 튜토리얼은 20초 이하로 줄 길이를 맞춘다(`tests/objectives.test.ts`가 같은 계산으로 검사). Esc나 "건너뛰기"로 언제든 끝나고, ❓ 도움말에서 다시 볼 수 있다. 브리핑 동안은 플레이 시간이 멈추고, 힌트 사다리 2단(대기 넛지) 타이머는 브리핑이 끝난 시각부터 잰다. 대사는 사건 본문이라 사건 파일에, 버튼·라벨은 `src/i18n.ts`에 둔다. 인물 목소리는 `characters.md` §8-1을 따른다(오미래는 메일로만).
 
 **오늘 할 일** (`src/engine/objectives.ts`, 순수 상태 기계): 항목마다 `any` 조건 중 하나가 맞으면 체크된다. 순서와 상관없이 체크될 수 있다.
 
@@ -175,18 +182,39 @@ opening: {
 | `{ pins: n }` | 보드의 핀이 n개 이상이 될 때 |
 
 - `hint`: 지금 차례인(처음으로 안 체크된) 항목 아래에만 작게 보이는 비계(scaffolding). 체크되면 사라진다.
-- `pulse`: 지금 차례인 항목이 이 값을 가지면 그 앱 창(닫혀 있으면 바탕화면 아이콘)이 숨 쉬듯 빛난다. 1화는 첫 항목만 터미널을 가리키고, 터미널의 남은 입력 `crontab -`도 함께 깜빡인다.
+- `pulse`: 지금 차례인 항목이 이 값을 가지면 그 앱 창(닫혀 있으면 바탕화면 아이콘)이 숨 쉬듯 빛난다. Case 3은 첫 항목만 터미널을 가리키고, 터미널의 남은 입력 `crontab -`도 함께 깜빡인다.
 - 체크 하나마다 `sfx.tick`, 셋 다 끝나면 `sfx.done`과 함께 포스트잇이 메모장 아이콘 쪽으로 접혀 들어가고, 메모장 맨 위에 `"<title> ✓"` 쪽이 생긴다. 그 뒤로는 펄스·힌트 줄이 모두 멈춘다.
 - 플레이 로그에는 `objective`, `interact`, `briefing`, `objectives-folded`, `meaningful`(증거를 처음 보여 준 명령) 이벤트가 남고, `summary.firstMinutes`에 모인다(`docs/playtest.md` Q8~Q12).
 
 사건 2를 만들 때는 그 사건의 첫 동선에 맞춰 항목 3개 안팎을 고른다. 첫 항목은 "눈에 보이는 첫 클릭"(`interact` + `pulse`), 둘째는 은재의 흔적 한 줄을 처음 보는 순간(`clue`/`output`), 셋째는 증거 보드 사용(`pins`)이 무난하다.
 
-## 13. 새 사건 체크리스트
+## 13. 튜토리얼 장치 (Case 0)
 
-1. 원칙 하나를 정한다(캡틴 제약: 리눅스/IT 공통 분모. 1화는 "프로세스별 열린 파일 한도, 소켓도 파일").
+웹 방탈출 분석(`data/web-escape-analysis/report.md` §9)의 "미리 준비된 첫 행동, 화면 위 선택지 줄이기, 막히기 전에 말 거는 동료"를 데이터로 켠다. 모두 선택 칸이다.
+
+```ts
+shell: {
+  allow: ['ls', 'cd', 'pwd', 'cat', 'head', 'tail', 'grep', 'df', 'du', 'history', 'systemctl', 'journalctl', 'man', 'help', 'hint', 'clear'],
+  refuse: "튜토리얼 세션: '{cmd}' 은(는) 오늘 연습 범위 밖이에요 …",   // 목록 밖의 진짜 명령(ps, sudo, vim…)
+  help: ['…'],                                                        // help 출력 대체
+},
+rail: { from: 'jihoon', channel: 'me-dm-jihoon', offRail: '그건 나중에요 ㅋㅋ {next} 부터!!', quiet: ['help', 'man'], done: '…', highlightClues: true },
+desktop: { icons: [{ app: 'terminal' }, { app: 'messenger' }, { app: 'mail' }, { app: 'notes', after: 'df' }, …] },
+// opening.objectives.items[] 에 say(그 항목 차례가 되면 레일 동료가 보내는 말), next(되돌림에 넣을 명령)
+```
+
+- `shell.allow`: 이 명령만 돈다. 목록 밖의 **진짜** 명령은 `refuse` 문장으로 답하고(`blocked` 마찰로 기록), 없는 명령은 예전처럼 `command not found` + 목록 안에서 고른 "혹시 …인가요?". Tab 자동완성도 목록만.
+- `rail`: 항목이 체크돼 다음 항목이 차례가 되면 1.5초 뒤 그 항목의 `say`가 `from`의 메시지로 온다(모두 끝나면 `done`). 단서도 체크도 못 만든 명령에는 차례인 항목마다 **한 번만** `offRail`(`{next}` = 그 항목의 `next`)이 온다(`rail-redirect` 이벤트). `quiet` 명령은 세지 않는다. `highlightClues`면 단서 정규식에 걸리는 터미널 줄이 노랗게 표시된다.
+- `desktop.icons`: 아이콘 순서와 해금 조건. `after`가 없는 아이콘만 처음에 보이고, 나머지는 그 항목이 체크되거나 체크리스트가 접히면 나타난다. 아이콘이 없어도 메시지 알림이나 보드의 "보고서 쓰기"로는 창이 열린다.
+- 은재는 레일 동료가 될 수 없다(§8-3, 실시간 대사 없음). `tests/case0.test.ts`가 검사한다.
+
+## 14. 새 사건 체크리스트
+
+1. 원칙 하나를 정한다(캡틴 제약: 리눅스/IT 공통 분모. Case 3은 "프로세스별 열린 파일 한도, 소켓도 파일", Case 0은 "로그는 디스크를 채운다").
 2. 확정 타임라인 표를 먼저 쓰고 `timeline`으로 옮긴다.
 3. 은재 history에 "알아보면 풀리는 한 줄"을 숨기지 않고 둔다.
 4. 칸마다 핵심 단서 2~5개, 각 단서는 서로 다른 명령으로 닿게(같은 명령으로 두 용의자를 동시에 확인하지 않게).
 5. 넛지·트리거 대사는 보이스 치트시트로 검토.
 6. `opening`: 브리핑 대사(30~60초), 오늘 할 일 3개, 새 음성 줄이 있으면 `src/audio/manifest.ts`와 큐 시트(`data/infra-mystery-game/audio-cues.md`)에 id 추가.
-7. `npm test` (무결성·도달 가능성 테스트), `npm run build && npm run e2e`.
+7. `src/cases/index.ts`의 `CAMPAIGN`에서 자리(`slot`)의 `cs`를 채운다. 자리만 있던 "준비 중" 칸이 플레이 가능한 사건이 된다.
+8. `npm test` (무결성·도달 가능성 테스트), `npm run build && npm run e2e`.

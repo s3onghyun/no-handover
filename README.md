@@ -1,6 +1,6 @@
 # No Handover 「인수인계 없음」
 
-비공개 1주 프로토타입. 퇴사한 선배(남은재)의 PC를 넘겨받은 입사 3주차 한도윤이 되어, 메신저·메일·터미널을 뒤져 토요일 새벽 결제 장애의 원인과 경위, 그리고 "무엇이 그걸 가능하게 했나"를 보고서로 쓰는 브라우저 게임이다. 사건 1개(「금요일 18:02의 작은 변경」), 백엔드 없음, 계정 없음, 공개 저장소 없음.
+비공개 프로토타입. 퇴사하는 선배(남은재)의 PC를 넘겨받은 신입 한도윤이 되어, 메신저·메일·터미널을 뒤져 장애의 원인과 경위, 그리고 "무엇이 그걸 가능하게 했나"를 보고서로 쓰는 브라우저 게임이다. 사건은 주니어 → 시니어 사다리 5칸(Case 0~4, [`docs/campaign-ladder.md`](docs/campaign-ladder.md)) 중 2개가 플레이 가능하다: **Case 0 튜토리얼 「위키가 안 열려요」**(5–10분, 처음 실행하면 여기서 시작)와 **Case 3 「금요일 18:02의 작은 변경」**(30–45분). 백엔드 없음, 계정 없음, 공개 저장소 없음.
 
 설계 문서는 저장소 밖 firstmate 홈의 `data/infra-mystery-game/`에 있다(보고서 §2-1·§4, `characters.md`, `design-constraints.md`). 회사명 누리클라우드는 가칭이고, 모든 인물·회사·서버·로그는 가상이다.
 
@@ -9,7 +9,7 @@
 ```sh
 npm install        # 한 번만. 이후 아래 명령은 모두 오프라인으로 동작
 npm run dev        # http://localhost:5173  개발 서버
-npm test           # 단위 테스트 74개 (node --test, TypeScript 타입 제거 내장 기능 사용)
+npm test           # 단위 테스트 86개 (node --test, TypeScript 타입 제거 내장 기능 사용)
 ```
 
 그 밖에:
@@ -18,31 +18,34 @@ npm test           # 단위 테스트 74개 (node --test, TypeScript 타입 제�
 |---|---|
 | `npm run build` | 타입 검사 + 정적 빌드 → `dist/` (약 0.3 MB, 어떤 정적 호스트나 폴더에서도 열림. `base: './'`) |
 | `npm run preview` | `dist/`를 로컬에서 서빙 |
-| `npm run e2e` | `dist/`를 띄우고 실제 브라우저(playwright-core + `~/.cache/ms-playwright`의 headless shell)로 오프닝 브리핑을 끝까지 보고(약 31초), 오늘 할 일 세 칸을 체크하고, 은재의 history 한 줄에서 출발해 사건을 푼다. 두 번째 창에서 Esc 건너뛰기, ❓ 다시 보기, 음소거 유지를 확인한다. `E2E_SHOTS=<폴더>`를 주면 스크린샷 6장 저장. 이어서 `scripts/e2e-audio.mjs`가 소리를 확인한다(아래 「소리」) |
+| `npm run e2e` | `dist/`를 띄우고 실제 브라우저(playwright-core + `~/.cache/ms-playwright`의 headless shell)로 **Case 0**을 푼다(18초 브리핑, 미리 쳐진 `history`, 지훈의 레일과 되돌림, 체크 5칸과 아이콘 해금, 오답 한 번 뒤 정답). 해설의 "다음 사건"으로 **Case 3**을 열어 오프닝 브리핑을 끝까지 보고(약 31초), 오늘 할 일 세 칸을 체크하고, 은재의 history 한 줄에서 출발해 사건을 푼다. 두 번째 창에서 Esc 건너뛰기, ❓ 다시 보기, 음소거 유지를 확인한다. `E2E_SHOTS=<폴더>`를 주면 스크린샷 9장 저장(Case 0 3장 + Case 3 6장). 이어서 `scripts/e2e-audio.mjs`가 소리를 확인한다(아래 「소리」) |
 | `npm run audio:render -- <폴더>` | ZzFX 효과음을 WAV로 렌더해 저장: `ui-set.wav`(UI 소리 전부, 5초), `fallbacks.wav`(진동·타이핑 대체음). 게임을 열지 않고 들어 볼 때 |
 
-URL 옵션(플레이테스트 진행자용): `?fresh=1` 저장 지우고 처음부터, `?nudge=2` 동료 넛지 대기 시간(분, 기본 10), `?rate=16` 게임 시계 배속(기본 16 = 45분 플레이에 09:00→21:00), `?lang=en` UI 영어(사건 본문은 한국어), `?briefing=0` 오프닝 브리핑 없이 시작, `?bspeed=2` 브리핑 배속. 작업 표시줄의 📋 에서도 일부를 바꿀 수 있다.
+URL 옵션(플레이테스트 진행자용): `?fresh=1` 모든 사건의 저장과 진행 상황을 지우고 Case 0부터, `?case=friday-1802` 그 사건을 잠금과 상관없이 열기(`case0-wiki`도 같음), `?nudge=2` 동료 넛지 대기 시간(분, 기본은 사건 값: Case 0 2분, Case 3 6분), `?rate=16` 게임 시계 배속(기본 16 = 45분 플레이에 09:00→21:00), `?lang=en` UI 영어(사건 본문은 한국어), `?briefing=0` 오프닝 브리핑 없이 시작, `?bspeed=2` 브리핑 배속. 작업 표시줄의 📋 에서도 일부를 바꿀 수 있다.
 
 ## 들어 있는 것
 
-- **첫 3분**: 잠금 해제 → 약 31초짜리 오프닝 브리핑(월요일 09:00 잠금 화면, 박지훈의 음성 메시지 카드와 타이핑되는 자막, 오미래의 메일 알림, Esc·건너뛰기로 생략, ❓에서 다시 보기) → 터미널이 열린 채 `crontab -`가 깜빡이고 창이 숨 쉬듯 빛나는 바탕화면 + 오른쪽 위 "오늘 할 일" 포스트잇(체크 3개: 열린 터미널 확인, 선배가 마지막에 친 명령 찾기, 증거 3개 보드에 올리기). 셋 다 체크되면 포스트잇이 메모장으로 접혀 들어가고 펄스·힌트 줄이 멈춘다.
+- **사건 사다리** (`src/cases/index.ts`, `src/engine/campaign.ts`): 처음 실행하면 Case 0 잠금 화면("Case 0 · 튜토리얼" 라벨, 경험자용 "튜토리얼 건너뛰기 → Case 3" 링크, ☰ 사건 목록). 사건은 앞의 플레이 가능한 사건을 풀면(해설까지 가면) 열리고, 아직 없는 Case 1·2·4는 제목만 보이는 "준비 중" 칸이다. 저장은 사건마다 따로(`no-handover:save:<id>`), 진행 상황은 `no-handover:campaign`.
+- **Case 0 튜토리얼** (`src/cases/case-0-wiki.ts`): 은재 퇴사 주 화요일 09:30, 위키 서버 한 대의 `/var`가 밤새 불어난 로그(11G)로 100%. 터미널에 `history`가 미리 쳐져 있어 Enter만 누르면 은재의 2025년 디스크 장애 순서가 나오고(노란 줄 = 단서), 지훈이 메신저로 단계마다 다음 명령을 알려 준다(엉뚱한 명령엔 한 번 "그건 나중에요 ㅋㅋ df -h 부터!!"). 쓸 수 있는 명령은 12개(`ls cd pwd cat head tail grep df du history systemctl journalctl` + `man help hint clear`)이고 그 밖의 진짜 명령은 "오늘 연습 범위 밖"이라고 답한다. 아이콘 3개로 시작해 체크 5칸이 진행될 때마다 메모장·보드·대시보드·보고서가 나타난다. 보고서 2칸(원인/경위), 제출 무제한, 넛지 2분, 명시 힌트 −5. 고치는 법은 해설에서 설명만 한다. 작업 표시줄 ⏭ 로 언제든 건너뛸 수 있다.
+- **첫 3분 (Case 3)**: 잠금 해제 → 약 31초짜리 오프닝 브리핑(월요일 09:00 잠금 화면, 박지훈의 음성 메시지 카드와 타이핑되는 자막, 오미래의 메일 알림, Esc·건너뛰기로 생략, ❓에서 다시 보기) → 터미널이 열린 채 `crontab -`가 깜빡이고 창이 숨 쉬듯 빛나는 바탕화면 + 오른쪽 위 "오늘 할 일" 포스트잇(체크 3개: 열린 터미널 확인, 선배가 마지막에 친 명령 찾기, 증거 3개 보드에 올리기). 셋 다 체크되면 포스트잇이 메모장으로 접혀 들어가고 펄스·힌트 줄이 멈춘다.
 - **소리**: UI 효과음 12개는 파일 없이 브라우저에서 ZzFX로 합성해 지금 바로 들린다. 음악·환경음·목소리는 메인이 파일을 보내 주면 폴더에 넣는 것만으로 나온다(코드 수정 없음). 첫 클릭(어디든)에서 소리가 켜진다. 자세한 것은 아래 「소리」.
 - **데스크톱 셸**: 잠금 화면 → 은재의 바탕화면(나무 의자 사진, 포스트잇 3장), 아이콘, 작업 표시줄, 알림 센터(🔔), 힌트(💡), 도움말(❓), 소리(🔊), 플레이테스트(📋), 게임 시계와 21:00 마감.
 - **앱**: 터미널(탭 14개 중 5개 살아 있음), 메신저(은재 PC 세션 + 내 계정, 채널·DM·삭제된 메시지 표시·보내지 않은 메시지), 메일(내 메일 + 은재 메일, 임시보관함 초안 11개 중 2개 열림), 도윤 메모장, 증거 보드, 원인 보고서/해설, 대시보드 스냅샷(ASCII).
-- **시뮬레이션 셸** (`src/engine/shell.ts`): 호스트 4대(pay-api-01, bastion, pay-cfg, review-web)의 가상 파일시스템. 실제 문법과 출력 형식으로 약 40개 명령: `ls cd pwd cat less head tail grep wc sort uniq find history journalctl crontab -l git log/show/branch/status df free ulimit ss last sudo man help systemctl show/status/cat ps pgrep curl ping ssh exit getent id whoami hostname date uptime echo clear`. 파이프, `; && ||`, 따옴표, `$(...)`, `$VAR`, `~`, 글롭, `2>/dev/null`, `.bashrc` 별칭(`밤`, `fds`, `왜`…), `!!`, Tab 자동완성, ↑/↓. 오타는 "혹시 'crontab' 인가요?"로, 쓰기·편집·재시작은 "조사 모드(읽기 전용)"라는 세계관 안의 설명으로 막는다. `sudo`는 읽기 명령만 허용하고 허용 여부와 상관없이 `/var/log/auth.log`에 남는다.
-- **사건 데이터 1파일** (`src/cases/friday-1802.ts`): 타임라인이 로그·history·메시지를 "방출"하고, 시드 고정 생성기가 잡음(시간당 stats, 리뷰 웹 접근 로그 20건, history 채움)을 만든다. 형식은 [`docs/case-format.md`](docs/case-format.md).
+- **시뮬레이션 셸** (`src/engine/shell.ts`): 호스트(Case 3은 pay-api-01, bastion, pay-cfg, review-web, Case 0은 wiki-01)의 가상 파일시스템. 실제 문법과 출력 형식으로 약 40개 명령: `ls cd pwd cat less head tail grep wc sort uniq find history journalctl crontab -l git log/show/branch/status df du free ulimit ss last sudo man help hint systemctl show/status/cat ps pgrep curl ping ssh exit getent id whoami hostname date uptime echo clear`. `du`는 파일의 겉보기 크기(`size`)로 계산하고, 50 MB가 넘는 파일의 `cat`은 "tail로 끝만"이라고 거절한다. `hint`는 💡 패널을 연다. 파이프, `; && ||`, 따옴표, `$(...)`, `$VAR`, `~`, 글롭, `2>/dev/null`, `.bashrc` 별칭(`밤`, `fds`, `왜`…), `!!`, Tab 자동완성, ↑/↓. 오타는 "혹시 'crontab' 인가요?"로, 쓰기·편집·재시작은 "조사 모드(읽기 전용)"라는 세계관 안의 설명으로 막는다. `sudo`는 읽기 명령만 허용하고 허용 여부와 상관없이 `/var/log/auth.log`에 남는다.
+- **사건 데이터 = 사건마다 1파일** (`src/cases/friday-1802.ts`, `src/cases/case-0-wiki.ts`): 타임라인이 로그·history·메시지를 "방출"하고, 시드 고정 생성기가 잡음(시간당 stats, 리뷰 웹 접근 로그 20건, history 채움)을 만든다. 형식은 [`docs/case-format.md`](docs/case-format.md).
 - **증거 보드**: 터미널 줄·메시지·메일·메모·알림 옆의 📌. 시각을 자동 인식해 타임라인에 놓고, 끌어서 보관함 ↔ 타임라인, 시각과 메모 수정.
-- **고발(보고서)**: 원인 / 경위 / 책임·은폐 세 칸, 제출 3회, 채점(칸당 100, 제출 배수 1·0.85·0.7, 핵심 증거 핀 보너스 최대 +30, 명시 힌트 −10씩) → 해설(실제 타임라인, 시스템 요인, 원칙 하나, "현업에서는 이렇게 확인한다" 명령 카드 7장, 인물 카드).
-- **힌트 사다리**: 1단 = 기계 안의 흔적(은재 `~/.bash_history` 4984–4990, 별칭, crontab 주석, vim 스왑 파일, TODO, 포스트잇, 도윤 메모, 22:15 DM), 2단 = 원인 칸에서 10분 진전이 없거나 잘못 고발하면 동료 넛지(지훈/서진의 목소리), 3단 = 칸별 명시 힌트(−10점). 모든 사용이 플레이 로그에 남는다.
+- **고발(보고서)**: Case 3은 원인 / 경위 / 책임·은폐 세 칸, 제출 3회(Case 0은 두 칸, 무제한), 채점(칸당 100, 제출 배수 1·0.85·0.7, 핵심 증거 핀 보너스 최대 +30, 명시 힌트 −10씩) → 해설(실제 타임라인, 시스템 요인, 원칙 하나, "현업에서는 이렇게 확인한다" 명령 카드 7장, 인물 카드).
+- **힌트 사다리**: 1단 = 기계 안의 흔적(은재 `~/.bash_history` 4984–4990, 별칭, crontab 주석, vim 스왑 파일, TODO, 포스트잇, 도윤 메모, 22:15 DM), 2단 = 원인 칸에서 진전이 없거나(Case 3 6분, Case 0 2분, 직전 1분 안에 단서를 찾았으면 보류) 잘못 고발하면 동료 넛지(지훈/서진의 목소리), 3단 = 칸별 명시 힌트(−10점, Case 0은 −5. 터미널에 `hint`를 쳐도 열림). 모든 사용이 플레이 로그에 남는다.
 - **플레이테스트 로그**: 명령, 막힘(오타·미지원·차단), 앱별 시간, 핀, 고발, 단서 발견 시각, 힌트 단계별 도달 시각. 서버로 보내지 않고 📋 → "플레이 로그 JSON 저장"으로만 기기에 내려받는다. 진행 계획은 [`docs/playtest.md`](docs/playtest.md).
 
 ## 구조
 
 ```
 src/engine/   types.ts(사건 스키마) build.ts(월드 생성) vfs.ts parser.ts shell.ts manpages.ts
-              hints.ts(사다리) objectives.ts(오늘 할 일) scoring.ts game.ts(DOM 없는 오케스트레이터: 단서, 트리거, 저장, 로그)
+              hints.ts(사다리) objectives.ts(오늘 할 일) scoring.ts campaign.ts(사건 잠금·건너뛰기)
+              game.ts(DOM 없는 오케스트레이터: 단서, 트리거, 레일, 저장, 로그)
 src/audio/    manifest.ts(큐 id → 파일·ZzFX 파라미터) audio.ts(AudioManager) unlock.ts(첫 제스처 잠금 해제) vendor/zzfx.ts(MIT)
-src/cases/    friday-1802.ts  ← 사건 하나 = 데이터 파일 하나
+src/cases/    index.ts(사다리 5칸) case-0-wiki.ts friday-1802.ts  ← 사건 하나 = 데이터 파일 하나
 src/ui/       wm.ts(창 관리자) dom.ts style.css briefing.ts(오프닝) objectives.ts(오늘 할 일 포스트잇) apps/*.ts
 src/i18n.ts   UI 문자열 표 (ko 먼저, en 같은 키)
 tests/        node:test 단위 테스트 + 데이터로 푸는 시나리오
