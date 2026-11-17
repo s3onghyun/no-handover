@@ -25,9 +25,10 @@ export const messengerApp: AppDef = {
     const side = h('nav.side', { 'aria-label': 'channels' });
     const header = h('div', { style: 'padding:10px 16px;border-bottom:1px solid var(--line);font-weight:600;display:flex;gap:8px;align-items:center' });
     const list = h('div.scroll');
+    const typingRow = h('div.typing-row', { 'aria-live': 'polite' });
     const composer = h('div.composer');
     body.appendChild(side);
-    body.appendChild(h('div.main', null, header, list, composer));
+    body.appendChild(h('div.main', null, header, list, typingRow, composer));
 
     const ch = (id: string) => g.cs.channels.find((c) => c.id === id);
 
@@ -44,6 +45,7 @@ export const messengerApp: AppDef = {
               { onclick: () => select(c.id) },
               c.kind === 'dm' && c.with ? ctx.avatar(c.with, 22) : h('span', { style: 'width:22px;text-align:center;color:var(--ink-3)' }, '#'),
               c.kind === 'dm' ? c.title : c.title.replace(/^#/, ''),
+              g.typing().some((x) => x.channel === c.id) ? h('span.typing-dot', { title: t('msg.typing', { who: ctx.name(c.with ?? '') }) }, '…') : null,
               n ? h('span.cnt', null, n > 99 ? '99+' : n) : null,
             ),
           );
@@ -116,9 +118,35 @@ export const messengerApp: AppDef = {
       list.appendChild(box);
       list.scrollTop = list.scrollHeight;
       if (c.draft) composer.appendChild(h('div.draft', null, h('small', null, t('msg.draftLabel')), c.draft));
-      else composer.appendChild(h('input', { disabled: true, placeholder: c.account === 'pc' ? t('msg.inputPc') : t('msg.inputMe') }));
+      else {
+        if (c.account === 'me') composer.appendChild(askChips());
+        composer.appendChild(h('input', { disabled: true, placeholder: c.account === 'pc' ? t('msg.inputPc') : t('msg.inputMe') }));
+      }
+      renderTyping();
       g.markRead(sel);
       for (const m of msgs) if (m.id.startsWith('E') && !m.id.includes('-')) g.open(`msg:${m.id}`);
+    };
+
+    /** "뭐부터 봐요?" quick replies (rung 2 on request): the right colleague answers at once, free. */
+    const askChips = (): HTMLElement => {
+      const a = g.cs.hints.ask;
+      if (!a || g.st.finished) return h('span');
+      const wrap = h('div.ask', null, ...a.prompts.map((p) => h('button.ask-chip', { onclick: () => {
+        const r = g.ask(p);
+        if (r) select(r.channel);
+      } }, p)));
+      const to = g.askPreview();
+      if (to) wrap.appendChild(h('span.ask-to', null, t('msg.askTo', { who: ctx.name(to.from) })));
+      return wrap;
+    };
+
+    /** "지훈님이 입력 중…" under the open channel while a colleague types there. */
+    const renderTyping = () => {
+      clear(typingRow);
+      const who = sel === '__drafts' ? [] : g.typing().filter((x) => x.channel === sel);
+      typingRow.classList.toggle('on', who.length > 0);
+      for (const w of who) typingRow.appendChild(h('div.typing', null, ctx.avatar(w.from, 20), h('span', null, t('msg.typing', { who: ctx.name(w.from) })), h('span.dots', null, h('i'), h('i'), h('i'))));
+      if (who.length) list.scrollTop = list.scrollHeight;
     };
 
     const select = (id: string) => {
@@ -130,6 +158,17 @@ export const messengerApp: AppDef = {
     select(sel);
     return {
       refresh: (type?: string) => {
+        if (type === 'typing') {
+          renderTyping();
+          renderSide();
+          return;
+        }
+        if (type === 'unsend') {
+          const top = list.scrollTop;
+          renderList();
+          list.scrollTop = top;
+          return;
+        }
         if (type !== 'message' && type !== 'save') return;
         const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 30;
         renderSide();

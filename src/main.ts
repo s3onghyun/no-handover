@@ -17,10 +17,10 @@ import { AudioManager } from './audio/audio.ts';
 import { MANIFEST } from './audio/manifest.ts';
 import { installAudioUnlock } from './audio/unlock.ts';
 import { runBriefing } from './ui/briefing.ts';
+import { renderHintPanel } from './ui/hintpanel.ts';
 import { mountObjectives } from './ui/objectives.ts';
 import type { Message } from './engine/build.ts';
 import type { ScoreResult } from './engine/scoring.ts';
-import type { SlotId } from './engine/types.ts';
 
 // ------------------------------------------------------------------ campaign: which case runs (docs/campaign-ladder.md)
 const campaign = new Campaign(CAMPAIGN);
@@ -62,9 +62,11 @@ function loadGame(): Game {
   } catch {
     saved = null;
   }
-  const settings: Partial<{ idleMinutes: number; clockRate: number }> = {};
+  const settings: Partial<{ idleMinutes: number; clockRate: number; senior: boolean }> = {};
   if (params.get('nudge')) settings.idleMinutes = Math.max(0.1, +params.get('nudge')!);
   if (params.get('rate')) settings.clockRate = Math.max(1, +params.get('rate')!);
+  // senior mode: hints cost points again (default: hints are only a record)
+  if (params.has('senior')) settings.senior = params.get('senior') !== '0';
   return new Game(CASE, saved, Object.keys(settings).length ? settings : undefined);
 }
 
@@ -77,7 +79,8 @@ const markSolved = () => {
   saveProgress();
 };
 if (game.st.finished) markSolved(); // saves from before the campaign existed
-const audio = new AudioManager(MANIFEST, { storage });
+// music is one-shot stings by default; `?music=loop` lets a music.* cue loop (ambience always loops)
+const audio = new AudioManager(MANIFEST, { storage, musicLoops: params.get('music') === 'loop' });
 (window as unknown as { __game: Game; __audio: AudioManager }).__game = game; // e2e and facilitator console access
 (window as unknown as { __audio: AudioManager }).__audio = audio;
 // the first click or key anywhere (lock screen included) starts sound; logged for the playtest
@@ -191,6 +194,7 @@ const ctx: UiCtx = {
     const n = campaign.next(CASE.id);
     return n ? { label: `${caseLabel(n)} 「${n.title}」`, go: () => goCase(n.id) } : null;
   },
+  caseLabel: caseLabel(ENTRY),
 };
 wm.ctx = ctx;
 wm.onFocus = (id) => game.focus(id);
@@ -284,34 +288,25 @@ notifBtn.onclick = () => {
   for (const n of game.cs.notifications) game.open(`notif:${n.id}`);
 };
 
-hintBtn.onclick = () => {
-  if (pop) return closePop();
-  pop = h('div.popover', { role: 'dialog' }, h('h3', null, `💡 ${t('hint.title')}`), h('p.muted', { style: 'margin:0 4px 8px;font-size:12.5px' }, '먼저 은재님 PC 안의 흔적(history, README, 주석, 메모)과 동료 메시지를 보세요. 그래도 막히면:'));
-  for (const slot of game.cs.accusation.slots) {
-    const used = game.ladder.usedExplicit(slot.id as SlotId);
-    const next = game.ladder.nextExplicit(slot.id as SlotId);
-    const box = h('div.notif', { style: 'cursor:default' }, h('b', null, slot.title));
-    for (const u of used) box.appendChild(h('div', { style: 'font-size:13px;margin-top:4px' }, `💡 ${u}`));
-    box.appendChild(
-      h(
-        'button.hint-btn',
-        {
-          style: 'margin-top:6px',
-          disabled: !next,
-          onclick: () => {
-            if (!next || !confirm(`${t('hint.title')}: −${next.cost}`)) return;
-            game.useHint(slot.id as SlotId);
-            closePop();
-            hintBtn.click();
-          },
-        },
-        next ? `${t('report.hint')} −${next.cost}${t('report.points')}` : t('hint.none'),
-      ),
-    );
-    pop.appendChild(box);
-  }
+/** 💡 panel: 요약 → 방향 → 정답 per section; re-rendered in place as steps open. */
+let hintFocus: string | undefined;
+function openHintPanel(focus?: string): void {
+  closePop();
+  hintFocus = focus;
+  game.log('hint-panel', { focus: focus ?? null });
+  pop = h('div.popover.hints', { role: 'dialog' });
+  const draw = () => {
+    if (!pop) return;
+    const top = pop.scrollTop;
+    pop.replaceChildren(renderHintPanel(game, { focus: hintFocus, rerender: draw }));
+    pop.scrollTop = top;
+  };
+  draw();
   document.body.appendChild(pop);
-};
+  if (focus) pop.querySelector(`[data-key="${focus}"]`)?.scrollIntoView({ block: 'nearest' });
+}
+hintBtn.onclick = () => (pop ? closePop() : openHintPanel());
+document.addEventListener('nh-hint', (e) => openHintPanel((e as CustomEvent<string>).detail));
 ptBtn.onclick = () => wm.open('playtest');
 
 helpBtn.onclick = () => {
@@ -355,10 +350,11 @@ game.on('change', (ev) => {
 });
 game.on('message', (m) => {
   const msg = m as Message;
-  void audio.play('sfx.ding');
-  // a recorded line for a colleague nudge, if main produced one (voice.nudge-<id>)
   const last = game.st.log[game.st.log.length - 1];
   const reason = last?.type === 'message' ? String(last.reason ?? '') : '';
+  if (reason === 'ask') return; // the player's own quick reply: no ding, no toast
+  void audio.play('sfx.ding');
+  // a recorded line for a colleague nudge, if main produced one (voice.nudge-<id>)
   if (reason.startsWith('nudge:') && `voice.nudge-${reason.slice(6)}` in MANIFEST) void audio.play(`voice.nudge-${reason.slice(6)}`);
   const c = game.cs.channels.find((x) => x.id === msg.channel);
   const el = h('div', null, h('b', null, `${ctx.name(msg.from)}`), h('span', { style: 'opacity:.7' }, ` · ${c?.title ?? ''}`), h('div', null, msg.text.length > 90 ? msg.text.slice(0, 90) + '…' : msg.text));
@@ -376,11 +372,22 @@ game.on('note', (id) => {
 });
 game.on('friction', () => void audio.play('sfx.error'));
 game.on('hint-panel', () => {
-  if (!pop) hintBtn.click();
+  if (!pop) openHintPanel();
 });
 // a very quiet key tick when a command runs (Enter in the terminal prompt; not while an IME composes)
 desktop.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.isComposing && (e.target as HTMLElement).closest?.('.tin')) void audio.play('sfx.key');
+});
+// terminal typing: one of three key clicks per key press, slightly panned (Her Story's keyboard)
+const KEY_CLICKS = ['sfx.key-1', 'sfx.key-2', 'sfx.key-3'];
+let lastClick = 0;
+desktop.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.repeat || e.ctrlKey || e.metaKey || ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape'].includes(e.key)) return;
+  if (!(e.target as HTMLElement).closest?.('.tin')) return;
+  const now = performance.now();
+  if (now - lastClick < 25) return;
+  lastClick = now;
+  void audio.play(KEY_CLICKS[Math.floor(Math.random() * KEY_CLICKS.length)], { pan: (Math.random() * 2 - 1) * 0.25 });
 });
 game.on('pinned', () => void audio.play('sfx.pin'));
 game.on('accuse', (sc) => {

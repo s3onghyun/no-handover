@@ -18,6 +18,8 @@ export interface UiCtx {
   name(personId: string): string;
   /** The next playable case in the campaign, if any (debrief "다음 사건 →" button). */
   nextCase?: () => { label: string; go(): void } | null;
+  /** 'Case 0 · 튜토리얼', 'Case 3' (result card). */
+  caseLabel?: string;
 }
 
 export interface AppDef {

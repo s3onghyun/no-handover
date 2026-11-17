@@ -395,3 +395,48 @@ input, textarea, select { font: inherit; }
 .tray-btn.skiptut { font-size: 12px; opacity: 0.85; }
 .icon.unlocked { animation: icon-in 900ms ease-out; }
 @keyframes icon-in { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+
+/* ---------- 💡 hint panel: 요약 → 방향 → 정답 ---------- */
+.popover.hints { width: 430px; max-height: 72vh; }
+.hintpanel .hp-intro { margin: 0 4px 6px; font-size: 12.5px; color: var(--ink-2); }
+.hintpanel .hp-record { margin: 0 4px 10px; font-size: 12px; color: var(--accent-2); }
+.hp-sec { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; background: #fcfbf8; }
+.hp-sec.focus { border-color: #d8c26a; box-shadow: 0 0 0 2px #fff1b8; }
+.hp-title { font-size: 13.5px; margin-bottom: 6px; display: flex; gap: 6px; align-items: baseline; }
+.hp-kind { font-size: 11px; color: #fff; background: var(--accent-2); border-radius: 4px; padding: 1px 6px; }
+.hp-step { display: flex; gap: 8px; align-items: flex-start; margin-top: 6px; font-size: 13px; }
+.hp-n { color: var(--ink-3); width: 16px; flex: none; line-height: 22px; }
+.hp-body { flex: 1; min-width: 0; }
+.hp-body small { display: block; color: var(--ink-3); font-size: 11px; }
+.hp-body ul { margin: 2px 0 0; padding-left: 16px; }
+.hp-dir { background: #fff6d6; border: 1px solid #ecd98c; border-radius: 6px; padding: 4px 8px; margin: 2px 0 4px; }
+.hp-answer { background: #fdeeea; border: 1px solid #efb9ad; border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; }
+.hp-confirm { font-size: 12.5px; color: var(--warn); margin-bottom: 4px; }
+.hp-body .hint-btn, .hp-body .ghost-btn { margin-right: 6px; }
+.hint-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ---------- messenger: ask a colleague + typing indicator ---------- */
+.composer .ask { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+.ask-chip { font-size: 12.5px; border: 1px solid #b8c3d6; background: #eef2f8; color: var(--accent); border-radius: 14px; padding: 3px 12px; cursor: pointer; }
+.ask-chip:hover { background: #e1e8f3; }
+.ask-to { font-size: 11.5px; color: var(--ink-3); }
+.typing-row { min-height: 0; padding: 0 16px; }
+.typing-row.on { padding: 4px 16px 6px; }
+.typing { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.typing .dots { display: inline-flex; gap: 3px; }
+.typing .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--ink-3); animation: typingdot 1.1s infinite ease-in-out; }
+.typing .dots i:nth-child(2) { animation-delay: 0.18s; }
+.typing .dots i:nth-child(3) { animation-delay: 0.36s; }
+@keyframes typingdot { 0%, 70%, 100% { opacity: 0.25; transform: translateY(0); } 35% { opacity: 1; transform: translateY(-2px); } }
+.typing-dot { margin-left: auto; color: var(--accent-2); font-weight: 700; }
+
+/* ---------- debrief: record, badge, result card ---------- */
+.debrief .record { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0 2px; font-size: 14px; }
+.debrief .rec-label { font-size: 12px; color: var(--ink-3); }
+.debrief .rec-line { font-weight: 600; }
+.badge-nohint { background: var(--hl); color: var(--ink); border-radius: 14px; padding: 3px 12px; font-weight: 700; font-size: 13px; transform: rotate(-3deg); display: inline-block; }
+.rec-senior { font-size: 12px; color: #fff; background: var(--accent-2); border-radius: 4px; padding: 1px 6px; }
+.cardbox { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 12px 0 6px; }
+.cardbox canvas.resultcard { width: 360px; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
+.cardbox .cardside { flex: 1; min-width: 180px; }
+.cardbox .cardside p { font-size: 12.5px; margin: 0 0 8px; }

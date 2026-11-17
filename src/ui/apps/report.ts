@@ -2,7 +2,10 @@ import { clear, h, storage } from '../dom.ts';
 import { t } from '../../i18n.ts';
 import type { AppDef, UiCtx } from '../wm.ts';
 import type { Submission } from '../../engine/scoring.ts';
-import { complete, grade } from '../../engine/scoring.ts';
+import { complete, grade, wrongReply } from '../../engine/scoring.ts';
+import { playRecord, recordLine, resultCard } from '../../engine/record.ts';
+import { openedFor } from '../hintpanel.ts';
+import { drawResultCard, downloadResultCard } from '../resultcard.ts';
 
 function debrief(root: HTMLElement, ctx: UiCtx): void {
   const g = ctx.game;
@@ -10,12 +13,25 @@ function debrief(root: HTMLElement, ctx: UiCtx): void {
   const last = g.st.submissions[g.st.submissions.length - 1];
   const s = last.score;
   const farewell = g.cs.notes.find((n) => n.highlight !== undefined);
+  const rec = playRecord(g);
+  const senior = rec.senior;
+  const card = resultCard(g, ctx.caseLabel ?? '');
+  const canvas = h('canvas.resultcard', { 'aria-label': `${card.caseLabel} ${card.caseTitle} — ${recordLine(rec)}` }) as HTMLCanvasElement;
+  drawResultCard(canvas, card);
   root.appendChild(
     h(
       'div.debrief',
       null,
       h('p.muted', null, `${t('debrief.title')} · ${g.cs.title}`),
       h('h2', null, d.headline),
+      h(
+        'div.record',
+        null,
+        h('span.rec-label', null, t('debrief.record')),
+        h('span.rec-line', null, recordLine(rec)),
+        rec.solved && rec.hints === 0 ? h('span.badge-nohint', null, `💡 ${t('debrief.badge')}`) : null,
+        senior ? h('span.rec-senior', null, t('debrief.senior')) : null,
+      ),
       h(
         'div.scorebox',
         null,
@@ -24,7 +40,18 @@ function debrief(root: HTMLElement, ctx: UiCtx): void {
         ...g.cs.accusation.slots.map((slot) => h('div.s', null, slot.title.split(' ')[0], h('b', null, `${s.slots[slot.id]?.correct ? '✓' : '✗'} ${s.slots[slot.id]?.points ?? 0}`))),
         h('div.s', null, `제출 ×${s.multiplier}`, h('b', null, `${g.st.submissions.length}회`)),
         h('div.s', null, t('report.evidence'), h('b', null, `+${s.evidenceBonus}`)),
-        h('div.s', null, '힌트', h('b', null, `−${s.hintCost}`)),
+        senior ? h('div.s', null, '힌트', h('b', null, `−${s.hintCost}`)) : h('div.s', null, '힌트', h('b', null, `${rec.hints}회`)),
+      ),
+      h(
+        'div.cardbox',
+        null,
+        canvas,
+        h(
+          'div.cardside',
+          null,
+          h('p.muted', null, t('debrief.cardNote')),
+          h('button.primary-btn.card-dl', { onclick: () => downloadResultCard(canvas, `no-handover-${g.cs.id}.png`) }, `🖼 ${t('debrief.card')}`),
+        ),
       ),
       s.allCorrect ? null : h('p', { style: 'color:var(--warn)' }, '제출 기회를 모두 썼다. 아래가 실제로 일어난 일이다.'),
       h('h3', null, t('debrief.memo')),
@@ -117,8 +144,7 @@ export const reportApp: AppDef = {
       }
       root.appendChild(h('p.intro', null, g.cs.accusation.intro ?? t('report.intro')));
       for (const slot of g.cs.accusation.slots) {
-        const hints = g.ladder.usedExplicit(slot.id);
-        const next = g.ladder.nextExplicit(slot.id);
+        const hints = openedFor(g, slot.id);
         const box = h(
           'section.slot',
           null,
@@ -126,20 +152,7 @@ export const reportApp: AppDef = {
             'h3',
             null,
             slot.title,
-            h(
-              'button.hint-btn',
-              {
-                disabled: !next,
-                title: t('hint.title'),
-                onclick: () => {
-                  if (!next) return;
-                  if (!confirm(`${t('hint.title')}: −${next.cost}${t('report.points')}`)) return;
-                  g.useHint(slot.id);
-                  render();
-                },
-              },
-              next ? `💡 ${t('report.hint')} −${next.cost}` : t('hint.none'),
-            ),
+            h('button.hint-btn', { title: t('hint.title'), onclick: () => document.dispatchEvent(new CustomEvent('nh-hint', { detail: slot.id })) }, t('hint.slot')),
           ),
           h('div.prompt', null, slot.prompt),
         );
@@ -181,11 +194,10 @@ export const reportApp: AppDef = {
                 const r = g.submit(sub);
                 if (!r) return;
                 if (!r.allCorrect && !g.st.finished) {
-                  const total = g.cs.accusation.slots.length;
-                  const wrong = g.cs.accusation.slots.filter((x) => !r.slots[x.id]?.correct).length;
                   const rp = g.cs.accusation.reply;
                   const count = max > 0 ? ` (${g.st.submissions.length}/${max})` : ` (${g.st.submissions.length})`;
-                  const body = rp ? rp.partial.replace('{n}', String(wrong)).replace('{total}', String(total)) : t('report.partial', { n: wrong, total });
+                  // main cases: "어딘가 틀렸다" only (which slot stays hidden); the tutorial counts the wrong slots
+                  const body = wrongReply(g.cs, r, { partial: t('report.partial'), bundled: t('report.bundled') });
                   lastReply = `${replyLabel(ctx)}${count}\n\n${body}\n\n${rp ? rp.sign : '오미래 드림 / CTO'}`;
                 }
                 render();
@@ -193,7 +205,7 @@ export const reportApp: AppDef = {
             },
             `${t('report.submit')} (${leftText})`,
           ),
-          h('span.muted', null, `★ ${t('report.evidence')}: +${Math.min(30, g.pinnedKeyClues() * 5)} · 힌트 −${g.ladder.totalCost()}`),
+          h('span.muted', null, `★ ${t('report.evidence')}: +${Math.min(30, g.pinnedKeyClues() * 5)} · ${g.st.settings.senior ? `힌트 −${g.ladder.totalCost()}` : t('report.hints', { n: g.hintCount() })}`),
         ),
       );
       if (lastReply) root.appendChild(h('div.reply', null, lastReply));
@@ -201,7 +213,7 @@ export const reportApp: AppDef = {
     render();
     return {
       refresh: (type?: string) => {
-        if (type === 'accuse' || type === 'pins') render();
+        if (type === 'accuse' || type === 'pins' || type === 'hint') render();
       },
     };
   },
