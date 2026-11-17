@@ -816,9 +816,9 @@ done`,
   ],
 
   stickies: [
-    { text: '다음 분께 —\n밤에 도는 것들을\n먼저 보세요.', x: 74, y: 9, color: '#F2D94E' },
-    { text: '도윤님 —\n월요일에 물 주세요 🌱', x: 74, y: 31, color: '#C9E4B4' },
-    { text: '보안팀: 조사 모드 (읽기 전용)\n명령 목록은 터미널에서 help', x: 74, y: 52, color: '#E8E6E1' },
+    { text: '다음 분께 —\n밤에 도는 것들을\n먼저 보세요.', x: 74, y: 38, color: '#F2D94E' },
+    { text: '도윤님 —\n월요일에 물 주세요 🌱', x: 74, y: 57, color: '#C9E4B4' },
+    { text: '보안팀: 조사 모드 (읽기 전용)\n명령 목록은 터미널에서 help', x: 74, y: 75, color: '#E8E6E1' },
   ],
 
   notifications: [
@@ -1059,5 +1059,55 @@ done`,
       { who: 'jihoon', text: '데모 압박 속에서 몇 달째 git-admins로 리뷰를 건너뛰었다. 악의가 아니라 부끄러움과 겁으로 메시지를 지웠다. "확인했습니다." "죄송합니다."' },
       { who: 'eunjae', text: '아무것도 숨기지 않았다. 말하려던 것을 끝내 보내지 못했을 뿐이다. 17:48의 초안은 아직 임시보관함에 있다.' },
     ],
+  },
+
+  // ------------------------------------------------------------------ opening (first 3 minutes)
+  // Briefing = 지훈's Monday-morning voice message (voice: characters.md §4(d) / §8-1: short bursts,
+  // 해요체 + 물결, ㅋㅋ, no full stops; under pressure he laughs: "설마"). 오미래 appears by mail only.
+  opening: {
+    briefing: {
+      lockTime: '09:00',
+      lockDate: '11월 16일 월요일',
+      caller: 'jihoon',
+      kind: 'voice',
+      voiceCue: 'voice.briefing-jihun',
+      lines: [
+        { text: '도윤님~ 굿모닝요!! 지훈이에요 ㅋㅋ', pauseMs: 1000 },
+        { text: '은재 선배님 금요일에 퇴사하셨잖아요… 그 PC 오늘부터 도윤님이 받아요', pauseMs: 1300 },
+        { text: '근데 결제 API가 금요일부터 좀 이상해요 토요일 새벽엔 5xx도 났었고요 ㅋㅋ 설마 큰 건 아니겠죠', pauseMs: 1500 },
+        { text: '미래님이 오늘 21시까지 원인 보고서 달래요!! 메일 곧 갈 거예요', pauseMs: 1300 },
+        { text: '보안팀이 선배님 세션 그대로 열어 뒀대요 터미널부터 한번 봐요~ 🙏', pauseMs: 1500 },
+      ],
+      mail: 'brief',
+      mailPreview: '도윤님, 은재님 PC 반납 정리와 함께 원인 보고서를 오늘 21:00까지 부탁드립니다.',
+    },
+    objectives: {
+      title: '오늘 할 일',
+      items: [
+        {
+          id: 'terminal',
+          text: '열린 터미널 확인',
+          hint: '선배가 치다 만 crontab - 가 아직 깜빡여요. 터미널 창을 눌러 보세요.',
+          any: [{ interact: 'terminal' }],
+          pulse: 'terminal',
+        },
+        {
+          id: 'last-command',
+          text: '선배가 마지막에 친 명령 찾기',
+          hint: '터미널에 history 를 쳐 보세요. 맨 아래가 가장 최근이에요.',
+          any: [{ clue: 'c_history' }, { output: '갔다 와서 마저', host: 'pay-api-01' }],
+        },
+        {
+          id: 'pins',
+          text: '증거 3개 보드에 올리기',
+          hint: '수상한 줄에 마우스를 올리면 오른쪽에 📌 가 보여요. 누르면 증거 보드로 가요.',
+          any: [{ pins: 3 }],
+        },
+      ],
+      after: [
+        '다음: 증거 보드에서 시각을 맞춰 보고, 원인 보고서 세 칸(원인 / 경위 / 책임)을 채우기.',
+        '막히면: 은재 선배의 history, 메모, crontab 주석부터. 그래도 막히면 💡',
+      ],
+    },
   },
 };

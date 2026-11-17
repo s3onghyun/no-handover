@@ -4,6 +4,7 @@
 
 import { buildWorld, type Message, type World } from './build.ts';
 import { HintLadder, type LadderState } from './hints.ts';
+import { emptyObjectiveState, Objectives, type Observation, type ObjectiveState } from './objectives.ts';
 import { scoreSubmission, type ScoreResult, type Submission } from './scoring.ts';
 import { Shell, type OutLine, type RunResult, type Session, type ShellEvent } from './shell.ts';
 import { detectTime, parseLocal } from './time.ts';
@@ -65,6 +66,12 @@ export interface SaveState {
   appTime: Record<string, number>;
   focusedApp: string | null;
   log: LogEvent[];
+  /** "오늘 할 일" checklist (added after v1 saves; filled in on load when missing). */
+  objectives: ObjectiveState;
+  /** Opening briefing: whether it ran, was skipped, and for how long. */
+  briefing: { startedAt: number | null; endedAt: number | null; skipped: boolean; watchedMs: number; replays: number };
+  /** Facilitator's first-minutes observations typed into the playtest panel. */
+  facilitator: Record<string, string>;
 }
 
 type Listener = (payload?: unknown) => void;
@@ -77,6 +84,7 @@ export class Game {
   readonly shell: Shell;
   readonly start: number;
   ladder: HintLadder;
+  objectives: Objectives;
   st: SaveState;
   private listeners = new Map<string, Set<Listener>>();
   private clueRegex = new Map<string, { re: RegExp; host?: string }[]>();
@@ -94,6 +102,12 @@ export class Game {
     }
     const s = saved && saved.v === SAVE_VERSION && saved.caseId === cs.id ? saved : null;
     this.st = s ?? this.fresh(settings);
+    // saves written before the opening existed
+    this.st.objectives ??= emptyObjectiveState();
+    this.st.briefing ??= { startedAt: null, endedAt: null, skipped: false, watchedMs: 0, replays: 0 };
+    this.st.facilitator ??= {};
+    this.objectives = new Objectives(cs.opening?.objectives.items ?? [], this.st.objectives);
+    this.st.objectives = this.objectives.state;
     if (settings) this.st.settings = { ...this.st.settings, ...settings };
     this.ladder = new HintLadder(cs.hints, 0, { idleMs: this.st.settings.idleMinutes * 60000 }, this.st.ladder);
     this.st.ladder = this.ladder.state;
@@ -131,6 +145,9 @@ export class Game {
       appTime: {},
       focusedApp: null,
       log: [{ t: 0, type: 'start', case: this.cs.id }],
+      objectives: emptyObjectiveState(),
+      briefing: { startedAt: null, endedAt: null, skipped: false, watchedMs: 0, replays: 0 },
+      facilitator: {},
     };
   }
 
@@ -210,6 +227,7 @@ export class Game {
     if (c.trace && !this.st.log.some((e) => e.type === 'rung1')) this.log('rung1', { clue: c.id });
     if (c.key) this.ladder.progress(this.st.playMs);
     this.emit('clue', c);
+    this.observe({ type: 'clue', id: c.id });
     for (const tr of this.cs.triggers) {
       if (this.st.triggersFired.includes(tr.id)) continue;
       if ('clue' in tr.when && tr.when.clue === c.id) this.fire(tr.id);
@@ -233,6 +251,7 @@ export class Game {
       this.log('open', { key });
     }
     for (const c of this.cs.clues) if (!(c.id in this.st.clues) && c.match.some((m) => 'open' in m && m.open === key)) this.discover(c, key);
+    this.observe({ type: 'open', key });
     this.emit('save');
   }
 
@@ -335,14 +354,23 @@ export class Game {
     tab.input = '';
     this.log('cmd', { tab: tab.label, host, line, expanded: r.expanded !== line ? r.expanded : undefined, lines: r.lines.length, events: r.events.length ? r.events : undefined });
     for (const e of r.events) this.logShellEvent(e);
-    this.observeOutput(host, [line, ...r.lines.filter((l) => l.cls !== 'err').map((l) => l.text)], `cmd:${line}`);
+    const output = r.lines.filter((l) => l.cls !== 'err').map((l) => l.text);
+    const progressBefore = Object.keys(this.st.clues).length + Object.keys(this.st.objectives.done).length;
+    this.observeOutput(host, [line, ...output], `cmd:${line}`);
+    this.observe({ type: 'cmd', host, line, output });
+    // first command that showed the player evidence (found a clue or ticked an objective)
+    if (Object.keys(this.st.clues).length + Object.keys(this.st.objectives.done).length > progressBefore && !this.st.log.some((e) => e.type === 'meaningful'))
+      this.log('meaningful', { line });
     this.emit('save');
     return r;
   }
 
   private logShellEvent(e: ShellEvent): void {
     const { type, ...rest } = e;
-    if (type === 'notfound' || type === 'blocked' || type === 'syntax') this.log('friction', { kind: type, ...rest });
+    if (type === 'notfound' || type === 'blocked' || type === 'syntax') {
+      this.log('friction', { kind: type, ...rest });
+      this.emit('friction', type);
+    }
     else if (type === 'private') this.log('private', rest);
   }
 
@@ -364,7 +392,9 @@ export class Game {
     pin.onTimeline = pin.ts !== null;
     this.st.pins.push(pin);
     this.log('pin', { kind: pin.kind, source: pin.source, clues: pin.clueIds, text: pin.text.slice(0, 160) });
+    this.emit('pinned', pin);
     this.emit('pins');
+    this.observe({ type: 'pins', count: this.st.pins.length });
     this.emit('save');
     return pin;
   }
@@ -425,6 +455,74 @@ export class Game {
     return score;
   }
 
+  // ---------------------------------------------------------------- opening: briefing + objectives
+
+  /** Feed the "오늘 할 일" checklist; emits 'objective' with the ids that ticked. */
+  private observe(o: Observation): void {
+    if (this.objectives.folded()) return;
+    const ticked = this.objectives.observe(o, this.st.playMs);
+    if (!ticked.length) return;
+    for (const id of ticked) this.log('objective', { id });
+    this.emit('objective', ticked);
+  }
+
+  /** The player clicked or typed inside an app window (not the automatic focus on open). */
+  interact(app: string): void {
+    if (!this.st.log.some((e) => e.type === 'interact' && e.app === app)) this.log('interact', { app });
+    this.observe({ type: 'interact', app });
+  }
+
+  /** Fold the finished checklist into the notebook (the UI calls this after its tick animation). */
+  foldObjectives(): boolean {
+    if (!this.objectives.fold(this.st.playMs)) return false;
+    this.log('objectives-folded');
+    this.emit('objectives-folded');
+    this.emit('save');
+    return true;
+  }
+
+  briefingStart(replay = false): void {
+    if (replay) this.st.briefing.replays++;
+    else this.st.briefing.startedAt = this.st.playMs;
+    this.log('briefing', { action: replay ? 'replay' : 'start' });
+  }
+
+  /**
+   * Briefing finished or skipped. The first time, the rung-2 idle timer starts from here, so
+   * the stuck clock never runs while the player is still being briefed.
+   */
+  briefingEnd(skipped: boolean, watchedMs: number, step: string, replay = false): void {
+    this.log('briefing', { action: skipped ? 'skip' : 'end', watchedMs: Math.round(watchedMs), step, replay: replay || undefined });
+    if (replay) return;
+    this.st.briefing.endedAt = this.st.playMs;
+    this.st.briefing.skipped = skipped;
+    this.st.briefing.watchedMs = Math.round(watchedMs);
+    this.ladder.progress(this.st.playMs);
+    this.emit('save');
+  }
+
+  /** First-minutes summary for the playtest log (docs/playtest.md, Q8–Q12). */
+  firstMinutes(): Record<string, unknown> {
+    const L = this.st.log;
+    const cmds = L.filter((e) => e.type === 'cmd');
+    const meaningful = L.find((e) => e.type === 'meaningful');
+    const audio = L.filter((e) => e.type === 'audio');
+    const lastAudio = audio[audio.length - 1];
+    return {
+      briefing: { ...this.st.briefing },
+      firstCommandAt: cmds[0]?.t ?? null,
+      firstCommand: cmds[0]?.line ?? null,
+      firstMeaningfulCommandAt: meaningful?.t ?? null,
+      firstMeaningfulCommand: meaningful?.line ?? null,
+      terminalInteractAt: L.find((e) => e.type === 'interact' && e.app === 'terminal')?.t ?? null,
+      objectives: (this.cs.opening?.objectives.items ?? []).map((i) => ({ id: i.id, t: this.st.objectives.done[i.id] ?? null })),
+      objectivesFoldedAt: this.st.objectives.foldedAt,
+      helpOpenedAt: L.find((e) => e.type === 'help')?.t ?? null,
+      audio: { changes: audio.map((e) => ({ t: e.t, muted: e.muted, volume: e.volume })), mutedAtEnd: lastAudio ? !!lastAudio.muted : null, volumeAtEnd: lastAudio ? lastAudio.volume : null },
+      facilitator: { ...this.st.facilitator },
+    };
+  }
+
   // ---------------------------------------------------------------- focus + playtest export
 
   focus(app: string | null): void {
@@ -459,6 +557,7 @@ export class Game {
         pins: this.st.pins.length,
         pinnedKeyClues: this.pinnedKeyClues(),
         appSeconds: Object.fromEntries(Object.entries(this.st.appTime).map(([k, v]) => [k, Math.round(v / 1000)])),
+        firstMinutes: this.firstMinutes(),
       },
       commands,
       friction,

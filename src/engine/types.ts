@@ -339,4 +339,66 @@ export interface CaseFile {
   hints: HintsDef;
   triggers: TriggerDef[];
   debrief: DebriefDef;
+  /** First minutes: briefing scene + "오늘 할 일" objectives (optional; see docs/case-format.md §12). */
+  opening?: OpeningDef;
+}
+
+// ------------------------------------------------------------------ opening (first 3 minutes)
+
+/** One condition that ticks an objective. Evaluated by src/engine/objectives.ts. */
+export type ObjectiveCond =
+  /** The player clicked or typed inside this app's window (auto-focus on open does not count). */
+  | { interact: string }
+  /** A terminal command was run; `cmd` is a regex on the typed line ('' = any command). */
+  | { cmd: string; host?: string }
+  /** A terminal output line (not the typed line) matched this regex. */
+  | { output: string; host?: string }
+  /** A clue was found. */
+  | { clue: string }
+  /** The player opened something (same keys as clue `open` matches). */
+  | { open: string }
+  /** At least this many pins are on the evidence board. */
+  | { pins: number };
+
+export interface ObjectiveDef {
+  id: string;
+  /** Checkbox label on the sticky. */
+  text: string;
+  /** Small scaffolding line shown only while this is the current (first unticked) item. */
+  hint?: string;
+  /** Any one condition ticks the item. */
+  any: ObjectiveCond[];
+  /** App window to pulse while this item is current (e.g. 'terminal'). */
+  pulse?: string;
+}
+
+export interface BriefingLine {
+  text: string;
+  /** Pause after the line is typed out (ms, default 700). */
+  pauseMs?: number;
+}
+
+export interface OpeningDef {
+  briefing: {
+    /** Lock-screen clock text, e.g. '09:00', and date line. */
+    lockTime: string;
+    lockDate: string;
+    /** Person id of the caller and how the call is framed. */
+    caller: string;
+    kind: 'voice' | 'call';
+    /** Audio manifest id of the recorded line; plays if the file exists, otherwise the subtitles carry it. */
+    voiceCue?: string;
+    /** Subtitle lines, typed out one by one (case content, Korean). */
+    lines: BriefingLine[];
+    /** Mail id that slides in as a notification near the end. */
+    mail: string;
+    /** One-line preview under the mail subject. */
+    mailPreview: string;
+  };
+  objectives: {
+    title: string;
+    items: ObjectiveDef[];
+    /** Lines added under the folded checklist in the notebook (what to do next). */
+    after: string[];
+  };
 }
