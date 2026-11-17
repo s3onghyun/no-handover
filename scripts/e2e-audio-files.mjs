@@ -7,7 +7,7 @@
 // Runs twice on temporary copies of dist/: as built (Opus .ogg first) and with every .ogg removed
 // (forces the .mp3 fallback). Each pass watches the whole briefing (~35 s).
 //
-//   npm run build && node scripts/e2e-audio-files.mjs     (also part of `npm run e2e`)
+//   npm run build && node scripts/e2e-audio-files.mjs     (run after `npm run e2e`; not wired into it to keep package.json out of this change)
 
 import { preview } from 'vite';
 import { chromium } from 'playwright-core';

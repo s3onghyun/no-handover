@@ -78,13 +78,23 @@ public/characters/  캐릭터 아트 (아래 참고)
 
 예: `public/audio/music/amb.office.ogg`와 `public/audio/music/amb.office.mp3`. 하나만 있어도 된다. 다른 경로를 쓰려면 그 큐에 `src: [...]`를 적는다.
 
+**들어 있는 음원 파일** (2026-11-17, 합계 2.55 MB / 예산 4 MB, 각각 Opus `.ogg` + `.mp3`, 48 kHz):
+
+| 큐 | 길이 | 라우드니스 | 내용 |
+|---|---|---|---|
+| `amb.office` | 78.9 s 이음매 없는 루프 | −24 LUFS | 데스크톱 환경음 (Gemini 음악) |
+| `music.briefing` | 12.7 s | −18 LUFS | 브리핑 잠금 화면 스팅 (Gemini 음악) |
+| `voice.briefing-jihun` | 23.6 s, 모노 | −16 LUFS | Case 3 브리핑의 지훈 음성 메시지 (Gemini TTS, Puck) |
+
+`music.reveal`은 아직 비어 있다(무음). **출처·처리 명령·측정값은 [`public/audio/audio-credits.md`](public/audio/audio-credits.md).** 음악·음성은 캡틴의 Gemini 계정으로 만든 **프로토타입용**이며, Gemini 앱 음악·TTS의 상업적 이용 조건은 판매 전에 확인해야 한다. 원본(저장소 밖 `data/infra-mystery-game/audio-in/`)에서 다시 만들기: `scripts/audio-prepare.sh <원본 폴더>`. 루프 이음매 검사: `scripts/audio-check-seam.sh`. 20초 미리듣기: `scripts/audio-preview.sh /tmp/nh-preview.wav`.
+
 **ZzFX 효과음** (파일 0, [ZzFX](https://github.com/KilledByAPixel/ZzFX) 1.4.0 MIT를 `src/audio/vendor/zzfx.ts`에 옮겨 넣음): `sfx.ding` `sfx.mail` `sfx.error` `sfx.tick` `sfx.done` `sfx.pin` `sfx.pulse` `sfx.key` `sfx.window-open` `sfx.window-close`, 그리고 파일이 올 때까지 `sfx.ring`(진동 두 번) `sfx.typing`(1.6초 루프). 한 가족으로 맞췄다: 사인 기반, 2–6 ms 어택, 짧은 감쇠, 저역 통과 필터. 최대 음량 100 %에서 피크 −18…−12 dBFS(`sfx.key`는 −24, `sfx.typing`은 −22로 더 작게). 소리를 바꾸려면 `manifest.ts`의 숫자 배열만 고친다. 배열은 [ZzFX 디자이너](https://killedbyapixel.github.io/ZzFX/)에 그대로 붙여 넣고 다시 꺼낼 수 있다. `hits`는 같은 소리를 여러 번(시각, 음량, 반음) 울린다. 범위는 `tests/zzfx.test.ts`가 지킨다.
 
 **자동 재생 규칙**: 브라우저는 사용자 제스처 전에는 소리를 막는다. 페이지 어디든 첫 `pointerdown`/`keydown`/`touchend`에서 AudioContext를 만들고 켠다(잠금 해제 버튼만이 아니다). 그 전에 요청된 루프(환경음)와 10초 안의 음악·목소리는 켜지는 즉시 재생되고, UI 효과음은 버린다. Safari가 다시 멈추면(백그라운드, 전화) 탭이 다시 보일 때와 다음 클릭에서 되살린다. 음소거 상태여도 잠금은 풀린다. 아직 켜지지 않았으면 화면 아래에 "아무 곳이나 클릭하면 소리가 켜집니다"가 보인다. 켜진 시각은 플레이 로그에 `audio-unlock`(`ms` 페이지 로드 후, `via` 이벤트, `muted`)으로 남는다. 작업 표시줄 🔊 음소거와 음량 막대는 localStorage에 남는다.
 
 **들어 보기**: `npm run audio:render -- /tmp/nh` 후 `/tmp/nh/ui-set.wav`. 또는 게임에서 브라우저 콘솔에 `__audio.play('sfx.done')`.
 
-**확인**: `npm run e2e`의 두 번째 단계(`scripts/e2e-audio.mjs`)가 `dist/`의 임시 복사본에 시험용 톤 두 개(`amb.office.ogg`, `voice.briefing-jihun.mp3`)를 넣고 띄운 뒤, 데스크톱 Chrome의 자동 재생 규칙을 걸고 잠금 화면 빈 곳을 클릭해 AudioContext가 `running`인지, `sfx.ding`이 실제 출력(AnalyserNode)에 나오는지, 넣은 파일이 코드 수정 없이 재생되는지, 음소거 상태에서도 잠금이 풀리는지 본다. 임시 복사본은 끝나면 지운다.
+**확인**: `npm run e2e`의 두 번째 단계(`scripts/e2e-audio.mjs`)가 `dist/`의 임시 복사본에 시험용 톤 두 개(`amb.office.ogg`, `voice.briefing-jihun.mp3`)를 넣고 띄운 뒤, 데스크톱 Chrome의 자동 재생 규칙을 걸고 잠금 화면 빈 곳을 클릭해 AudioContext가 `running`인지, `sfx.ding`이 실제 출력(AnalyserNode)에 나오는지, 넣은 파일이 코드 수정 없이 재생되는지, 음소거 상태에서도 잠금이 풀리는지 본다. 임시 복사본은 끝나면 지운다(이 단계는 들어 있는 음원 파일을 먼저 지우고 시작한다). 들어 있는 음원 자체는 `node scripts/e2e-audio-files.mjs`(빌드 후)가 확인한다: Case 3(`?case=friday-1802`)를 ogg 그대로 한 번, ogg를 숨겨 mp3로 한 번 띄워, 잠금 화면 스팅·지훈 음성·환경음 루프가 파일로 재생되는지, 자막이 음성 길이에 맞춰 끝나는지, 마스터 출력 레벨(AnalyserNode)과 콘솔 디코드 오류를 본다.
 
 ## 의존성과 라이선스
 
@@ -102,6 +112,8 @@ public/characters/  캐릭터 아트 (아래 참고)
 | 코드 | 버전 | 라이선스 | 위치 | 용도 |
 |---|---|---|---|---|
 | ZzFX (Frank Force) | 1.4.0 | MIT, Copyright (c) 2019 Frank Force. 고지는 파일 머리에 그대로 둠 | `src/audio/vendor/zzfx.ts` | UI 효과음 합성 |
+
+음원: `public/audio/music/`, `public/audio/voice/`의 파일은 Gemini 음악·Gemini TTS로 만든 프로토타입용(상업 조건 미확인). 자세한 것은 [`public/audio/audio-credits.md`](public/audio/audio-credits.md).
 
 전이 의존성: esbuild, rollup, postcss, nanoid, fdir, picomatch, tinyglobby, undici-types(MIT), picocolors(ISC), source-map-js(BSD-3-Clause). vitest는 설치 시점의 버전에 미해결 보안 권고가 있어 빼고, Node 22 내장 `node --test`와 타입 제거 기능으로 대신했다.
 
