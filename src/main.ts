@@ -12,7 +12,12 @@ import { notesApp } from './ui/apps/notes.ts';
 import { boardApp } from './ui/apps/board.ts';
 import { reportApp } from './ui/apps/report.ts';
 import { dashboardApp, playtestApp } from './ui/apps/misc.ts';
+import { AudioManager } from './audio/audio.ts';
+import { MANIFEST } from './audio/manifest.ts';
+import { runBriefing } from './ui/briefing.ts';
+import { mountObjectives } from './ui/objectives.ts';
 import type { Message } from './engine/build.ts';
+import type { ScoreResult } from './engine/scoring.ts';
 import type { SlotId } from './engine/types.ts';
 
 const CASE = caseFriday1802;
@@ -41,7 +46,11 @@ function loadGame(): Game {
 }
 
 const game = loadGame();
-(window as unknown as { __game: Game }).__game = game; // e2e and facilitator console access
+const audio = new AudioManager(MANIFEST, { storage });
+(window as unknown as { __game: Game; __audio: AudioManager }).__game = game; // e2e and facilitator console access
+(window as unknown as { __audio: AudioManager }).__audio = audio;
+/** True while the opening briefing covers the screen: play time (and the hint timers) stand still. */
+let briefingActive = false;
 
 let saveTimer = 0;
 const save = () => {
@@ -56,7 +65,33 @@ const clock = h('div.clock');
 const notifBtn = h('button.tray-btn', { title: t('tb.notifications'), 'aria-label': t('tb.notifications') }, '🔔');
 const hintBtn = h('button.tray-btn', { title: t('tb.hint') }, `💡 ${t('tb.hint')}`);
 const ptBtn = h('button.tray-btn', { title: t('app.playtest') }, '📋');
-const taskbar = h('div#taskbar', null, h('div.brand', null, t('game.title'), h('small', null, t('game.titleKo'))), tasks, hintBtn, notifBtn, ptBtn, clock);
+const helpBtn = h('button.tray-btn', { title: t('tb.help'), 'aria-label': t('tb.help') }, '❓');
+const soundBtn = h('button.tray-btn.sound', { 'aria-pressed': 'false' });
+const volume = h('input.vol', { type: 'range', min: 0, max: 100, step: 5, title: t('tb.volume'), 'aria-label': t('tb.volume') }) as HTMLInputElement;
+const renderSound = () => {
+  soundBtn.textContent = audio.muted || audio.volume === 0 ? '🔇' : audio.volume < 0.4 ? '🔈' : '🔊';
+  soundBtn.title = audio.muted ? t('tb.unmute') : t('tb.mute');
+  soundBtn.setAttribute('aria-label', soundBtn.title);
+  soundBtn.setAttribute('aria-pressed', String(audio.muted));
+  volume.value = String(Math.round(audio.volume * 100));
+  volume.classList.toggle('muted', audio.muted);
+};
+const logAudio = () => game.log('audio', { muted: audio.muted, volume: Math.round(audio.volume * 100) / 100 });
+soundBtn.onclick = () => {
+  audio.unlock();
+  audio.setMuted(!audio.muted);
+  logAudio();
+  renderSound();
+};
+volume.oninput = () => {
+  audio.unlock();
+  audio.setVolume(+volume.value / 100);
+  if (audio.muted && +volume.value > 0) audio.setMuted(false);
+  renderSound();
+};
+volume.onchange = logAudio;
+renderSound();
+const taskbar = h('div#taskbar', null, h('div.brand', null, t('game.title'), h('small', null, t('game.titleKo'))), tasks, hintBtn, notifBtn, helpBtn, h('div.soundctl', null, soundBtn, volume), ptBtn, clock);
 const toasts = h('div.toasts', { 'aria-live': 'polite' });
 document.body.append(desktop, taskbar, toasts);
 
@@ -108,6 +143,22 @@ const ctx: UiCtx = {
 };
 wm.ctx = ctx;
 wm.onFocus = (id) => game.focus(id);
+wm.onOpen = () => {
+  void audio.play('sfx.window-open');
+  objectivesUi?.refresh();
+};
+wm.onClose = () => {
+  void audio.play('sfx.window-close');
+  objectivesUi?.refresh();
+};
+// a real click or key press inside a window (the automatic focus on open does not count)
+const interact = (e: Event) => {
+  if (briefingActive) return;
+  const w = (e.target as HTMLElement).closest?.('.window') as HTMLElement | null;
+  if (w?.dataset.app) game.interact(w.dataset.app);
+};
+desktop.addEventListener('pointerdown', interact, true);
+desktop.addEventListener('keydown', interact, true);
 for (const app of [terminalApp, messengerApp, mailApp, notesApp, boardApp, reportApp, dashboardApp, playtestApp]) wm.register(app);
 
 // ------------------------------------------------------------------ desktop icons + stickies + wallpaper
@@ -139,6 +190,7 @@ const chair = `<svg id="wallpaper-chair" viewBox="0 0 200 260" aria-hidden="true
 desktop.insertAdjacentHTML('beforeend', chair);
 desktop.appendChild(h('div.wall-caption', null, '바탕화면: 의자 (2026, 직접 만듦)'));
 desktop.appendChild(iconsEl);
+let objectivesUi: ReturnType<typeof mountObjectives> | null = null;
 for (const s of game.cs.stickies) {
   const el = h('div.sticky', { style: { left: `${s.x}%`, top: `${s.y}%`, background: s.color ?? '#F2D94E' }, title: '포스트잇' }, s.text);
   el.appendChild(ctx.pinBtn({ kind: 'note', text: `포스트잇: ${s.text.replace(/\n/g, ' ')}`, source: '바탕화면' }));
@@ -209,6 +261,26 @@ hintBtn.onclick = () => {
 };
 ptBtn.onclick = () => wm.open('playtest');
 
+helpBtn.onclick = () => {
+  if (pop) return closePop();
+  game.log('help');
+  pop = h('div.popover', { role: 'dialog' }, h('h3', null, `❓ ${t('help.title')}`));
+  if (game.cs.opening) {
+    pop.appendChild(
+      h(
+        'div.help-acts',
+        null,
+        h('button.primary-btn', { onclick: () => (closePop(), playBriefing(true)) }, t('help.replay')),
+        h('button.ghost-btn', { onclick: () => (closePop(), objectivesUi?.show()) }, t('help.todo')),
+      ),
+    );
+  }
+  const ul = h('ul.help-list');
+  for (const k of ['help.l1', 'help.l2', 'help.l3', 'help.l4', 'help.l5'] as const) ul.appendChild(h('li', null, t(k)));
+  pop.appendChild(ul);
+  document.body.appendChild(pop);
+};
+
 // ------------------------------------------------------------------ events
 let rafPending = false;
 const pendingTypes = new Set<string>();
@@ -224,22 +296,38 @@ game.on('change', (ev) => {
     pendingTypes.clear();
     renderIcons();
     for (const ty of types) wm.refreshAll(ty);
+    objectivesUi?.refresh();
     renderClock();
   });
 });
 game.on('message', (m) => {
   const msg = m as Message;
+  void audio.play('sfx.ding');
+  // a recorded line for a colleague nudge, if main produced one (voice.nudge-<id>)
+  const last = game.st.log[game.st.log.length - 1];
+  const reason = last?.type === 'message' ? String(last.reason ?? '') : '';
+  if (reason.startsWith('nudge:') && `voice.nudge-${reason.slice(6)}` in MANIFEST) void audio.play(`voice.nudge-${reason.slice(6)}`);
   const c = game.cs.channels.find((x) => x.id === msg.channel);
   const el = h('div', null, h('b', null, `${ctx.name(msg.from)}`), h('span', { style: 'opacity:.7' }, ` · ${c?.title ?? ''}`), h('div', null, msg.text.length > 90 ? msg.text.slice(0, 90) + '…' : msg.text));
   ctx.toast(el, () => wm.open('messenger', msg.channel));
 });
 game.on('mail', (id) => {
   const m = game.cs.mails.find((x) => x.id === id);
+  if (id !== game.cs.debrief.closingMail) void audio.play('sfx.mail');
   if (m && id !== game.cs.debrief.closingMail) ctx.toast(h('div', null, h('b', null, '✉ '), m.subject), () => wm.open('mail', id));
 });
 game.on('toast', (text) => ctx.toast(h('div', null, String(text)), () => wm.open('notes', 'farewell')));
 game.on('note', (id) => {
   wm.open('notes', id);
+});
+game.on('friction', () => void audio.play('sfx.error'));
+game.on('pinned', () => void audio.play('sfx.pin'));
+game.on('accuse', (sc) => {
+  // the debrief opens once the case is finished (solved, or out of submissions): reveal theme
+  if (game.st.finished) {
+    audio.stopLoop('music.tension', 1500);
+    void audio.play('music.reveal', { gain: (sc as ScoreResult).allCorrect ? 1 : 0.8 });
+  } else audio.loop('music.tension'); // a wrong report raises the stakes
 });
 document.addEventListener('nh-reset', () => {
   storage.remove(SAVE_KEY);
@@ -257,11 +345,13 @@ function renderClock() {
 
 let last = performance.now();
 let lastSave = 0;
+const TENSION_AT = game.deadline() - 3 * 3600_000; // last three game hours (18:00 for case 1)
 function loop() {
   const n = performance.now();
-  if (game.st.unlocked && !document.hidden) game.tick(n - last);
+  if (game.st.unlocked && !document.hidden && !briefingActive) game.tick(n - last);
   last = n;
   renderClock();
+  if (game.st.unlocked && !briefingActive && !game.st.finished && game.now() >= TENSION_AT) audio.loop('music.tension');
   if (n - lastSave > 5000 && game.st.unlocked) {
     lastSave = n;
     storage.set(SAVE_KEY, game.serialize());
@@ -272,19 +362,51 @@ document.addEventListener('visibilitychange', () => (last = performance.now()));
 window.addEventListener('beforeunload', () => storage.set(SAVE_KEY, game.serialize()));
 
 // ------------------------------------------------------------------ boot
+/** The desktop as the player first sees it: terminal open with the half-typed prompt pulsing. */
+function revealDesktop(first: boolean) {
+  renderIcons();
+  renderClock();
+  objectivesUi = mountObjectives(desktop, ctx, audio);
+  if (first && !game.cs.opening) wm.open('mail', 'brief');
+  wm.open('terminal');
+  objectivesUi.refresh();
+  if (first) {
+    void audio.play('sfx.pulse');
+    setTimeout(() => ctx.toast(h('div', null, h('b', null, '✉ '), '새 메일 2통 — 오미래, 보안팀'), () => wm.open('mail', 'brief')), 600);
+  }
+  audio.loop('amb.office');
+}
+
+function playBriefing(replay: boolean) {
+  if (!game.cs.opening || briefingActive) return;
+  audio.unlock(); // inside the click that started it: browsers allow sound from here on
+  briefingActive = true;
+  closePop();
+  game.briefingStart(replay);
+  if (replay) audio.stopLoop('amb.office', 400);
+  runBriefing({
+    cs: game.cs,
+    audio,
+    avatar: ctx.avatar,
+    name: ctx.name,
+    speed: +(params.get('bspeed') ?? 1) || 1,
+    onReveal: () => (replay ? audio.loop('amb.office') : revealDesktop(true)),
+    onDone: (skipped, watchedMs, step) => {
+      briefingActive = false;
+      last = performance.now();
+      game.briefingEnd(skipped, watchedMs, step, replay);
+      save();
+    },
+  });
+}
+
 function start(first: boolean) {
   game.st.unlocked = true;
   game.log(first ? 'unlock' : 'resume');
+  audio.unlock();
   boot.remove();
-  renderIcons();
-  renderClock();
-  if (first) {
-    wm.open('mail', 'brief');
-    wm.open('terminal');
-    setTimeout(() => ctx.toast(h('div', null, h('b', null, '✉ '), '새 메일 2통 — 오미래, 보안팀'), () => wm.open('mail', 'brief')), 600);
-  } else {
-    wm.open('terminal');
-  }
+  if (first && game.cs.opening && params.get('briefing') !== '0') playBriefing(false);
+  else revealDesktop(first);
   save();
 }
 

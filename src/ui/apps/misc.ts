@@ -45,7 +45,28 @@ export const playtestApp: AppDef = {
         submissions: unknown[];
         causeCorrectAt: number | null;
         appSeconds: Record<string, number>;
+        firstMinutes: {
+          briefing: { startedAt: number | null; skipped: boolean; watchedMs: number; replays: number };
+          firstCommandAt: number | null;
+          firstMeaningfulCommandAt: number | null;
+          firstMeaningfulCommand: string | null;
+          terminalInteractAt: number | null;
+          objectives: { id: string; t: number | null }[];
+          objectivesFoldedAt: number | null;
+        };
       };
+      const fm = s.firstMinutes;
+      const fac = (key: string, label: string, options?: string[]) => {
+        const save = (v: string) => {
+          g.st.facilitator[key] = v;
+          g.log('facilitator', { key, value: v });
+        };
+        const field = options
+          ? (h('select', { onchange: (e: Event) => save((e.target as HTMLSelectElement).value) }, h('option', { value: '' }, '—'), ...options.map((o) => h('option', { value: o, selected: g.st.facilitator[key] === o }, o))) as HTMLSelectElement)
+          : (h('input', { type: 'text', value: g.st.facilitator[key] ?? '', oninput: (e: Event) => (g.st.facilitator[key] = (e.target as HTMLInputElement).value), onchange: (e: Event) => save((e.target as HTMLInputElement).value) }) as HTMLInputElement);
+        return h('label', null, label, field);
+      };
+      const briefingText = fm.briefing.startedAt === null ? '—' : fm.briefing.skipped ? `건너뜀 (${mmss(fm.briefing.watchedMs)} 시청)` : `끝까지 봄 (${mmss(fm.briefing.watchedMs)})`;
       const idle = h('input', { type: 'number', min: 1, max: 120, value: g.st.settings.idleMinutes }) as HTMLInputElement;
       const rate = h('input', { type: 'number', min: 1, max: 120, value: g.st.settings.clockRate }) as HTMLInputElement;
       idle.onchange = () => {
@@ -77,6 +98,26 @@ export const playtestApp: AppDef = {
           h('tr', null, h('th', null, '원인 칸 정답 시각'), h('td', null, mmss(s.causeCorrectAt))),
           h('tr', null, h('th', null, '앱별 시간(초)'), h('td', null, Object.entries(s.appSeconds).map(([k, v]) => `${k} ${v}`).join(' · ') || '—')),
         ),
+        h('h4', { style: 'margin:14px 0 4px' }, t('pt.first')),
+        h(
+          'table',
+          null,
+          h('tr', null, h('th', null, '오프닝 브리핑'), h('td', null, briefingText + (fm.briefing.replays ? ` · 다시 보기 ${fm.briefing.replays}회` : ''))),
+          h('tr', null, h('th', null, '터미널 첫 클릭'), h('td', null, mmss(fm.terminalInteractAt))),
+          h('tr', null, h('th', null, '첫 명령 / 첫 의미 있는 명령'), h('td', null, `${mmss(fm.firstCommandAt)} / ${mmss(fm.firstMeaningfulCommandAt)}${fm.firstMeaningfulCommand ? ` (${fm.firstMeaningfulCommand})` : ''}`)),
+          h('tr', null, h('th', null, '오늘 할 일 체크'), h('td', null, fm.objectives.map((o) => `${o.id} ${mmss(o.t)}`).join(' · ') + (fm.objectivesFoldedAt !== null ? ` → 접힘 ${mmss(fm.objectivesFoldedAt)}` : ''))),
+          h('tr', null, h('th', null, '소리'), h('td', null, `${(window as unknown as { __audio?: { muted: boolean; volume: number } }).__audio?.muted ? '음소거' : '켜짐'} · ${Math.round(((window as unknown as { __audio?: { volume: number } }).__audio?.volume ?? 0) * 100)}%`)),
+        ),
+        h(
+          'div.ptfirst',
+          null,
+          h('p.muted', { style: 'margin:8px 0 2px' }, t('pt.firstNote')),
+          fac('foundTerminal', '터미널을 도움 없이 찾았나', ['도움 없이', '진행자가 도움', '못 찾음']),
+          fac('checkboxes', '체크박스 3개를 이해했나', ['이해함', '일부만', '못 봄 / 이해 못 함']),
+          fac('audioPref', '소리 선호', ['켜 두고 싶음', '끄고 싶음', '상관없음']),
+          fac('whatToDo', '"처음에 뭘 해야 한다고 생각했어요?" (답 그대로)'),
+          fac('firstNote', '첫 3분 메모'),
+        ),
         h(
           'div.submitbar',
           { style: 'margin-top:14px' },
@@ -86,6 +127,6 @@ export const playtestApp: AppDef = {
       );
     };
     render();
-    return { refresh: (type?: string) => (type === 'clue' || type === 'accuse' || type === 'message' ? render() : undefined) };
+    return { refresh: (type?: string) => (type === 'clue' || type === 'accuse' || type === 'message' || type === 'objective' ? render() : undefined) };
   },
 };

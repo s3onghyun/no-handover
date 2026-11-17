@@ -45,6 +45,9 @@ export class WM {
   readonly apps = new Map<string, AppDef>();
   ctx!: UiCtx;
   onFocus: (id: string | null) => void = () => {};
+  /** Window opened / closed (sound cues, onboarding pulse). */
+  onOpen: (id: string) => void = () => {};
+  onClose: (id: string) => void = () => {};
   readonly root: HTMLElement;
   readonly tasks: HTMLElement;
 
@@ -103,6 +106,7 @@ export class WM {
     this.wins.set(id, { def, el, body, inst, task });
     this.focus(id);
     if (arg !== undefined) inst.open?.(arg);
+    this.onOpen(id);
     return inst;
   }
 
@@ -146,6 +150,7 @@ export class WM {
     w.task.remove();
     this.wins.delete(id);
     if (this.focused === id) this.focusTop();
+    this.onClose(id);
   }
 
   private focusTop(): void {
