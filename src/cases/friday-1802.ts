@@ -956,7 +956,7 @@ done`,
     idle: [
       { id: 'idle-1', from: 'jihoon', channel: 'me-dm-jihoon', unlessClues: ['c_cron'], text: '도윤님 ㅋㅋ 아직 보고서 중?? 은재 선배는 뭐든 자기 홈에 넣어 두는 스타일이었어요~ history 같은 거 한번 봐요!! 🙏' },
       { id: 'idle-2', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c_cron'], text: '로그 봤어요. 03:15부터. 그 시각에 뭐가 시작됐는지 보세요.' },
-      { id: 'idle-3', from: 'jihoon', channel: 'me-dm-jihoon', unlessClues: ['c_cron', 'c_limit'], text: '아 근데 은재 선배 금요일에 터미널 탭 그대로 두고 가셨잖아요 ㅋㅋ 마지막 탭 한번 봐요~ 뭐 치다 마신 거 같던데!!' },
+      { id: 'idle-3', from: 'jihoon', channel: 'me-dm-jihoon', unlessClues: ['c_cron'], text: '아 근데 은재 선배 금요일에 터미널 탭 그대로 두고 가셨잖아요 ㅋㅋ 마지막 탭 한번 봐요~ 뭐 치다 마신 거 같던데!!' },
       { id: 'idle-4', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c_limit', 'c_fds'], text: '음. 풀 크기 올리면 fd도 같이 봐야 해요. LimitNOFILE 확인 부탁해요.' },
     ],
     wrong: {
