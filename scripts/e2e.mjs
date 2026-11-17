@@ -73,6 +73,8 @@ try {
   assert.equal(await page.locator('.todo li.done').count(), 0);
   assert.ok(await todoItem('terminal').locator('.hint').isVisible());
   await page.waitForTimeout(700);
+  // screenshot at the pulse's brightest frame (the animation keeps running afterwards)
+  await page.evaluate(() => document.getAnimations().filter((a) => a.animationName === 'pulse').forEach((a) => (a.currentTime = 900)));
   await shot('onboarding-02-desktop-sticky.png');
   let fm = (await page.evaluate(() => window.__game.playtestReport())).summary.firstMinutes;
   assert.equal(fm.briefing.skipped, false);
