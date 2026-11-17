@@ -18,15 +18,15 @@ npm test           # 단위 테스트 86개 (node --test, TypeScript 타입 제�
 |---|---|
 | `npm run build` | 타입 검사 + 정적 빌드 → `dist/` (약 0.3 MB, 어떤 정적 호스트나 폴더에서도 열림. `base: './'`) |
 | `npm run preview` | `dist/`를 로컬에서 서빙 |
-| `npm run e2e` | `dist/`를 띄우고 실제 브라우저(playwright-core + `~/.cache/ms-playwright`의 headless shell)로 **Case 0**을 푼다(18초 브리핑, 미리 쳐진 `history`, 지훈의 레일과 되돌림, 체크 5칸과 아이콘 해금, 오답 한 번 뒤 정답). 해설의 "다음 사건"으로 **Case 3**을 열어 오프닝 브리핑을 끝까지 보고(약 31초), 오늘 할 일 세 칸을 체크하고, 은재의 history 한 줄에서 출발해 사건을 푼다. 두 번째 창에서 Esc 건너뛰기, ❓ 다시 보기, 음소거 유지를 확인한다. `E2E_SHOTS=<폴더>`를 주면 스크린샷 9장 저장(Case 0 3장 + Case 3 6장). 이어서 `scripts/e2e-audio.mjs`가 소리를 확인한다(아래 「소리」) |
+| `npm run e2e` | `dist/`를 띄우고 실제 브라우저(playwright-core + `~/.cache/ms-playwright`의 headless shell)로 **Case 0**을 푼다(18초 브리핑, 미리 쳐진 `history`, 지훈의 레일과 되돌림, 체크 5칸과 아이콘 해금, 오답 한 번 뒤 정답). 해설의 "다음 사건"으로 **Case 3**을 열어 오프닝 브리핑을 끝까지 보고(약 31초), 오늘 할 일 세 칸을 체크하고, 은재의 history 한 줄에서 출발해 사건을 푼다. Case 0에서는 메신저의 "뭐부터 봐요?" 빠른 답장(→ "박지훈님이 입력 중…" → 답), `hint`로 연 💡 패널의 요약 → 방향 → 정답(두 번 확인), 해설의 기록 줄과 결과 카드 PNG 내려받기(1200×630)를, Case 3에서는 지훈의 "설마" 메시지가 왔다가 지워지는 것과 "힌트 0회" 배지를 본다. 두 번째 창에서 Esc 건너뛰기, ❓ 다시 보기, 음소거 유지를 확인한다. `E2E_SHOTS=<폴더>`를 주면 스크린샷 12장과 결과 카드 PNG 2장 저장. 이어서 `scripts/e2e-audio.mjs`가 소리를 확인한다(아래 「소리」) |
 | `npm run audio:render -- <폴더>` | ZzFX 효과음을 WAV로 렌더해 저장: `ui-set.wav`(UI 소리 전부, 5초), `fallbacks.wav`(진동·타이핑 대체음). 게임을 열지 않고 들어 볼 때 |
 
-URL 옵션(플레이테스트 진행자용): `?fresh=1` 모든 사건의 저장과 진행 상황을 지우고 Case 0부터, `?case=friday-1802` 그 사건을 잠금과 상관없이 열기(`case0-wiki`도 같음), `?nudge=2` 동료 넛지 대기 시간(분, 기본은 사건 값: Case 0 2분, Case 3 6분), `?rate=16` 게임 시계 배속(기본 16 = 45분 플레이에 09:00→21:00), `?lang=en` UI 영어(사건 본문은 한국어), `?briefing=0` 오프닝 브리핑 없이 시작, `?bspeed=2` 브리핑 배속. 작업 표시줄의 📋 에서도 일부를 바꿀 수 있다.
+URL 옵션(플레이테스트 진행자용): `?fresh=1` 모든 사건의 저장과 진행 상황을 지우고 Case 0부터, `?case=friday-1802` 그 사건을 잠금과 상관없이 열기(`case0-wiki`도 같음), `?nudge=2` 동료 넛지 대기 시간(분, 기본은 사건 값: Case 0 2분, Case 3 6분), `?rate=16` 게임 시계 배속(기본 16 = 45분 플레이에 09:00→21:00), `?lang=en` UI 영어(사건 본문은 한국어), `?briefing=0` 오프닝 브리핑 없이 시작, `?bspeed=2` 브리핑 배속, `?senior=1` 시니어 모드(힌트가 다시 점수에서 빠짐; 기본은 기록만), `?music=loop` `music.*` 큐의 루프 허용(기본은 스팅만 한 번씩). 작업 표시줄의 📋 에서도 일부를 바꿀 수 있다.
 
 ## 들어 있는 것
 
 - **사건 사다리** (`src/cases/index.ts`, `src/engine/campaign.ts`): 처음 실행하면 Case 0 잠금 화면("Case 0 · 튜토리얼" 라벨, 경험자용 "튜토리얼 건너뛰기 → Case 3" 링크, ☰ 사건 목록). 사건은 앞의 플레이 가능한 사건을 풀면(해설까지 가면) 열리고, 아직 없는 Case 1·2·4는 제목만 보이는 "준비 중" 칸이다. 저장은 사건마다 따로(`no-handover:save:<id>`), 진행 상황은 `no-handover:campaign`.
-- **Case 0 튜토리얼** (`src/cases/case-0-wiki.ts`): 은재 퇴사 주 화요일 09:30, 위키 서버 한 대의 `/var`가 밤새 불어난 로그(11G)로 100%. 터미널에 `history`가 미리 쳐져 있어 Enter만 누르면 은재의 2025년 디스크 장애 순서가 나오고(노란 줄 = 단서), 지훈이 메신저로 단계마다 다음 명령을 알려 준다(엉뚱한 명령엔 한 번 "그건 나중에요 ㅋㅋ df -h 부터!!"). 쓸 수 있는 명령은 12개(`ls cd pwd cat head tail grep df du history systemctl journalctl` + `man help hint clear`)이고 그 밖의 진짜 명령은 "오늘 연습 범위 밖"이라고 답한다. 아이콘 3개로 시작해 체크 5칸이 진행될 때마다 메모장·보드·대시보드·보고서가 나타난다. 보고서 2칸(원인/경위), 제출 무제한, 넛지 2분, 명시 힌트 −5. 고치는 법은 해설에서 설명만 한다. 작업 표시줄 ⏭ 로 언제든 건너뛸 수 있다.
+- **Case 0 튜토리얼** (`src/cases/case-0-wiki.ts`): 은재 퇴사 주 화요일 09:30, 위키 서버 한 대의 `/var`가 밤새 불어난 로그(11G)로 100%. 터미널에 `history`가 미리 쳐져 있어 Enter만 누르면 은재의 2025년 디스크 장애 순서가 나오고(노란 줄 = 단서), 지훈이 메신저로 단계마다 다음 명령을 알려 준다(엉뚱한 명령엔 한 번 "그건 나중에요 ㅋㅋ df -h 부터!!"). 쓸 수 있는 명령은 12개(`ls cd pwd cat head tail grep df du history systemctl journalctl` + `man help hint clear`)이고 그 밖의 진짜 명령은 "오늘 연습 범위 밖"이라고 답한다. 아이콘 3개로 시작해 체크 5칸이 진행될 때마다 메모장·보드·대시보드·보고서가 나타난다. 보고서 2칸(원인/경위, 틀리면 "2칸 중 1칸" 식으로 알려 줌), 제출 무제한, 넛지 2분, 💡 패널은 지금 할 일(체크리스트 항목)도 요약 → 방향 → 정답으로 안내. 고치는 법은 해설에서 설명만 한다. 작업 표시줄 ⏭ 로 언제든 건너뛸 수 있다.
 - **첫 3분 (Case 3)**: 잠금 해제 → 약 31초짜리 오프닝 브리핑(월요일 09:00 잠금 화면, 박지훈의 음성 메시지 카드와 타이핑되는 자막, 오미래의 메일 알림, Esc·건너뛰기로 생략, ❓에서 다시 보기) → 터미널이 열린 채 `crontab -`가 깜빡이고 창이 숨 쉬듯 빛나는 바탕화면 + 오른쪽 위 "오늘 할 일" 포스트잇(체크 3개: 열린 터미널 확인, 선배가 마지막에 친 명령 찾기, 증거 3개 보드에 올리기). 셋 다 체크되면 포스트잇이 메모장으로 접혀 들어가고 펄스·힌트 줄이 멈춘다.
 - **소리**: UI 효과음 12개는 파일 없이 브라우저에서 ZzFX로 합성해 지금 바로 들린다. 음악·환경음·목소리는 메인이 파일을 보내 주면 폴더에 넣는 것만으로 나온다(코드 수정 없음). 첫 클릭(어디든)에서 소리가 켜진다. 자세한 것은 아래 「소리」.
 - **데스크톱 셸**: 잠금 화면 → 은재의 바탕화면(나무 의자 사진, 포스트잇 3장), 아이콘, 작업 표시줄, 알림 센터(🔔), 힌트(💡), 도움말(❓), 소리(🔊), 플레이테스트(📋), 게임 시계와 21:00 마감.
@@ -34,22 +34,23 @@ URL 옵션(플레이테스트 진행자용): `?fresh=1` 모든 사건의 저장�
 - **시뮬레이션 셸** (`src/engine/shell.ts`): 호스트(Case 3은 pay-api-01, bastion, pay-cfg, review-web, Case 0은 wiki-01)의 가상 파일시스템. 실제 문법과 출력 형식으로 약 40개 명령: `ls cd pwd cat less head tail grep wc sort uniq find history journalctl crontab -l git log/show/branch/status df du free ulimit ss last sudo man help hint systemctl show/status/cat ps pgrep curl ping ssh exit getent id whoami hostname date uptime echo clear`. `du`는 파일의 겉보기 크기(`size`)로 계산하고, 50 MB가 넘는 파일의 `cat`은 "tail로 끝만"이라고 거절한다. `hint`는 💡 패널을 연다. 파이프, `; && ||`, 따옴표, `$(...)`, `$VAR`, `~`, 글롭, `2>/dev/null`, `.bashrc` 별칭(`밤`, `fds`, `왜`…), `!!`, Tab 자동완성, ↑/↓. 오타는 "혹시 'crontab' 인가요?"로, 쓰기·편집·재시작은 "조사 모드(읽기 전용)"라는 세계관 안의 설명으로 막는다. `sudo`는 읽기 명령만 허용하고 허용 여부와 상관없이 `/var/log/auth.log`에 남는다.
 - **사건 데이터 = 사건마다 1파일** (`src/cases/friday-1802.ts`, `src/cases/case-0-wiki.ts`): 타임라인이 로그·history·메시지를 "방출"하고, 시드 고정 생성기가 잡음(시간당 stats, 리뷰 웹 접근 로그 20건, history 채움)을 만든다. 형식은 [`docs/case-format.md`](docs/case-format.md).
 - **증거 보드**: 터미널 줄·메시지·메일·메모·알림 옆의 📌. 시각을 자동 인식해 타임라인에 놓고, 끌어서 보관함 ↔ 타임라인, 시각과 메모 수정.
-- **고발(보고서)**: Case 3은 원인 / 경위 / 책임·은폐 세 칸, 제출 3회(Case 0은 두 칸, 무제한), 채점(칸당 100, 제출 배수 1·0.85·0.7, 핵심 증거 핀 보너스 최대 +30, 명시 힌트 −10씩) → 해설(실제 타임라인, 시스템 요인, 원칙 하나, "현업에서는 이렇게 확인한다" 명령 카드 7장, 인물 카드).
-- **힌트 사다리**: 1단 = 기계 안의 흔적(은재 `~/.bash_history` 4984–4990, 별칭, crontab 주석, vim 스왑 파일, TODO, 포스트잇, 도윤 메모, 22:15 DM), 2단 = 원인 칸에서 진전이 없거나(Case 3 6분, Case 0 2분, 직전 1분 안에 단서를 찾았으면 보류) 잘못 고발하면 동료 넛지(지훈/서진의 목소리), 3단 = 칸별 명시 힌트(−10점, Case 0은 −5. 터미널에 `hint`를 쳐도 열림). 모든 사용이 플레이 로그에 남는다.
+- **고발(보고서)**: Case 3은 원인 / 경위 / 책임·은폐 세 칸, 제출 3회(Case 0은 두 칸, 무제한). 본편은 **묶음 확인**: 틀리면 "보고서 어딘가가 사실과 맞지 않습니다"만 오고 어느 칸인지, 몇 칸인지는 말하지 않는다(Obra Dinn). Case 0은 "2칸 중 1칸" 식. 채점(칸당 100, 제출 배수 1·0.85·0.7, 핵심 증거 핀 보너스 최대 +30) → 해설: 맨 위에 **기록** "힌트 N회 · 소요 · 명령 수"와 "힌트 0회" 배지, 공유용 **결과 카드**(1200×630 PNG, 브라우저 안에서 canvas로 그림, 원인·정답 없음, 📥 버튼), 실제 타임라인, 시스템 요인, 원칙 하나, "현업에서는 이렇게 확인한다" 명령 카드, 인물 카드.
+- **힌트 사다리**: 1단 = 기계 안의 흔적(은재 `~/.bash_history` 4984–4990, 별칭, crontab 주석, vim 스왑 파일, TODO, 포스트잇, 도윤 메모, 22:15 DM). 2단 = 동료 넛지: 원인 칸에서 진전이 없거나(Case 3 6분, Case 0 2분, 직전 1분 안에 단서를 찾았으면 보류) 잘못 고발하면 지훈/서진의 목소리로, 또는 **메신저 입력창의 빠른 답장 "뭐부터 봐요?" / "막혔어요"를 누르면 바로**(무료, 기록만; Case 0은 체크리스트가 열려 있는 동안 지훈이 지금 칠 명령을 알려 줌). 동료는 1–2초 "입력 중…" 뒤에 답한다. 3단 = 💡 패널(작업 표시줄, 보고서 칸의 "💡 이 칸 힌트", 터미널 `hint`): 칸마다 ① 요약(지금까지 찾은 단서, 무료) → ② 방향(다음에 볼 곳, 아직 못 찾은 단서 쪽부터) → ③ 정답(한 번 더 확인). 방향·정답은 **점수를 깎지 않고 "힌트 N회"로 기록만** 남는다(시니어 모드 `?senior=1`만 감점). 모든 사용이 플레이 로그에 남는다.
 - **플레이테스트 로그**: 명령, 막힘(오타·미지원·차단), 앱별 시간, 핀, 고발, 단서 발견 시각, 힌트 단계별 도달 시각. 서버로 보내지 않고 📋 → "플레이 로그 JSON 저장"으로만 기기에 내려받는다. 진행 계획은 [`docs/playtest.md`](docs/playtest.md).
 
 ## 구조
 
 ```
 src/engine/   types.ts(사건 스키마) build.ts(월드 생성) vfs.ts parser.ts shell.ts manpages.ts
-              hints.ts(사다리) objectives.ts(오늘 할 일) scoring.ts campaign.ts(사건 잠금·건너뛰기)
+              hints.ts(사다리) hintpanel.ts(💡 요약/방향/정답) record.ts(기록·결과 카드) objectives.ts(오늘 할 일)
+              scoring.ts(채점·묶음 확인) campaign.ts(사건 잠금·건너뛰기)
               game.ts(DOM 없는 오케스트레이터: 단서, 트리거, 레일, 저장, 로그)
 src/audio/    manifest.ts(큐 id → 파일·ZzFX 파라미터) audio.ts(AudioManager) unlock.ts(첫 제스처 잠금 해제) vendor/zzfx.ts(MIT)
 src/cases/    index.ts(사다리 5칸) case-0-wiki.ts friday-1802.ts  ← 사건 하나 = 데이터 파일 하나
 src/ui/       wm.ts(창 관리자) dom.ts style.css briefing.ts(오프닝) objectives.ts(오늘 할 일 포스트잇) apps/*.ts
 src/i18n.ts   UI 문자열 표 (ko 먼저, en 같은 키)
 tests/        node:test 단위 테스트 + 데이터로 푸는 시나리오
-scripts/e2e.mjs  실제 브라우저 e2e   scripts/e2e-audio.mjs  소리 e2e   scripts/audio-render.ts  WAV 렌더
+scripts/e2e.mjs  실제 브라우저 e2e   scripts/e2e-audio.mjs  소리 e2e   scripts/audio-render.ts  WAV 렌더   scripts/ambience-render.ts  방 톤 + 키 클릭 WAV
 public/characters/  캐릭터 아트 (아래 참고)
 ```
 
@@ -88,13 +89,15 @@ public/characters/  캐릭터 아트 (아래 참고)
 
 `music.reveal`은 아직 비어 있다(무음). **출처·처리 명령·측정값은 [`public/audio/audio-credits.md`](public/audio/audio-credits.md).** 음악·음성은 캡틴의 Gemini 계정으로 만든 **프로토타입용**이며, Gemini 앱 음악·TTS의 상업적 이용 조건은 판매 전에 확인해야 한다. 원본(저장소 밖 `data/infra-mystery-game/audio-in/`)에서 다시 만들기: `scripts/audio-prepare.sh <원본 폴더>`. 루프 이음매 검사: `scripts/audio-check-seam.sh`. 20초 미리듣기: `scripts/audio-preview.sh /tmp/nh-preview.wav`.
 
-**ZzFX 효과음** (파일 0, [ZzFX](https://github.com/KilledByAPixel/ZzFX) 1.4.0 MIT를 `src/audio/vendor/zzfx.ts`에 옮겨 넣음): `sfx.ding` `sfx.mail` `sfx.error` `sfx.tick` `sfx.done` `sfx.pin` `sfx.pulse` `sfx.key` `sfx.window-open` `sfx.window-close`, 그리고 파일이 올 때까지 `sfx.ring`(진동 두 번) `sfx.typing`(1.6초 루프). 한 가족으로 맞췄다: 사인 기반, 2–6 ms 어택, 짧은 감쇠, 저역 통과 필터. 최대 음량 100 %에서 피크 −18…−12 dBFS(`sfx.key`는 −24, `sfx.typing`은 −22로 더 작게). 소리를 바꾸려면 `manifest.ts`의 숫자 배열만 고친다. 배열은 [ZzFX 디자이너](https://killedbyapixel.github.io/ZzFX/)에 그대로 붙여 넣고 다시 꺼낼 수 있다. `hits`는 같은 소리를 여러 번(시각, 음량, 반음) 울린다. 범위는 `tests/zzfx.test.ts`가 지킨다.
+**ZzFX 효과음** (파일 0, [ZzFX](https://github.com/KilledByAPixel/ZzFX) 1.4.0 MIT를 `src/audio/vendor/zzfx.ts`에 옮겨 넣음): `sfx.ding` `sfx.mail` `sfx.error` `sfx.tick` `sfx.done` `sfx.pin` `sfx.pulse` `sfx.key` `sfx.window-open` `sfx.window-close`, 터미널에서 글자를 칠 때마다 셋 중 하나가 무작위로 좌우 ±0.25 패닝되어 나는 키 클릭 `sfx.key-1` `sfx.key-2` `sfx.key-3`(−34…−22 dBFS), 그리고 파일이 올 때까지 `sfx.ring`(진동 두 번) `sfx.typing`(1.6초 루프). 한 가족으로 맞췄다: 사인 기반, 2–6 ms 어택, 짧은 감쇠, 저역 통과 필터. 최대 음량 100 %에서 피크 −18…−12 dBFS(`sfx.key`는 −24, `sfx.typing`은 −22로 더 작게). 소리를 바꾸려면 `manifest.ts`의 숫자 배열만 고친다. 배열은 [ZzFX 디자이너](https://killedbyapixel.github.io/ZzFX/)에 그대로 붙여 넣고 다시 꺼낼 수 있다. `hits`는 같은 소리를 여러 번(시각, 음량, 반음) 울린다. 범위는 `tests/zzfx.test.ts`가 지킨다.
+
+**합성 방 톤과 음악 규칙**: `amb.office` 파일이 없으면 브라우저 안에서 사무실 방 톤을 합성해 루프한다(`src/audio/roomtone.ts`: 갈색 잡음 → 저역 필터 두 단 + A2–E3–A3 느린 패드, 스테레오 12초, RMS −26 dBFS / 피크 ≤ −10 dBFS). 필터를 버퍼 둘레로 두 바퀴 돌리고 패드는 버퍼 안에서 정수 주기만 돌게 만들어 **이음매가 구조적으로 없다**(`tests/hints-polish.test.ts`가 레벨과 이음매를 검사). 해석 순서는 파일 → ZzFX → 합성(`synth`) → 무음. 음악(`music.*`)은 **한 번만 울리는 스팅**이다: 브리핑·해설 스팅은 원샷이고, 파일에 `loop`가 있어도 `?music=loop` 없이는 루프하지 않는다(`music.tension`도 같음). 데스크톱 밑에 깔리는 루프는 환경음뿐이다. 오프라인으로 들어 보기: `npm run audio:ambience -- out.wav`(방 톤 24초 + 키 클릭, 12초 이음매 포함).
 
 **자동 재생 규칙**: 브라우저는 사용자 제스처 전에는 소리를 막는다. 페이지 어디든 첫 `pointerdown`/`keydown`/`touchend`에서 AudioContext를 만들고 켠다(잠금 해제 버튼만이 아니다). 그 전에 요청된 루프(환경음)와 10초 안의 음악·목소리는 켜지는 즉시 재생되고, UI 효과음은 버린다. Safari가 다시 멈추면(백그라운드, 전화) 탭이 다시 보일 때와 다음 클릭에서 되살린다. 음소거 상태여도 잠금은 풀린다. 아직 켜지지 않았으면 화면 아래에 "아무 곳이나 클릭하면 소리가 켜집니다"가 보인다. 켜진 시각은 플레이 로그에 `audio-unlock`(`ms` 페이지 로드 후, `via` 이벤트, `muted`)으로 남는다. 작업 표시줄 🔊 음소거와 음량 막대는 localStorage에 남는다.
 
 **들어 보기**: `npm run audio:render -- /tmp/nh` 후 `/tmp/nh/ui-set.wav`. 또는 게임에서 브라우저 콘솔에 `__audio.play('sfx.done')`.
 
-**확인**: `npm run e2e`의 두 번째 단계(`scripts/e2e-audio.mjs`)가 `dist/`의 임시 복사본에 시험용 톤 두 개(`amb.office.ogg`, `voice.briefing-jihun.mp3`)를 넣고 띄운 뒤, 데스크톱 Chrome의 자동 재생 규칙을 걸고 잠금 화면 빈 곳을 클릭해 AudioContext가 `running`인지, `sfx.ding`이 실제 출력(AnalyserNode)에 나오는지, 넣은 파일이 코드 수정 없이 재생되는지, 음소거 상태에서도 잠금이 풀리는지 본다. 임시 복사본은 끝나면 지운다(이 단계는 들어 있는 음원 파일을 먼저 지우고 시작한다). 들어 있는 음원 자체는 `node scripts/e2e-audio-files.mjs`(빌드 후)가 확인한다: Case 3(`?case=friday-1802`)를 ogg 그대로 한 번, ogg를 숨겨 mp3로 한 번 띄워, 잠금 화면 스팅·지훈 음성·환경음 루프가 파일로 재생되는지, 자막이 음성 길이에 맞춰 끝나는지, 마스터 출력 레벨(AnalyserNode)과 콘솔 디코드 오류를 본다.
+**확인**: `npm run e2e`의 두 번째 단계(`scripts/e2e-audio.mjs`)가 `dist/`의 임시 복사본에 시험용 톤 두 개(`amb.office.ogg`, `voice.briefing-jihun.mp3`)를 넣고 띄운 뒤, 데스크톱 Chrome의 자동 재생 규칙을 걸고 잠금 화면 빈 곳을 클릭해 AudioContext가 `running`인지, `sfx.ding`이 실제 출력(AnalyserNode)에 나오는지, 넣은 파일이 코드 수정 없이 재생되는지, 터미널 타이핑이 키 클릭을 내는지, 음악이 루프하지 않는지, 넣었던 `amb.office`를 임시 복사본에서 숨기면 합성 방 톤이 대신 루프하는지, 음소거 상태에서도 잠금이 풀리는지 본다. 임시 복사본은 끝나면 지운다(이 단계는 들어 있는 음원 파일을 먼저 지우고 시작한다). 들어 있는 음원 자체는 `node scripts/e2e-audio-files.mjs`(빌드 후)가 확인한다: Case 3(`?case=friday-1802`)를 ogg 그대로 한 번, ogg를 숨겨 mp3로 한 번 띄워, 잠금 화면 스팅·지훈 음성·환경음 루프가 파일로 재생되는지, 자막이 음성 길이에 맞춰 끝나는지, 마스터 출력 레벨(AnalyserNode)과 콘솔 디코드 오류를 본다.
 
 ## 의존성과 라이선스
 
