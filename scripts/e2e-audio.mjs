@@ -18,6 +18,9 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const site = mkdtempSync(join(tmpdir(), 'nh-audio-e2e-'));
 cpSync(join(root, 'dist'), site, { recursive: true });
+// this test is about the drop-in resolution itself, so it starts from no files at all; the shipped
+// music/voice files are checked by scripts/e2e-audio-files.mjs
+rmSync(join(site, 'audio'), { recursive: true, force: true });
 
 /** 16-bit mono WAV: a sine at `hz` for `secs`, peak `amp`. */
 function tone(hz, secs, amp = 0.3, sr = 44100) {
