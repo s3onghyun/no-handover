@@ -440,3 +440,5 @@ input, textarea, select { font: inherit; }
 .cardbox canvas.resultcard { width: 360px; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
 .cardbox .cardside { flex: 1; min-width: 180px; }
 .cardbox .cardside p { font-size: 12.5px; margin: 0 0 8px; }
+/* the 💡 panel and toasts share the bottom-right corner: toasts step aside while it is open */
+body:has(.popover.hints) .toasts { right: 452px; }
