@@ -20,6 +20,8 @@ const pages: Page[] = [
   P('crontab — 예약 작업 목록', ['crontab -l [-u 사용자]'], ['형식: 분 시 일 월 요일 명령.  "15 3 * * *" = 매일 03:15.', '사용자마다 따로 있습니다. 다른 사용자 것은 sudo crontab -l -u 이름.', '시스템 전체 예약은 /etc/crontab, /etc/cron.d/ 에도 있습니다.', '편집(-e)과 삭제(-r)는 조사 모드에서 막혀 있습니다.'], ['crontab -l', 'sudo crontab -l -u deploy', 'ls /etc/cron.d/']),
   P('git — 저장소 기록 보기', ['git log [--oneline] [--format=fuller] [-n N] [--all] [-p] [브랜치|커밋]', 'git show [커밋]', 'git branch [-a] [-v]', 'git status', 'git -C <경로> <명령>'], ['--format=fuller 는 작성 시각(AuthorDate)과 반영 시각(CommitDate)을 따로 보여 줍니다.', '커밋 본문 끝의 "Reviewed-by:" 같은 줄을 트레일러라고 부릅니다.', '저장소를 바꾸는 명령(commit, push, revert…)은 막혀 있습니다.'], ['git log --oneline -5', 'git log --format=fuller -1', 'git show HEAD', 'git branch -a']),
   P('df — 디스크 사용량', ['df [-h]'], ['Use% 가 100%에 가까우면 디스크가 꽉 찬 것입니다.'], ['df -h']),
+  P('du — 디렉터리·파일이 차지한 크기', ['du [-s] [-h] [-a] [-c] [-d N] [경로...]'], ['-s  인자마다 합계 한 줄만', '-h  사람이 읽는 단위(K, M, G)', '-a  파일까지 한 줄씩', '-d N  N단계 깊이까지만', 'df 가 "어디가 찼나"라면 du 는 "그 안에서 누가 큰가"입니다. 큰 것으로 한 단계씩 내려가세요.'], ['du -sh /var/*', 'du -sh /var/log/*', 'du -ah /var/log/wiki']),
+  P('hint — 힌트 패널 열기', ['hint'], ['작업 표시줄의 💡 힌트 패널을 엽니다. 칸마다 명시 힌트가 있고, 쓸 때마다 점수가 조금 깎입니다.'], ['hint']),
   P('free — 메모리 사용량', ['free [-h]'], [], ['free -h']),
   P('ulimit — 이 셸의 자원 한도', ['ulimit -n     (열 수 있는 파일 수)', 'ulimit -a     (전체)', 'ulimit -Hn    (하드 한도)'], ['지금 이 셸(bash) 프로세스의 한도입니다. 이미 떠 있는 서비스의 한도는 다를 수 있습니다:', '  systemctl show <서비스> -p LimitNOFILE', '  cat /proc/<PID>/limits'], ['ulimit -n', 'cat /proc/$(pgrep -f payment-api)/limits']),
   P('ss — 소켓(네트워크 연결) 보기', ['ss -s', 'ss -tan    (TCP 전체, 숫자로)', 'ss -ltn    (대기 중인 포트)', 'sudo ss -tanp  (프로세스까지)'], ['TCP 연결 하나도 프로세스 입장에서는 열린 파일(fd) 하나입니다.'], ['ss -s', 'ss -tan | wc -l']),

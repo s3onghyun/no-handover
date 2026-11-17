@@ -363,6 +363,27 @@ export interface CaseFile {
   boot?: { status?: string; unlock?: string; note?: string };
   /** Terminal tabs shown as closed sessions next to the live ones (atmosphere only). */
   deadTabs?: string[];
+  /** Tutorial rail: a colleague walks the player through the objectives (docs/case-format.md §13). */
+  rail?: RailDef;
+  /**
+   * Desktop icons for this case, in order. `after` = an objective id: the icon appears once that
+   * item is ticked (or the checklist folds). Default: all seven apps from the start.
+   */
+  desktop?: { icons: { app: string; after?: string }[] };
+}
+
+export interface RailDef {
+  /** Person id and channel (account 'me') of the guide. */
+  from: string;
+  channel: string;
+  /** One-line redirect for a command that found nothing while an item is current; `{next}` = the item's `next`. Once per item. */
+  offRail: string;
+  /** Commands that never count as off-rail (help, man …). */
+  quiet?: string[];
+  /** Sent when every item is ticked. */
+  done?: string;
+  /** Terminal lines that match a clue are highlighted (yellow), like clmystery's CLUE marker. */
+  highlightClues?: boolean;
 }
 
 export interface ShellDef {
@@ -401,6 +422,10 @@ export interface ObjectiveDef {
   any: ObjectiveCond[];
   /** App window to pulse while this item is current (e.g. 'terminal'). */
   pulse?: string;
+  /** Rail (tutorial): the guide's message when this item becomes the current one. */
+  say?: string;
+  /** Rail: the exact command named in the off-rail redirect ("그건 나중에요 ㅋㅋ {next} 부터!!"). */
+  next?: string;
 }
 
 export interface BriefingLine {

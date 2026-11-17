@@ -8,6 +8,9 @@
 
 import type { HintsDef, NudgeDef, SlotId } from './types.ts';
 
+/** A clue found this recently means the player is about to get there: the idle nudge waits. */
+export const HOLD_MS = 60_000;
+
 export interface LadderState {
   lastProgressAt: number;
   idleFired: string[];
@@ -39,10 +42,12 @@ export class HintLadder {
   /**
    * Call periodically. Returns the idle nudge to deliver, if the player has been stuck long enough.
    * `causeSolved` = all key cause clues found; then idle nudges stop.
+   * `lastClueAt` = when any clue (key or not) was last found: within HOLD_MS the nudge is held.
    */
-  tick(now: number, found: ReadonlySet<string>, causeSolved: boolean): NudgeDef | null {
+  tick(now: number, found: ReadonlySet<string>, causeSolved: boolean, lastClueAt = -Infinity): NudgeDef | null {
     if (causeSolved) return null;
     if (now - this.state.lastProgressAt < this.idleMs) return null;
+    if (now - lastClueAt < HOLD_MS) return null;
     const next = this.def.idle.find((n) => !this.state.idleFired.includes(n.id) && !(n.unlessClues?.length && n.unlessClues.every((c) => found.has(c))));
     if (!next) return null;
     this.state.idleFired.push(next.id);

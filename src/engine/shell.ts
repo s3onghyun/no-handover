@@ -32,7 +32,8 @@ export type ShellEvent =
   | { type: 'ssh'; host: string }
   | { type: 'exit'; host: string }
   | { type: 'private'; path: string; opened: boolean }
-  | { type: 'syntax'; msg: string };
+  | { type: 'syntax'; msg: string }
+  | { type: 'hint' };
 
 export interface OutLine {
   text: string;
@@ -532,6 +533,12 @@ export class Shell {
         '바꾸는 명령(rm, vim, kill, systemctl restart, crontab -e …)은 조사 모드에서 막혀 있어요.',
         '팁: man journalctl 처럼 예시를 볼 수 있어요. ↑/↓ 이전 명령, Tab 자동완성, 줄 위의 📌 로 증거 보드에 핀.',
       ]);
+
+    // `hint`: the engineer's way into the 💡 panel (the UI opens it on this event)
+    cmds.hint = (c) => {
+      c.events.push({ type: 'hint' });
+      return ok(['💡 힌트 패널을 열었어요 (작업 표시줄 💡).', '   그 전에: history 와 ~/README.txt, 메신저의 동료 메시지도 힌트예요.']);
+    };
 
     cmds.man = (c) => {
       if (!c.args.length) return fail('What manual page do you want?\nFor example, try \'man man\'.'.split('\n'));

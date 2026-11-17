@@ -74,6 +74,8 @@ export interface SaveState {
   facilitator: Record<string, string>;
   /** Campaign progress when this case was first opened (set by the UI; "played Case 0 first?"). */
   campaignAtStart?: { solved: string[]; skipped: string[]; tutorial?: string } | null;
+  /** Tutorial rail: items whose guide line was sent, items that already got an off-rail redirect. */
+  rail?: { said: string[]; redirected: string[] };
 }
 
 type Listener = (payload?: unknown) => void;
@@ -108,6 +110,7 @@ export class Game {
     this.st.objectives ??= emptyObjectiveState();
     this.st.briefing ??= { startedAt: null, endedAt: null, skipped: false, watchedMs: 0, replays: 0 };
     this.st.facilitator ??= {};
+    this.st.rail ??= { said: [], redirected: [] };
     this.objectives = new Objectives(cs.opening?.objectives.items ?? [], this.st.objectives);
     this.st.objectives = this.objectives.state;
     if (settings) this.st.settings = { ...this.st.settings, ...settings };
@@ -203,7 +206,8 @@ export class Game {
     }
     // rung 2 idle nudges
     if (!this.st.finished) {
-      const n = this.ladder.tick(t, this.foundSet(), this.causeSolved());
+      const lastClueAt = Math.max(-Infinity, ...Object.values(this.st.clues).map((c) => c.at));
+      const n = this.ladder.tick(t, this.foundSet(), this.causeSolved(), lastClueAt);
       if (n) this.deliverNudge(n, 'idle');
     }
   }
@@ -360,9 +364,10 @@ export class Game {
     const progressBefore = Object.keys(this.st.clues).length + Object.keys(this.st.objectives.done).length;
     this.observeOutput(host, [line, ...output], `cmd:${line}`);
     this.observe({ type: 'cmd', host, line, output });
+    const progressed = Object.keys(this.st.clues).length + Object.keys(this.st.objectives.done).length > progressBefore;
     // first command that showed the player evidence (found a clue or ticked an objective)
-    if (Object.keys(this.st.clues).length + Object.keys(this.st.objectives.done).length > progressBefore && !this.st.log.some((e) => e.type === 'meaningful'))
-      this.log('meaningful', { line });
+    if (progressed && !this.st.log.some((e) => e.type === 'meaningful')) this.log('meaningful', { line });
+    if (!progressed) this.railOffTrack(line);
     this.emit('save');
     return r;
   }
@@ -374,6 +379,10 @@ export class Game {
       this.emit('friction', type);
     }
     else if (type === 'private') this.log('private', rest);
+    else if (type === 'hint') {
+      this.log('hint-cmd');
+      this.emit('hint-panel');
+    }
   }
 
   // ---------------------------------------------------------------- evidence board
@@ -469,6 +478,34 @@ export class Game {
     if (!ticked.length) return;
     for (const id of ticked) this.log('objective', { id });
     this.emit('objective', ticked);
+    this.railNext();
+  }
+
+  /** Rail: the guide names the next command when an item becomes current (and once at the end). */
+  private railNext(): void {
+    const rail = this.cs.rail;
+    if (!rail) return;
+    const st = this.st.rail!;
+    const cur = this.objectives.current();
+    const key = cur ? cur.id : '__done';
+    const text = cur ? cur.say : rail.done;
+    if (!text || st.said.includes(key)) return;
+    st.said.push(key);
+    this.st.queue.push({ due: this.st.playMs + 1500, trigger: `rail:${key}`, action: { message: { channel: rail.channel, from: rail.from, text } } });
+  }
+
+  /** Rail: a command that found nothing gets one redirect per item, in the guide's voice. */
+  private railOffTrack(line: string): void {
+    const rail = this.cs.rail;
+    if (!rail || this.objectives.folded()) return;
+    const name = line.trim().split(/\s+/)[0] ?? '';
+    if (!name || (rail.quiet ?? []).includes(name)) return;
+    const cur = this.objectives.current();
+    const st = this.st.rail!;
+    if (!cur?.next || st.redirected.includes(cur.id)) return;
+    st.redirected.push(cur.id);
+    this.log('rail-redirect', { item: cur.id, line });
+    this.st.queue.push({ due: this.st.playMs + 1200, trigger: `rail-off:${cur.id}`, action: { message: { channel: rail.channel, from: rail.from, text: rail.offRail.replace(/\{next\}/g, cur.next) } } });
   }
 
   /** The player clicked or typed inside an app window (not the automatic focus on open). */
