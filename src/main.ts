@@ -14,6 +14,7 @@ import { reportApp } from './ui/apps/report.ts';
 import { dashboardApp, playtestApp } from './ui/apps/misc.ts';
 import { AudioManager } from './audio/audio.ts';
 import { MANIFEST } from './audio/manifest.ts';
+import { installAudioUnlock } from './audio/unlock.ts';
 import { runBriefing } from './ui/briefing.ts';
 import { mountObjectives } from './ui/objectives.ts';
 import type { Message } from './engine/build.ts';
@@ -49,6 +50,8 @@ const game = loadGame();
 const audio = new AudioManager(MANIFEST, { storage });
 (window as unknown as { __game: Game; __audio: AudioManager }).__game = game; // e2e and facilitator console access
 (window as unknown as { __audio: AudioManager }).__audio = audio;
+// the first click or key anywhere (lock screen included) starts sound; logged for the playtest
+installAudioUnlock(audio, { hintText: t('tb.soundHint'), onRunning: (info) => game.log('audio-unlock', { ...info }) });
 /** True while the opening briefing covers the screen: play time (and the hint timers) stand still. */
 let briefingActive = false;
 
