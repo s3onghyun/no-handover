@@ -1,5 +1,7 @@
 // Browser end-to-end run: builds nothing, serves dist/ with `vite preview`, drives the real UI
-// with playwright-core and solves case 1 starting from the departed senior's history line.
+// with playwright-core: watches the whole opening briefing, ticks the three "오늘 할 일" boxes,
+// solves case 1 starting from the departed senior's history line, then checks the skip path,
+// the help-menu replay and the persisted mute toggle in a second page.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
@@ -43,18 +45,50 @@ async function pinLine(re) {
   await line.locator('.pinbtn').click();
 }
 
+const todoItem = (id) => page.locator(`.todo li[data-id="${id}"]`);
+
 try {
   console.log(`e2e against ${url}`);
   await page.goto(`${url}?fresh=1`);
   await page.locator('#boot button.primary').click();
-  await page.locator('.window[data-app="terminal"]').waitFor();
+
+  // ---- opening briefing, full path (real time, ~30 s)
+  const t0 = Date.now();
+  await page.locator('#briefing').waitFor();
+  assert.equal(await page.locator('.window[data-app="terminal"]').count(), 0, 'desktop stays hidden during the briefing');
+  await page.locator('#briefing[data-step="voice"] .brief-line').nth(1).waitFor({ timeout: 20000 });
+  await page.waitForTimeout(1200);
+  await shot('onboarding-01-briefing.png');
+  step('briefing: lock screen → voice message from 박지훈, subtitles typing');
+  await page.locator('#briefing[data-step="mail"] .brief-mail', { hasText: '[긴급] 토요일 결제 장애 원인 보고' }).waitFor({ timeout: 40000 });
+  step('briefing: CTO mail notification slides in');
+  await page.locator('#briefing').waitFor({ state: 'detached', timeout: 30000 });
+  const secs = (Date.now() - t0) / 1000;
+  assert.ok(secs >= 28 && secs <= 62, `briefing took ${secs}s`);
+  step(`briefing ends on its own after ${secs.toFixed(1)} s`);
+
+  await page.locator('.window[data-app="terminal"].pulse').waitFor();
   assert.equal(await page.locator('.tin input').inputValue(), 'crontab -');
-  step('unlock: terminal opens with the half-typed "crontab -"');
-  await shot('01-desktop.png');
+  assert.equal(await page.locator('.todo li').count(), 3);
+  assert.equal(await page.locator('.todo li.done').count(), 0);
+  assert.ok(await todoItem('terminal').locator('.hint').isVisible());
+  await page.waitForTimeout(700);
+  await shot('onboarding-02-desktop-sticky.png');
+  let fm = (await page.evaluate(() => window.__game.playtestReport())).summary.firstMinutes;
+  assert.equal(fm.briefing.skipped, false);
+  assert.ok(fm.briefing.watchedMs > 25000, `watchedMs ${fm.briefing.watchedMs}`);
+  step('desktop: terminal open and pulsing with "crontab -", "오늘 할 일" sticky with 3 empty boxes');
+
+  await page.locator('.window[data-app="terminal"] .tout').click();
+  await todoItem('terminal').and(page.locator('.done')).waitFor();
+  assert.equal(await page.locator('.window[data-app="terminal"].pulse').count(), 0, 'pulse stops after the first box');
+  assert.ok(await page.evaluate(() => window.__audio.history.some((x) => x.id === 'sfx.tick')), 'tick cue requested');
+  step('box 1 ticks on the first click into the terminal; the pulse stops; tick cue plays');
 
   await run('history | tail -20');
   await page.locator('.tline', { hasText: '4990' }).waitFor();
-  step('history shows 4984–4990');
+  await todoItem('last-command').and(page.locator('.done')).waitFor();
+  step('history shows 4984–4990 and box 2 ("선배가 마지막에 친 명령") ticks');
 
   for (const c of ['crontab -l', 'head -5 ~/bin/ledger-backup.sh', 'fds', 'systemctl show payment-api -p LimitNOFILE', 'tail -3 ~/log/backup.log']) await run(c);
   await page.locator('.window[data-app="notes"] .ln.reveal', { hasText: '알았음. 늦었음.' }).waitFor();
@@ -62,6 +96,17 @@ try {
   await pinLine(/^15 3 \* \* 6/);
   await pinLine(/^1947/);
   await pinLine(/^LimitNOFILE=4096/);
+  await todoItem('pins').and(page.locator('.done')).waitFor();
+  await page.locator('.todo').waitFor({ state: 'detached', timeout: 6000 });
+  await page.locator('.toast', { hasText: '오늘 할 일 끝' }).click();
+  await page.locator('.window[data-app="notes"] .item.sel', { hasText: '오늘 할 일 ✓' }).waitFor();
+  await page.waitForTimeout(400);
+  await shot('onboarding-03-sticky-folded.png');
+  fm = (await page.evaluate(() => window.__game.playtestReport())).summary.firstMinutes;
+  assert.ok(fm.objectives.every((o) => o.t !== null) && fm.objectivesFoldedAt !== null);
+  assert.ok(fm.firstMeaningfulCommandAt !== null);
+  step('box 3 ticks at the third pin; the sticky folds into the notebook ("오늘 할 일 ✓")');
+  await page.locator('.window[data-app="notes"] .titlebar button.close').click();
   await pinLine(/opened 2,314 segment files/);
 
   await page.locator('.window[data-app="terminal"]').click({ position: { x: 300, y: 12 } });
@@ -123,6 +168,37 @@ try {
   assert.equal(log.summary.rung3.length, 0);
   assert.ok(log.summary.rung1At !== null);
   step('playtest log: solved, rung 1 reached, no explicit hints');
+
+  // ---- second page: skip path, help-menu replay, persisted mute
+  const p2 = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  p2.on('pageerror', (e) => errors.push(String(e)));
+  p2.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  await p2.goto(`${url}?fresh=1`);
+  await p2.locator('#boot button.primary').click();
+  await p2.locator('#briefing[data-step="ring"]').waitFor({ timeout: 10000 });
+  await p2.keyboard.press('Escape');
+  await p2.locator('#briefing').waitFor({ state: 'detached', timeout: 2000 });
+  await p2.locator('.window[data-app="terminal"].pulse').waitFor({ timeout: 2000 });
+  const g2 = await p2.evaluate(() => ({ b: window.__game.st.briefing, ladder: window.__game.ladder.state.lastProgressAt }));
+  assert.equal(g2.b.skipped, true);
+  assert.equal(g2.ladder, g2.b.endedAt, 'rung-2 idle timer starts when the briefing ends');
+  step('skip path: Esc during the call card drops straight to the desktop; rung-2 timer starts there');
+
+  await p2.locator('.tray-btn[aria-label="도움말"]').click();
+  await p2.locator('.popover button', { hasText: '오프닝 다시 보기' }).click();
+  await p2.locator('#briefing').waitFor();
+  await p2.locator('.brief-skip').click();
+  await p2.locator('#briefing').waitFor({ state: 'detached', timeout: 2000 });
+  assert.equal(await p2.evaluate(() => window.__game.st.briefing.replays), 1);
+  step('help menu replays the opening; the 건너뛰기 button skips it');
+
+  await p2.locator('.tray-btn.sound').click();
+  assert.equal(JSON.parse(await p2.evaluate(() => localStorage.getItem('no-handover:audio'))).muted, true);
+  await p2.reload();
+  assert.equal(await p2.locator('.tray-btn.sound').innerText(), '🔇');
+  step('mute toggle persists across reloads');
+  await p2.close();
+
   assert.deepEqual(errors, []);
   console.log('e2e passed');
 } catch (e) {
