@@ -1,52 +1,87 @@
-// Audio cue manifest: cue id -> files. The ids match data/infra-mystery-game/audio-cues.md
-// (the cue sheet main firstmate produces the assets from). Every `src` list is empty for now:
-// drop the files into public/audio/<folder>/ and list them here, ogg/opus first, mp3 fallback, e.g.
-//   src: ['audio/music/amb.office.ogg', 'audio/music/amb.office.mp3']
-// A cue with no playable file falls back to its `placeholder`: a tiny generated WebAudio sound
-// (so the UI reacts now) or silence.
+// Audio cue manifest: cue id -> how to sound it. The ids match data/infra-mystery-game/audio-cues.md
+// (the cue sheet main firstmate produces the music and voice from).
+//
+// Resolution order, per cue, every time it plays (src/audio/audio.ts):
+//   1. a file: `src`, or by default public/audio/<folder>/<id>.ogg then .mp3, where <folder> is
+//      music (amb.*, music.*), voice (voice.*) or sfx (sfx.*). Dropping a file there is enough;
+//      no code change. ogg is tried first, mp3 is the fallback for browsers without ogg.
+//   2. `zzfx`: a sound synthesised in the browser with ZzFX (src/audio/vendor/zzfx.ts, MIT).
+//   3. silence.
+//
+// The `zzfx` arrays are the 21 ZzFX parameters (see the table in vendor/zzfx.ts) and paste
+// straight into / out of the ZzFX designer at https://killedbyapixel.github.io/ZzFX/ .
+// Change the numbers here to retune a sound; no other code changes. Index 0 is the volume:
+// tests/zzfx.test.ts keeps every UI cue's peak between -18 and -12 dBFS at full volume.
+//
+// The UI set is one family: sine voices, 2-6 ms attack, a short decay to 60 % and a quick
+// release, low-passed (filter < 0) so nothing is sharp. Variation comes from pitch and `hits`.
+
+import type { ZzfxParams } from './vendor/zzfx.ts';
 
 export type VolumeClass = 'music' | 'ambience' | 'voice' | 'sfx' | 'ui';
 
-/** Generated stand-ins, see src/audio/audio.ts `synth`. */
-export type Placeholder = 'silence' | 'ding' | 'mail' | 'ring' | 'tick' | 'done' | 'error' | 'click' | 'pin';
+/** One strike of the cue's zzfx sound: start time (s), gain (default 1), pitch shift (semitones, default 0). */
+export type ZzfxHit = [at: number, gain?: number, semitones?: number];
 
 export interface CueDef {
-  /** Files to try in order (paths relative to the site root, i.e. public/). Empty = not produced yet. */
-  src: string[];
+  /** Files to try in order (paths relative to the site root, i.e. public/). Default: see cueFiles(). */
+  src?: string[];
   class: VolumeClass;
   loop?: boolean;
-  /** Per-cue gain on top of the class gain (0..1, default 1). */
+  /** Per-cue gain on top of the class gain (0..1, default 1). Applies to files and zzfx alike. */
   gain?: number;
-  placeholder: Placeholder;
+  /** ZzFX parameters used when no file plays. Omitted = silence. */
+  zzfx?: ZzfxParams;
+  /** Strike the zzfx sound several times (chords, arpeggios, double buzz). Default: once at 0. */
+  hits?: ZzfxHit[];
+  /** Loop length in seconds for a looping zzfx cue (hits past the end wrap around). */
+  loopLen?: number;
   /** Where it plays (for the cue sheet and for humans). */
   where: string;
 }
 
+// prettier-ignore
 export const MANIFEST = {
-  // ---------------------------------------------------------------- music / ambience
-  'amb.office': { src: [], class: 'ambience', loop: true, gain: 0.7, placeholder: 'silence', where: '데스크톱 내내 (브리핑 뒤 시작)' },
-  'music.briefing': { src: [], class: 'music', placeholder: 'silence', where: '오프닝 브리핑 시작 (잠금 화면 → 음성 메시지)' },
-  'music.reveal': { src: [], class: 'music', placeholder: 'silence', where: '보고서 정답 → 해설 화면' },
-  'music.tension': { src: [], class: 'music', loop: true, gain: 0.5, placeholder: 'silence', where: '게임 시계 18:00 이후 또는 첫 오답 뒤 (선택)' },
-  // ---------------------------------------------------------------- voice
-  'voice.briefing-jihun': { src: [], class: 'voice', placeholder: 'silence', where: '오프닝: 지훈의 음성 메시지 (자막과 함께)' },
-  'voice.nudge-idle-1': { src: [], class: 'voice', placeholder: 'silence', where: '2단 넛지 idle-1 (지훈) 도착 시 (선택)' },
-  'voice.nudge-idle-2': { src: [], class: 'voice', placeholder: 'silence', where: '2단 넛지 idle-2 (서진) 도착 시 (선택)' },
-  'voice.nudge-idle-3': { src: [], class: 'voice', placeholder: 'silence', where: '2단 넛지 idle-3 (지훈) 도착 시 (선택)' },
-  'voice.nudge-idle-4': { src: [], class: 'voice', placeholder: 'silence', where: '2단 넛지 idle-4 (서진) 도착 시 (선택)' },
-  // ---------------------------------------------------------------- sfx
-  'sfx.ring': { src: [], class: 'sfx', placeholder: 'ring', where: '오프닝: 음성 메시지 카드가 뜰 때 (휴대폰 진동/메신저 콜)' },
-  'sfx.typing': { src: [], class: 'sfx', loop: true, gain: 0.5, placeholder: 'silence', where: '오프닝: 음성 파일이 없을 때 자막이 타이핑되는 동안 (루프)' },
-  'sfx.ding': { src: [], class: 'ui', placeholder: 'ding', where: '메신저 새 메시지 (넛지·트리거)' },
-  'sfx.mail': { src: [], class: 'ui', placeholder: 'mail', where: '새 메일 알림 (오프닝의 CTO 메일 포함)' },
-  'sfx.error': { src: [], class: 'ui', gain: 0.6, placeholder: 'error', where: '터미널: 없는 명령·차단·문법 오류' },
-  'sfx.key': { src: [], class: 'ui', gain: 0.4, placeholder: 'silence', where: '터미널: Enter로 명령 실행 (선택, 기본 무음)' },
-  'sfx.tick': { src: [], class: 'ui', placeholder: 'tick', where: '오늘 할 일 체크 하나' },
-  'sfx.done': { src: [], class: 'ui', placeholder: 'done', where: '오늘 할 일 세 개 완료 → 메모장으로 접힘' },
-  'sfx.pin': { src: [], class: 'ui', gain: 0.7, placeholder: 'pin', where: '증거 보드에 핀' },
-  'sfx.window-open': { src: [], class: 'ui', gain: 0.5, placeholder: 'silence', where: '창 열기 (선택)' },
-  'sfx.window-close': { src: [], class: 'ui', gain: 0.5, placeholder: 'silence', where: '창 닫기 (선택)' },
-  'sfx.pulse': { src: [], class: 'ui', gain: 0.35, placeholder: 'silence', where: '첫 클릭 유도: 터미널 펄스와 함께 한 번 (선택)' },
+  // ---------------------------------------------------------------- music / ambience (files only)
+  'amb.office': { class: 'ambience', loop: true, gain: 0.7, where: '데스크톱 내내 (브리핑 뒤 시작)' },
+  'music.briefing': { class: 'music', where: '오프닝 브리핑 시작 (잠금 화면 → 음성 메시지)' },
+  'music.reveal': { class: 'music', where: '보고서 정답 → 해설 화면' },
+  'music.tension': { class: 'music', loop: true, gain: 0.5, where: '게임 시계 18:00 이후 또는 첫 오답 뒤 (선택)' },
+  // ---------------------------------------------------------------- voice (files only)
+  'voice.briefing-jihun': { class: 'voice', where: '오프닝: 지훈의 음성 메시지 (자막과 함께)' },
+  'voice.nudge-idle-1': { class: 'voice', where: '2단 넛지 idle-1 (지훈) 도착 시 (선택)' },
+  'voice.nudge-idle-2': { class: 'voice', where: '2단 넛지 idle-2 (서진) 도착 시 (선택)' },
+  'voice.nudge-idle-3': { class: 'voice', where: '2단 넛지 idle-3 (지훈) 도착 시 (선택)' },
+  'voice.nudge-idle-4': { class: 'voice', where: '2단 넛지 idle-4 (서진) 도착 시 (선택)' },
+  // ---------------------------------------------------------------- physical sfx: CC0 files later, zzfx until then
+  //                                      vol   rnd  freq  att   sus  rel  shp crv slide dsl pj pjt  rep noise mod crush dly susV decay trem filter
+  'sfx.ring': { class: 'sfx', zzfx: [0.14, 0, 150, .01, .24, .05, 2, 1, 0, 0, 0, 0, .03, 0, 0, 0, 0, 1, 0, .6, -650], hits: [[0], [0.42]],
+    where: '오프닝: 음성 메시지 카드가 뜰 때 (휴대폰 진동/메신저 콜)' },
+  'sfx.typing': { class: 'sfx', loop: true, gain: 0.5, loopLen: 1.6,
+    zzfx: [0.17, 0, 1700, .001, 0, .022, 0, 1, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, -5000],
+    hits: [[0, 1, 0], [.13, .7, -2], [.27, .9, 1], [.38, .6, -1], [.55, .85, 0], [.66, .7, 2], [.8, 1, -3], [.93, .65, 0], [1.08, .9, 1], [1.21, .75, -2], [1.37, .8, 0]],
+    where: '오프닝: 음성 파일이 없을 때 자막이 타이핑되는 동안 (루프)' },
+  // ---------------------------------------------------------------- UI set (zzfx; a file in public/audio/sfx/ overrides)
+  'sfx.ding': { class: 'ui', zzfx: [0.22, .02, 880, .004, .02, .22, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, .6, .04, 0, -4000], hits: [[0, 1, 0], [.09, .85, 7]],
+    where: '메신저 새 메시지 (넛지·트리거)' },
+  'sfx.mail': { class: 'ui', zzfx: [0.22, .02, 587, .006, .04, .3, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, .6, .05, 0, -2600], hits: [[0, 1, 0], [.13, .8, 5]],
+    where: '새 메일 알림 (오프닝의 CTO 메일 포함)' },
+  'sfx.error': { class: 'ui', zzfx: [0.23, .02, 165, .003, .03, .09, 1, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, .6, .02, 0, -900],
+    where: '터미널: 없는 명령·차단·문법 오류' },
+  'sfx.key': { class: 'ui', zzfx: [0.09, .05, 1800, .001, 0, .02, 0, 1, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, -6000],
+    where: '터미널: Enter로 명령 실행 (아주 작게)' },
+  'sfx.tick': { class: 'ui', zzfx: [0.25, .03, 1568, .002, .01, .07, 0, 1, 8, 0, 0, 0, 0, 0, 0, 0, 0, .6, .02, 0, -6000], hits: [[0, 1, 0], [.05, .6, 12]],
+    where: '오늘 할 일 체크 하나' },
+  'sfx.done': { class: 'ui', zzfx: [0.16, .02, 784, .004, .02, .32, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, .6, .05, 0, -5000], hits: [[0, 1, 0], [.075, .9, 4], [.15, .85, 7], [.225, .9, 12]],
+    where: '오늘 할 일 세 개 완료 → 메모장으로 접힘' },
+  'sfx.pin': { class: 'ui', zzfx: [0.22, .03, 1050, .001, 0, .05, 0, 1, -6, 0, 0, 0, 0, .1, 0, 0, 0, 1, 0, 0, -5000], hits: [[0, 1, 0], [0, .6, -19]],
+    where: '증거 보드에 핀' },
+  'sfx.window-open': { class: 'ui', zzfx: [0.22, .02, 520, .004, .01, .09, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, .6, .02, 0, -4000],
+    where: '창 열기' },
+  'sfx.window-close': { class: 'ui', zzfx: [0.22, .02, 560, .004, .01, .09, 0, 1, -2, 0, 0, 0, 0, 0, 0, 0, 0, .6, .02, 0, -4000],
+    where: '창 닫기' },
+  'sfx.pulse': { class: 'ui', zzfx: [0.25, 0, 196, .18, .12, .5, 0, 1, 0, 0, 0, 0, .25, 0, 0, 0, 0, .8, 0, .15, -1200], hits: [[0, 1, 0], [0, .5, 12]],
+    where: '첫 클릭 유도: 터미널 펄스와 함께 한 번' },
 } satisfies Record<string, CueDef>;
 
 export type CueId = keyof typeof MANIFEST;
@@ -59,3 +94,15 @@ export const CLASS_GAIN: Record<VolumeClass, number> = {
   sfx: 0.8,
   ui: 0.6,
 };
+
+/** Folder under public/audio/ for a cue id. */
+export function cueFolder(id: string): 'music' | 'voice' | 'sfx' {
+  return id.startsWith('voice.') ? 'voice' : id.startsWith('sfx.') ? 'sfx' : 'music';
+}
+
+/** Files to try for a cue, in order: the explicit `src`, else audio/<folder>/<id>.ogg and .mp3. */
+export function cueFiles(id: string, cue: CueDef): string[] {
+  if (cue.src) return cue.src;
+  const stem = `audio/${cueFolder(id)}/${id}`;
+  return [`${stem}.ogg`, `${stem}.mp3`];
+}

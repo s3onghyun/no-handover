@@ -1,24 +1,47 @@
-// AudioManager fallbacks with a fake WebAudio context (node has none).
+// AudioManager: resolution order (file -> zzfx -> silence), unlock, pending cues, prefs.
+// Uses a fake WebAudio context (node has none).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AudioManager, type CtxLike, type StorageLike } from '../src/audio/audio.ts';
-import { MANIFEST, type CueDef } from '../src/audio/manifest.ts';
+import { AudioManager, PENDING_MS, defaultFetch, type CtxLike, type StorageLike } from '../src/audio/audio.ts';
+import { MANIFEST, cueFiles, cueFolder, type CueDef } from '../src/audio/manifest.ts';
 
-function fakeCtx() {
+function fakeCtx(initial = 'suspended') {
   const log: string[] = [];
-  const param = () => ({ value: 1, setValueAtTime: () => {}, setTargetAtTime: () => {}, exponentialRampToValueAtTime: () => {} });
+  const sources: { loop: boolean; rate: number; buffer: unknown }[] = [];
+  const param = () => ({ value: 1, setTargetAtTime: () => {} });
   const node = () => ({ connect: () => {}, disconnect: () => {} });
-  const ctx: CtxLike & { log: string[] } = {
+  const ctx: CtxLike & { log: string[]; sources: typeof sources } = {
     log,
+    sources,
     currentTime: 0,
-    state: 'suspended',
+    sampleRate: 48000,
+    state: initial,
     destination: {},
+    onstatechange: null,
     resume: async () => {
       log.push('resume');
+      ctx.state = 'running';
+      ctx.onstatechange?.();
     },
     createGain: () => ({ ...node(), gain: param() }),
-    createBufferSource: () => ({ ...node(), buffer: null, loop: false, start: () => log.push('buffer.start'), stop: () => log.push('buffer.stop') }),
-    createOscillator: () => ({ ...node(), type: 'sine', frequency: param(), start: () => log.push('osc.start'), stop: () => {} }),
+    createBufferSource: () => {
+      const s = {
+        ...node(),
+        buffer: null as unknown,
+        loop: false,
+        playbackRate: { value: 1 },
+        start: () => {
+          log.push('start');
+          sources.push({ loop: s.loop, rate: s.playbackRate.value, buffer: s.buffer });
+        },
+        stop: () => log.push('stop'),
+      };
+      return s as never;
+    },
+    createBuffer: (_c: number, len: number, sr: number) => {
+      const data = new Float32Array(len);
+      return { duration: len / sr, getChannelData: () => data };
+    },
     decodeAudioData: async (b: ArrayBuffer) => {
       if (new Uint8Array(b)[0] === 0) throw new Error('bad data');
       return { duration: 2.5 };
@@ -32,96 +55,222 @@ function memStorage(init: Record<string, string> = {}): StorageLike & { data: Re
   return { data, get: (k) => data[k] ?? null, set: (k, v) => void (data[k] = v) };
 }
 
+const tick = () => new Promise((r) => setTimeout(r, 0));
+const ZZ = [0.2, 0, 440, 0.001, 0, 0.02];
 const M: Record<string, CueDef> = {
-  ding: { src: [], class: 'ui', placeholder: 'ding', where: '' },
-  quiet: { src: [], class: 'sfx', placeholder: 'silence', where: '' },
-  voice: { src: ['v.ogg', 'v.mp3'], class: 'voice', placeholder: 'silence', where: '' },
-  missing: { src: ['gone.ogg'], class: 'sfx', placeholder: 'tick', where: '' },
-  amb: { src: [], class: 'ambience', loop: true, placeholder: 'silence', where: '' },
+  'sfx.ding': { class: 'ui', zzfx: ZZ, where: '' },
+  'sfx.quiet': { class: 'sfx', where: '' },
+  'voice.v': { class: 'voice', where: '' },
+  'sfx.custom': { src: ['x/one.ogg', 'x/one.mp3'], class: 'sfx', zzfx: ZZ, where: '' },
+  'amb.a': { class: 'ambience', loop: true, where: '' },
+  'sfx.loopy': { class: 'sfx', loop: true, loopLen: 0.5, zzfx: ZZ, hits: [[0], [0.25]], where: '' },
+  'music.sting': { class: 'music', where: '' },
 };
 
-test('audio: locked until unlock(), then placeholders and silence instead of missing files', async () => {
-  const ctx = fakeCtx();
-  const a = new AudioManager(M, { createContext: () => ctx, fetchBytes: async () => null, storage: memStorage() });
-  assert.equal((await a.play('ding')).status, 'locked', 'browsers block sound before a gesture');
-  assert.equal(a.unlock(), true);
-  assert.ok(ctx.log.includes('resume'));
-  assert.equal((await a.play('ding')).status, 'placeholder');
-  assert.ok(ctx.log.includes('osc.start'), 'placeholder ding is a generated oscillator');
-  assert.equal((await a.play('quiet')).status, 'silent');
-  assert.equal((await a.play('missing')).status, 'placeholder', '404 falls back to the placeholder');
-  assert.equal((await a.play('nope')).status, 'unknown');
-  assert.equal(await a.hasFile('voice'), false);
+test('audio: default file paths per cue folder; explicit src wins', () => {
+  assert.deepEqual(cueFiles('amb.office', MANIFEST['amb.office']), ['audio/music/amb.office.ogg', 'audio/music/amb.office.mp3']);
+  assert.deepEqual(cueFiles('music.reveal', MANIFEST['music.reveal']), ['audio/music/music.reveal.ogg', 'audio/music/music.reveal.mp3']);
+  assert.deepEqual(cueFiles('voice.briefing-jihun', MANIFEST['voice.briefing-jihun']), ['audio/voice/voice.briefing-jihun.ogg', 'audio/voice/voice.briefing-jihun.mp3']);
+  assert.deepEqual(cueFiles('sfx.ring', MANIFEST['sfx.ring']), ['audio/sfx/sfx.ring.ogg', 'audio/sfx/sfx.ring.mp3']);
+  assert.deepEqual(cueFiles('sfx.custom', M['sfx.custom']), ['x/one.ogg', 'x/one.mp3']);
+  assert.equal(cueFolder('amb.x'), 'music');
 });
 
-test('audio: tries formats in order, skips undecodable files, caches the decode', async () => {
-  const ctx = fakeCtx();
+test('audio: resolution order is file (ogg, then mp3) -> zzfx -> silence', async () => {
+  const files = new Map<string, Uint8Array>();
   const fetched: string[] = [];
+  const ctx = fakeCtx();
   const a = new AudioManager(M, {
     createContext: () => ctx,
-    base: '/x/',
-    fetchBytes: async (u) => {
-      fetched.push(u);
-      return u.endsWith('.ogg') ? new Uint8Array([0]).buffer : new Uint8Array([1, 2]).buffer; // ogg undecodable here
-    },
+    base: '/b/',
+    fetchBytes: async (u) => (fetched.push(u), files.get(u)?.buffer ?? null),
   });
   a.unlock();
-  const h = await a.play('voice');
-  assert.equal(h.status, 'file');
+  // nothing on disk: zzfx when the cue has parameters, else silence
+  assert.equal((await a.play('sfx.ding')).status, 'zzfx');
+  assert.deepEqual(fetched.filter((u) => u.includes('sfx.ding')), ['/b/audio/sfx/sfx.ding.ogg', '/b/audio/sfx/sfx.ding.mp3'], 'ogg first, then mp3');
+  assert.equal((await a.play('sfx.quiet')).status, 'silent');
+  assert.equal((await a.play('voice.v')).status, 'silent');
+  assert.equal(await a.source('sfx.ding'), 'zzfx');
+  assert.equal(await a.source('voice.v'), 'silent');
+  assert.equal(await a.source('nope'), 'silent');
+
+  // a file appears (fresh manager = fresh cache, like a page reload after main drops files in)
+  files.set('/b/audio/sfx/sfx.ding.mp3', new Uint8Array([1, 2]));
+  files.set('/b/audio/voice/voice.v.ogg', new Uint8Array([0])); // undecodable here
+  files.set('/b/audio/voice/voice.v.mp3', new Uint8Array([1]));
+  const b = new AudioManager(M, { createContext: () => fakeCtx(), base: '/b/', fetchBytes: async (u) => files.get(u)?.buffer ?? null });
+  b.unlock();
+  const h = await b.play('sfx.ding');
+  assert.equal(h.status, 'file', 'a file beats the zzfx fallback');
   assert.equal(h.duration, 2.5);
-  assert.deepEqual(fetched, ['/x/v.ogg', '/x/v.mp3']);
-  await a.play('voice');
-  assert.equal(fetched.length, 2, 'decoded buffer is cached');
-  assert.equal(await a.hasFile('voice'), true);
+  assert.equal((await b.play('voice.v')).status, 'file', 'undecodable ogg falls through to mp3');
+  assert.equal(await b.hasFile('voice.v'), true);
+  assert.equal(await b.hasFile('sfx.quiet'), false);
+});
+
+test('audio: decoded files are cached; stop() fades and stops', async () => {
+  const ctx = fakeCtx();
+  let n = 0;
+  const a = new AudioManager(M, { createContext: () => ctx, fetchBytes: async () => (n++, new Uint8Array([1]).buffer) });
+  a.unlock();
+  const before = n;
+  await a.play('music.sting');
+  await a.play('music.sting');
+  assert.ok(n - before <= 1, 'one fetch per cue at most');
+  const h = await a.play('music.sting');
   h.stop();
-  assert.ok(ctx.log.includes('buffer.stop'));
+  assert.ok(ctx.log.includes('stop'));
+});
+
+test('audio: defaultFetch treats an HTML fallback page (dev/preview servers) as missing', async () => {
+  const orig = globalThis.fetch;
+  try {
+    globalThis.fetch = (async (u: string) =>
+      u.endsWith('.html')
+        ? new Response('<!doctype html>', { headers: { 'content-type': 'text/html' } })
+        : u.endsWith('.404')
+          ? new Response('no', { status: 404 })
+          : new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'audio/ogg' } })) as typeof fetch;
+    assert.equal(await defaultFetch('a.html'), null);
+    assert.equal(await defaultFetch('a.404'), null);
+    assert.equal((await defaultFetch('a.ogg'))?.byteLength, 3);
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
+
+test('audio: zzfx one-shots render once per cue and play with a small pitch wobble', async () => {
+  const ctx = fakeCtx();
+  const a = new AudioManager(M, { createContext: () => ctx, fetchBytes: async () => null, random: () => 1 });
+  a.unlock();
+  const h1 = await a.play('sfx.ding');
+  const h2 = await a.play('sfx.ding');
+  assert.ok(h1.duration > 0.02 && h1.duration < 0.05, `duration ${h1.duration}`);
+  const zz = ctx.sources.filter((s) => s.buffer && (s.buffer as { duration: number }).duration === h1.duration);
+  assert.equal(zz.length, 2);
+  assert.equal(zz[0].buffer, zz[1].buffer, 'buffer rendered once, reused');
+  assert.equal(h2.status, 'zzfx');
+  // randomness 0 in ZZ -> no wobble; the manifest's cues use .02-.05
+  assert.equal(zz[0].rate, 1);
+});
+
+test('audio: unlock creates the context in the gesture, resumes it, starts a silent buffer (iOS), reports running', async () => {
+  const ctx = fakeCtx('suspended');
+  let t = 1000;
+  const a = new AudioManager(M, { createContext: () => ctx, fetchBytes: async () => null, now: () => t });
+  let changes = 0;
+  a.onChange(() => changes++);
+  assert.equal(a.state(), 'none');
+  assert.equal(a.running(), false);
+  assert.equal((await a.play('sfx.ding')).status, 'locked', 'browsers block sound before a gesture');
+  t = 1234;
+  assert.equal(a.unlock(), true);
+  assert.equal(ctx.log[0], 'start', 'a 1-sample silent buffer is started inside the gesture');
+  assert.ok(ctx.log.includes('resume'));
+  await tick();
+  assert.equal(a.state(), 'running');
+  assert.equal(a.running(), true);
+  assert.equal(a.runningAt, 1234);
+  assert.ok(changes >= 1);
+  // Safari suspends again (background tab / phone call): the next gesture or visibility resumes it
+  ctx.state = 'interrupted';
+  a.resumeIfNeeded();
+  await tick();
+  assert.equal(ctx.state, 'running');
+  assert.equal(ctx.log.filter((x) => x === 'resume').length, 2);
+  a.unlock();
+  assert.equal(ctx.log.filter((x) => x === 'resume').length, 2, 'no resume when already running');
 });
 
 test('audio: no WebAudio at all is a silent no-op', async () => {
   const a = new AudioManager(M, { createContext: () => null });
   assert.equal(a.unlock(), false);
-  assert.equal((await a.play('ding')).status, 'unavailable');
-  a.loop('amb');
-  a.stopLoop('amb');
-  assert.equal(await a.hasFile('voice'), false);
+  assert.equal(a.state(), 'none');
+  assert.equal((await a.play('sfx.ding')).status, 'unavailable');
+  a.loop('amb.a');
+  a.stopLoop('amb.a');
+  assert.equal(await a.hasFile('voice.v'), false);
 });
 
-test('audio: mute and volume persist; muted one-shots are skipped', async () => {
+test('audio: mute and volume persist; muted one-shots are skipped; mute never blocks unlocking', async () => {
   const store = memStorage();
-  const a = new AudioManager(M, { createContext: fakeCtx, storage: store });
+  const a = new AudioManager(M, { createContext: fakeCtx, storage: store, fetchBytes: async () => null });
   a.unlock();
   a.setVolume(1.7);
   assert.equal(a.volume, 1, 'clamped');
   a.setVolume(0.35);
   a.setMuted(true);
   assert.deepEqual(JSON.parse(store.data['no-handover:audio']), { muted: true, volume: 0.35 });
-  assert.equal((await a.play('ding')).status, 'muted');
-  const b = new AudioManager(M, { createContext: fakeCtx, storage: store });
+  assert.equal((await a.play('sfx.ding')).status, 'muted');
+
+  const ctx = fakeCtx();
+  const b = new AudioManager(M, { createContext: () => ctx, storage: store, fetchBytes: async () => null });
   assert.equal(b.muted, true);
   assert.equal(b.volume, 0.35);
+  b.loop('sfx.loopy');
+  assert.equal(b.unlock(), true, 'muted players still unlock');
+  await tick();
+  assert.equal(b.running(), true);
+  assert.equal(b.isLooping('sfx.loopy'), true, 'loops run (silently) so unmuting is instant');
+  b.setMuted(false);
+  assert.equal((await b.play('sfx.ding')).status, 'zzfx', 'unmuting needs no second click');
+
   const bad = new AudioManager(M, { storage: memStorage({ 'no-handover:audio': '{oops' }) });
   assert.equal(bad.muted, false, 'corrupt prefs fall back to defaults');
 });
 
-test('audio: loops asked for before unlock start on unlock, once', async () => {
-  const a = new AudioManager(M, { createContext: fakeCtx, fetchBytes: async () => null });
-  a.loop('amb');
-  assert.equal(a.isLooping('amb'), false);
+test('audio: loops asked for before unlock start on unlock, once; zzfx loops are real loops', async () => {
+  const ctx = fakeCtx();
+  const a = new AudioManager(M, { createContext: () => ctx, fetchBytes: async () => null });
+  a.loop('amb.a');
+  a.loop('sfx.loopy');
+  assert.equal(a.isLooping('amb.a'), false);
   a.unlock();
-  a.loop('amb');
-  await new Promise((r) => setTimeout(r, 0));
-  assert.equal(a.isLooping('amb'), true);
-  assert.equal(a.history.filter((x) => x.id === 'amb').length, 1, 'one copy only');
-  a.stopLoop('amb');
-  assert.equal(a.isLooping('amb'), false);
+  a.loop('amb.a');
+  await tick();
+  await tick();
+  assert.equal(a.isLooping('amb.a'), true);
+  assert.equal(a.history.filter((x) => x.id === 'amb.a').length, 1, 'one copy only');
+  assert.deepEqual(a.history.find((x) => x.id === 'amb.a'), { id: 'amb.a', status: 'silent' }, 'no file yet: silent until main drops one in');
+  assert.deepEqual(a.history.find((x) => x.id === 'sfx.loopy'), { id: 'sfx.loopy', status: 'zzfx' });
+  const loopSrc = ctx.sources.find((s) => s.loop);
+  assert.ok(loopSrc, 'zzfx loop source has loop=true');
+  assert.equal((loopSrc!.buffer as { duration: number }).duration, 0.5, 'buffer is exactly loopLen');
+  a.stopLoop('amb.a');
+  assert.equal(a.isLooping('amb.a'), false);
 });
 
-test('audio manifest: every cue has a known class and placeholder; files are not produced yet', () => {
+test('audio: music/voice asked for just before the unlock play on unlock; UI cues and stale requests do not', async () => {
+  let t = 0;
+  const ctx = fakeCtx();
+  const a = new AudioManager(M, { createContext: () => ctx, fetchBytes: async () => new Uint8Array([1]).buffer, now: () => t });
+  const stale = await a.play('voice.v');
+  assert.equal(stale.status, 'pending');
+  t = PENDING_MS + 500;
+  const sting = await a.play('music.sting');
+  assert.equal(sting.status, 'pending');
+  const cancelled = await a.play('music.sting');
+  cancelled.stop();
+  assert.equal((await a.play('sfx.ding')).status, 'locked');
+  t += 2000;
+  a.unlock();
+  await tick();
+  await tick();
+  const played = a.history.filter((x) => x.status === 'file').map((x) => x.id);
+  assert.deepEqual(played, ['music.sting'], 'only the fresh, uncancelled music request plays');
+  assert.equal(a.history.filter((x) => x.id === 'sfx.ding' && x.status !== 'locked').length, 0);
+});
+
+test('audio manifest: ids, classes, files and fallbacks', () => {
+  const ids = Object.keys(MANIFEST);
+  assert.equal(ids.length, 21);
   for (const [id, c] of Object.entries(MANIFEST) as [string, CueDef][]) {
     assert.match(id, /^(amb|music|voice|sfx)\.[a-z0-9-]+$/, id);
     assert.ok(['music', 'ambience', 'voice', 'sfx', 'ui'].includes(c.class), id);
-    for (const s of c.src) assert.match(s, new RegExp(`^audio/[a-z]+/${id.replace('.', '\\.')}\\.(ogg|mp3)$`), `${id}: ${s}`);
-    if (c.class === 'music' || c.class === 'voice' || c.class === 'ambience') assert.equal(c.placeholder, 'silence', id);
+    for (const s of cueFiles(id, c)) assert.match(s, new RegExp(`^audio/(music|voice|sfx)/${id.replace('.', '\\.')}\\.(ogg|mp3)$`), `${id}: ${s}`);
+    if (c.class === 'music' || c.class === 'voice' || c.class === 'ambience') assert.equal(c.zzfx, undefined, `${id}: file only, silent until produced`);
+    if (id.startsWith('sfx.')) assert.ok(c.zzfx, `${id}: every sfx has a zzfx fallback so the UI is audible today`);
   }
   assert.ok('voice.briefing-jihun' in MANIFEST);
 });
