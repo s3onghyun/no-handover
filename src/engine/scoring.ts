@@ -1,4 +1,5 @@
-// Accusation scoring: three slots x 100, attempt multiplier, evidence bonus, hint cost.
+// Accusation scoring: 100 per report slot (the case decides which slots exist: case 0 has two,
+// case 3 three), attempt multiplier, evidence bonus, hint cost.
 
 import type { CaseFile, SlotDef, SlotId } from './types.ts';
 
@@ -14,7 +15,8 @@ export interface SlotScore {
 }
 
 export interface ScoreResult {
-  slots: Record<SlotId, SlotScore>;
+  /** One entry per slot the case has (cause / sequence / responsibility). */
+  slots: Partial<Record<SlotId, SlotScore>>;
   allCorrect: boolean;
   base: number;
   multiplier: number;
@@ -29,12 +31,6 @@ export interface ScoreResult {
 export const ATTEMPT_MULTIPLIER = [1, 0.85, 0.7];
 export const EVIDENCE_POINTS = 5;
 export const EVIDENCE_CAP = 30;
-
-function slot(cs: CaseFile, id: SlotId): SlotDef {
-  const s = cs.accusation.slots.find((x) => x.id === id);
-  if (!s) throw new Error(`case has no slot ${id}`);
-  return s;
-}
 
 export function scoreSlot(def: SlotDef, picked: string | string[] | null): SlotScore & { blamed: string[] } {
   const ids = picked === null ? [] : Array.isArray(picked) ? picked : [picked];
@@ -52,28 +48,47 @@ export function scoreSlot(def: SlotDef, picked: string | string[] | null): SlotS
   return { correct, points, blamed };
 }
 
+export function picked(sub: Submission, id: SlotId): string | string[] | null {
+  return id === 'responsibility' ? sub.responsibility : sub[id];
+}
+
+/** True when every slot the case has is filled in. */
+export function complete(cs: CaseFile, sub: Submission): boolean {
+  return cs.accusation.slots.every((s) => {
+    const v = picked(sub, s.id);
+    return Array.isArray(v) ? v.length > 0 : !!v;
+  });
+}
+
 export function scoreSubmission(
   cs: CaseFile,
   sub: Submission,
   ctx: { attempt: number; pinnedKeyClues: number; hintCost: number },
 ): ScoreResult {
-  const c = scoreSlot(slot(cs, 'cause'), sub.cause);
-  const s = scoreSlot(slot(cs, 'sequence'), sub.sequence);
-  const r = scoreSlot(slot(cs, 'responsibility'), sub.responsibility);
-  const base = c.points + s.points + r.points;
+  const slots: Partial<Record<SlotId, SlotScore>> = {};
+  const blamed: string[] = [];
+  let base = 0;
+  let allCorrect = true;
+  for (const def of cs.accusation.slots) {
+    const r = scoreSlot(def, picked(sub, def.id));
+    slots[def.id] = { correct: r.correct, points: r.points };
+    base += r.points;
+    allCorrect &&= r.correct;
+    blamed.push(...r.blamed);
+  }
   const multiplier = ATTEMPT_MULTIPLIER[Math.min(ctx.attempt, ATTEMPT_MULTIPLIER.length) - 1] ?? ATTEMPT_MULTIPLIER[ATTEMPT_MULTIPLIER.length - 1];
   const evidenceBonus = Math.min(EVIDENCE_CAP, ctx.pinnedKeyClues * EVIDENCE_POINTS);
   const total = Math.max(0, Math.round(base * multiplier) + evidenceBonus - ctx.hintCost);
   return {
-    slots: { cause: c, sequence: s, responsibility: r },
-    allCorrect: c.correct && s.correct && r.correct,
+    slots,
+    allCorrect,
     base,
     multiplier,
     evidenceBonus,
     hintCost: ctx.hintCost,
     total,
-    max: 300 + EVIDENCE_CAP,
-    blamed: [...new Set([...c.blamed, ...s.blamed, ...r.blamed])],
+    max: 100 * cs.accusation.slots.length + EVIDENCE_CAP,
+    blamed: [...new Set(blamed)],
   };
 }
 

@@ -35,6 +35,11 @@ export interface FileDef {
   private?: boolean;
   /** Binary file: cat prints a short notice instead of content. */
   binary?: string;
+  /**
+   * Apparent size in bytes when the file is much bigger than its sample `content` (an 11G log
+   * whose last lines are readable). Used by ls -l, du; cat refuses files over 50 MB in-world.
+   */
+  size?: number;
 }
 
 export interface ProcDef {
@@ -320,7 +325,8 @@ export interface CaseFile {
   company: string;
   /** Mail domain for git authors etc. (use a reserved .example domain). */
   domain: string;
-  clock: { start: LocalTime; deadline: LocalTime; tz: string };
+  /** `rate`: game-clock speed (default 16 = 45 min of play for 09:00→21:00). */
+  clock: { start: LocalTime; deadline: LocalTime; tz: string; rate?: number };
   player: string;
   owner: string;
   people: Record<string, Person>;
@@ -335,12 +341,37 @@ export interface CaseFile {
   terminalTabs: TabDef[];
   dashboard: string[];
   clues: ClueDef[];
-  accusation: { slots: SlotDef[]; maxSubmissions: number };
+  /**
+   * Report slots (any subset of cause / sequence / responsibility, in display order).
+   * `maxSubmissions: 0` = unlimited. `intro` and `reply` override the CTO framing of case 3.
+   */
+  accusation: {
+    slots: SlotDef[];
+    maxSubmissions: number;
+    intro?: string;
+    /** Reply after a wrong report: who answers, the text ({n} wrong of {total}), signature. */
+    reply?: { from: string; partial: string; sign: string };
+  };
   hints: HintsDef;
   triggers: TriggerDef[];
   debrief: DebriefDef;
   /** First minutes: briefing scene + "오늘 할 일" objectives (optional; see docs/case-format.md §12). */
   opening?: OpeningDef;
+  /** Tutorial shell: only these commands run; other real commands answer in-world (docs/case-format.md §13). */
+  shell?: ShellDef;
+  /** Lock-screen texts (default: case 3's security-team framing from src/i18n.ts). */
+  boot?: { status?: string; unlock?: string; note?: string };
+  /** Terminal tabs shown as closed sessions next to the live ones (atmosphere only). */
+  deadTabs?: string[];
+}
+
+export interface ShellDef {
+  /** Command names that run. Anything else that exists answers with `refuse`. */
+  allow: string[];
+  /** In-world refusal for a real command outside `allow`; `{cmd}` is replaced by its name. */
+  refuse: string;
+  /** Lines printed by `help` instead of the full tool list. */
+  help?: string[];
 }
 
 // ------------------------------------------------------------------ opening (first 3 minutes)

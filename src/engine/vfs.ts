@@ -16,6 +16,8 @@ export interface VNode {
   binary?: string;
   /** Symlink target text shown by ls -l (fd entries). */
   link?: string;
+  /** Apparent size in bytes (overrides the content length; see FileDef.size). */
+  size?: number;
 }
 
 export interface Who {
@@ -91,6 +93,7 @@ export class Vfs {
       private: opts.private,
       binary: opts.binary,
       link: opts.link,
+      size: opts.size,
     };
     parent.children!.set(node.name, node);
     return node;
@@ -165,6 +168,7 @@ export class Vfs {
   static size(n: VNode): number {
     if (n.type === 'dir') return 4096;
     if (n.link) return 64;
+    if (n.size !== undefined) return n.size;
     const c = typeof n.content === 'function' ? n.content() : n.content ?? '';
     return new TextEncoder().encode(c).length + (c ? 1 : 0);
   }

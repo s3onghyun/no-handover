@@ -3,9 +3,6 @@ import { t } from '../../i18n.ts';
 import type { AppDef } from '../wm.ts';
 import type { OutLine } from '../../engine/shell.ts';
 
-/** Tabs the departed senior left open whose remote sessions are gone (14 tabs in total). */
-const DEAD_TABS = ['pay-api-02', 'backup?', 'logs', 'db-ro', 'wiki', 'tmp', 'scratch', 'old', 'memo'];
-
 export const terminalApp: AppDef = {
   id: 'terminal',
   title: () => t('app.terminal'),
@@ -59,7 +56,7 @@ export const terminalApp: AppDef = {
           h(`button.ttab${i === cur ? '.sel' : ''}`, { role: 'tab', 'aria-selected': String(i === cur), onclick: () => select(i) }, tb.label),
         );
       });
-      for (const d of DEAD_TABS) {
+      for (const d of g.cs.deadTabs ?? []) {
         tabsEl.appendChild(
           h('button.ttab.dead', {
             title: t('term.closedTab'),

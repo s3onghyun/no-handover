@@ -2,8 +2,7 @@ import { clear, h, storage } from '../dom.ts';
 import { t } from '../../i18n.ts';
 import type { AppDef, UiCtx } from '../wm.ts';
 import type { Submission } from '../../engine/scoring.ts';
-import { grade } from '../../engine/scoring.ts';
-import type { SlotId } from '../../engine/types.ts';
+import { complete, grade } from '../../engine/scoring.ts';
 
 function debrief(root: HTMLElement, ctx: UiCtx): void {
   const g = ctx.game;
@@ -22,9 +21,7 @@ function debrief(root: HTMLElement, ctx: UiCtx): void {
         null,
         h('div.s.grade', null, t('debrief.score'), h('b', null, grade(s.total, s.max))),
         h('div.s', null, '합계', h('b', null, `${s.total} / ${s.max}`)),
-        ...(['cause', 'sequence', 'responsibility'] as SlotId[]).map((k) =>
-          h('div.s', null, g.cs.accusation.slots.find((x) => x.id === k)!.title.split(' ')[0], h('b', null, `${s.slots[k].correct ? '✓' : '✗'} ${s.slots[k].points}`)),
-        ),
+        ...g.cs.accusation.slots.map((slot) => h('div.s', null, slot.title.split(' ')[0], h('b', null, `${s.slots[slot.id]?.correct ? '✓' : '✗'} ${s.slots[slot.id]?.points ?? 0}`))),
         h('div.s', null, `제출 ×${s.multiplier}`, h('b', null, `${g.st.submissions.length}회`)),
         h('div.s', null, t('report.evidence'), h('b', null, `+${s.evidenceBonus}`)),
         h('div.s', null, '힌트', h('b', null, `−${s.hintCost}`)),
@@ -63,15 +60,29 @@ function debrief(root: HTMLElement, ctx: UiCtx): void {
       h('div.cards', null, ...d.cards.map((c) => h('div.cmdcard', null, h('b', null, c.title), h('code', null, c.cmd), h('p', null, c.explain)))),
       h('h3', null, '도윤'),
       h('p', null, `“${d.doyunLine}”`),
+      nextBox(ctx),
       h(
         'div.submitbar',
         { style: 'margin-top:18px' },
-        h('button.ghost-btn', { onclick: () => ctx.wm.open('mail', d.closingMail) }, `✉ ${t('report.reply')}`),
+        h('button.ghost-btn', { onclick: () => ctx.wm.open('mail', d.closingMail) }, `✉ ${replyLabel(ctx)}`),
         h('button.ghost-btn', { onclick: () => ctx.wm.open('playtest') }, `📋 ${t('pt.save')}`),
         h('button.ghost-btn', { onclick: () => document.dispatchEvent(new CustomEvent('nh-reset')) }, `↺ ${t('debrief.again')}`),
       ),
     ),
   );
+}
+
+/** "<who>의 회신" for the case (case 3: the CTO; the tutorial: Doyun's mentor). */
+function replyLabel(ctx: UiCtx): string {
+  const r = ctx.game.cs.accusation.reply;
+  return r ? t('report.replyFrom', { who: r.from }) : t('report.reply');
+}
+
+/** Debrief footer: the next case of the campaign, when there is one. */
+function nextBox(ctx: UiCtx): HTMLElement | null {
+  const next = ctx.nextCase?.();
+  if (!next) return null;
+  return h('div.nextcase', null, h('button.primary-btn', { onclick: () => next.go() }, `${t('debrief.next')} → ${next.label}`));
 }
 
 export const reportApp: AppDef = {
@@ -104,7 +115,7 @@ export const reportApp: AppDef = {
         root.scrollTop = 0;
         return;
       }
-      root.appendChild(h('p.intro', null, t('report.intro')));
+      root.appendChild(h('p.intro', null, g.cs.accusation.intro ?? t('report.intro')));
       for (const slot of g.cs.accusation.slots) {
         const hints = g.ladder.usedExplicit(slot.id);
         const next = g.ladder.nextExplicit(slot.id);
@@ -151,6 +162,8 @@ export const reportApp: AppDef = {
         root.appendChild(box);
       }
       const left = g.submissionsLeft();
+      const max = g.cs.accusation.maxSubmissions;
+      const leftText = max > 0 ? `${t('report.left')} ${left}/${max}` : t('report.unlimited');
       root.appendChild(
         h(
           'div.submitbar',
@@ -160,7 +173,7 @@ export const reportApp: AppDef = {
             {
               disabled: left <= 0,
               onclick: () => {
-                if (!sub.cause || !sub.sequence || !sub.responsibility.length) {
+                if (!complete(g.cs, sub)) {
                   alert(t('report.need'));
                   return;
                 }
@@ -168,13 +181,17 @@ export const reportApp: AppDef = {
                 const r = g.submit(sub);
                 if (!r) return;
                 if (!r.allCorrect && !g.st.finished) {
-                  const wrong = (['cause', 'sequence', 'responsibility'] as SlotId[]).filter((k) => !r.slots[k].correct).length;
-                  lastReply = `${t('report.reply')} (${g.st.submissions.length}/${g.cs.accusation.maxSubmissions})\n\n${t('report.partial', { n: wrong })}\n\n오미래 드림 / CTO`;
+                  const total = g.cs.accusation.slots.length;
+                  const wrong = g.cs.accusation.slots.filter((x) => !r.slots[x.id]?.correct).length;
+                  const rp = g.cs.accusation.reply;
+                  const count = max > 0 ? ` (${g.st.submissions.length}/${max})` : ` (${g.st.submissions.length})`;
+                  const body = rp ? rp.partial.replace('{n}', String(wrong)).replace('{total}', String(total)) : t('report.partial', { n: wrong, total });
+                  lastReply = `${replyLabel(ctx)}${count}\n\n${body}\n\n${rp ? rp.sign : '오미래 드림 / CTO'}`;
                 }
                 render();
               },
             },
-            `${t('report.submit')} (${t('report.left')} ${left}/${g.cs.accusation.maxSubmissions})`,
+            `${t('report.submit')} (${leftText})`,
           ),
           h('span.muted', null, `★ ${t('report.evidence')}: +${Math.min(30, g.pinnedKeyClues() * 5)} · 힌트 −${g.ladder.totalCost()}`),
         ),

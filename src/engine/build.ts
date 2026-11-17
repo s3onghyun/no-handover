@@ -243,6 +243,7 @@ export function buildWorld(cs: CaseFile): World {
         mtime: f.mtime ? parseLocal(f.mtime) : undefined,
         private: f.private,
         binary: f.binary,
+        size: f.size,
       });
     }
 

@@ -81,8 +81,11 @@ const BLOCKED: Record<string, string> = {
   docker: '이 서버에는 컨테이너가 없어요.', kubectl: '이 서버에는 쿠버네티스가 없어요.',
   su: 'sudo (읽기 전용) 만 허용돼요.', passwd: '', useradd: '', usermod: '', crontab_e: '',
   python: '', python3: '', perl: '', node: '', awk: 'grep / head / tail / wc / sort / uniq 로 대신해 보세요.', sed: 'grep / head / tail / wc / sort / uniq 로 대신해 보세요.',
-  du: 'df -h 를 쓰세요.', mount: '', fdisk: '', ip: '', ifconfig: '', netstat: 'ss 를 쓰세요 (netstat의 후속 도구).', dig: '', nslookup: '', host: '', traceroute: '',
+  mount: '', fdisk: '', ip: '', ifconfig: '', netstat: 'ss 를 쓰세요 (netstat의 후속 도구).', dig: '', nslookup: '', host: '', traceroute: '',
 };
+
+/** Files bigger than this are not dumped by cat (the player is pointed at head/tail instead). */
+export const CAT_LIMIT = 50 * 1024 * 1024;
 
 const SUDO_OK = new Set(['cat', 'less', 'more', 'head', 'tail', 'ls', 'grep', 'wc', 'journalctl', 'crontab', 'ss', 'find', 'sort', 'uniq', 'last', 'id', 'whoami']);
 
@@ -226,8 +229,10 @@ export class Shell {
     return { user: f.user, groups, sudo };
   }
 
+  /** Commands the player can run here (the tutorial narrows this to its allow list). */
   knownCommands(): string[] {
-    return Object.keys(this.commands);
+    const allow = this.world.cs.shell?.allow;
+    return Object.keys(this.commands).filter((c) => !allow || allow.includes(c));
   }
 
   /** Run one input line. Records it in the frame's history (bash records even failing lines). */
@@ -430,6 +435,12 @@ export class Shell {
     const f = this.frame(s);
     const name = argv[0];
     const fn = this.commands[name];
+    const tut = this.world.cs.shell;
+    if (tut && !tut.allow.includes(name) && (name in this.commands || name in BLOCKED)) {
+      // a real tool, just not part of today's lesson: answer in-world instead of "command not found"
+      events.push({ type: 'blocked', cmd: name });
+      return fail(tut.refuse.replace(/\{cmd\}/g, name).split('\n'), 126);
+    }
     if (!fn) {
       if (name in BLOCKED) {
         events.push({ type: 'blocked', cmd: name });
@@ -469,6 +480,10 @@ export class Shell {
     }
     if (node.private) c.events.push({ type: 'private', path: abs, opened: true });
     if (node.binary) return fail(`${cmd}: ${p}: ${node.binary}`, 1);
+    if (cmd === 'cat' && Vfs.size(node) > CAT_LIMIT) {
+      c.events.push({ type: 'blocked', cmd: `cat ${p} (${human(Vfs.size(node))})` });
+      return fail([`cat: ${p}: 파일이 너무 커요 (${human(Vfs.size(node))}). 다 출력하면 터미널이 멈춰요.`, `  (도윤: 끝부분만 보자 → tail -n 20 ${p}   앞부분은 → head ${p})`], 1);
+    }
     return txt;
   }
 
@@ -503,7 +518,7 @@ export class Shell {
     const cmds: Record<string, Cmd> = {};
 
     cmds.help = () =>
-      ok([
+      this.world.cs.shell?.help ? ok(this.world.cs.shell.help) : ok([
         `${this.world.cs.company} 조사 모드 셸 — 보안팀 승인, 읽기 전용 세션 (남은재 계정)`,
         '이 PC와 서버들에 깔려 있고, 조사 모드에서 허용된 도구들:',
         '  파일    ls  cd  pwd  cat  less  head  tail  grep  wc  sort  uniq  find',
@@ -933,6 +948,7 @@ export class Shell {
     cmds.git = (c) => this.git(c);
 
     cmds.df = (c) => ok(c.hw.def.df ?? ['Filesystem      Size  Used Avail Use% Mounted on', '/dev/sda1        50G   20G   30G  40% /']);
+    cmds.du = (c) => this.du(c);
     cmds.free = (c) => ok(c.hw.def.free ?? ['               total        used        free      shared  buff/cache   available', 'Mem:           7.7Gi       2.1Gi       3.0Gi        12Mi       2.6Gi       5.3Gi', 'Swap:             0B          0B          0B']);
     cmds.ulimit = (c) => {
       const { flags, pos } = getopt(c.args);
@@ -1031,7 +1047,27 @@ export class Shell {
       const [verb, unitArg] = pos;
       const units = c.hw.def.units ?? [];
       const find = (u?: string) => units.find((x) => x.name === u || x.name === `${u}.service`);
-      if (!verb || verb === 'list-units') return ok(['  UNIT                      LOAD   ACTIVE SUB     DESCRIPTION', ...units.map((u) => `  ${u.name.padEnd(25)} loaded active running ${u.props.Description ?? ''}`), '', `${units.length} loaded units listed.`]);
+      const state = (u: (typeof units)[number]) => [u.props.ActiveState ?? 'active', u.props.SubState ?? 'running'];
+      const failed = units.filter((u) => state(u)[0] === 'failed');
+      if (!verb || verb === 'list-units' || flags.has('failed')) {
+        const shown = flags.has('failed') ? failed : units;
+        return ok([
+          '  UNIT                      LOAD   ACTIVE SUB     DESCRIPTION',
+          ...shown.map((u) => `${state(u)[0] === 'failed' ? '●' : ' '} ${u.name.padEnd(25)} loaded ${state(u)[0].padEnd(6)} ${state(u)[1].padEnd(7)} ${u.props.Description ?? ''}`),
+          '',
+          `${shown.length} loaded units listed.`,
+        ]);
+      }
+      if (verb === 'status' && !unitArg)
+        return ok([
+          `● ${c.f.host}`,
+          `    State: ${failed.length ? 'degraded' : 'running'}`,
+          `    Units: ${units.length} loaded (서비스 ${units.length}개)`,
+          `     Jobs: 0 queued`,
+          `   Failed: ${failed.length} units${failed.length ? ` (${failed.map((u) => u.name).join(', ')})` : ''}`,
+          '',
+          `(서비스 하나를 자세히: systemctl status <서비스>${units[0] ? `  예) systemctl status ${units[0].name.replace(/\.service$/, '')}` : ''})`,
+        ]);
       if (verb === 'list-timers')
         return ok([
           'NEXT                        LEFT          LAST                        PASSED       UNIT                         ACTIVATES',
@@ -1293,6 +1329,54 @@ export class Shell {
     const plus = (diff.match(/^\+(?!\+\+)/gm) ?? []).length;
     const minus = (diff.match(/^-(?!--)/gm) ?? []).length;
     return [...files.map((f) => ` ${f} | ${plus + minus} ${'+'.repeat(plus)}${'-'.repeat(minus)}`), ` ${files.length} file changed, ${plus} insertion(+), ${minus} deletion(-)`];
+  }
+
+  // ---------------------------------------------------------------- du
+
+  /**
+   * du: disk usage per directory, in 1K blocks (or -h human units). Sizes come from the VFS
+   * (content length, or the file's declared apparent size), rounded up to 4K blocks like ext4.
+   * Supports -s -h -a -c -d N / --max-depth=N; unreadable directories print the real error.
+   */
+  private du(c: Ctx): IO {
+    const { flags, pos } = getopt(c.args, ['d'], ['max-depth']);
+    const hum = flags.has('h') || flags.has('human-readable');
+    const summarize = flags.has('s') || flags.has('summarize');
+    const all = flags.has('a') || flags.has('all');
+    const dv = (flags.get('d') ?? flags.get('max-depth')) as string | undefined;
+    const maxDepth = summarize ? 0 : dv !== undefined ? +dv : Infinity;
+    if (Number.isNaN(maxDepth)) return fail(`du: invalid maximum depth '${dv}'`);
+    const who = this.who(c.f, c.sudo);
+    const out: string[] = [];
+    const errs: string[] = [];
+    const blocks = (n: VNode) => (n.type === 'dir' ? 4096 : Math.ceil(Vfs.size(n) / 4096) * 4096);
+    const fmt = (bytes: number, label: string) => `${hum ? (bytes === 0 ? '0' : human(bytes)) : String(Math.ceil(bytes / 1024))}\t${label}`;
+    const walk = (abs: string, label: string, depth: number): number => {
+      const node = c.hw.vfs.lookup(abs)!;
+      if (node.type !== 'dir') {
+        const b = blocks(node);
+        if (depth === 0 || (all && depth <= maxDepth)) out.push(fmt(b, label));
+        return b;
+      }
+      let total = blocks(node);
+      const list = c.hw.vfs.readDir(abs, who);
+      if (typeof list === 'string') errs.push(`du: cannot read directory '${label}': ${errText[list]}`);
+      else for (const ch of list) total += walk(abs === '/' ? '/' + ch.name : `${abs}/${ch.name}`, label === '/' ? '/' + ch.name : `${label.replace(/\/$/, '')}/${ch.name}`, depth + 1);
+      if (depth <= maxDepth) out.push(fmt(total, label));
+      return total;
+    };
+    let grand = 0;
+    for (const p of pos.length ? pos : ['.']) {
+      const abs = this.path(c, p);
+      const n = c.hw.vfs.resolve(abs, who);
+      if (typeof n === 'string') {
+        errs.push(`du: cannot access '${p}': ${errText[n]}`);
+        continue;
+      }
+      grand += walk(abs, p, 0);
+    }
+    if (flags.has('c') || flags.has('total')) out.push(fmt(grand, 'total'));
+    return { out, err: errs, code: errs.length ? 1 : 0 };
   }
 
   // ---------------------------------------------------------------- completion

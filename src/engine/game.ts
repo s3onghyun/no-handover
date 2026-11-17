@@ -72,6 +72,8 @@ export interface SaveState {
   briefing: { startedAt: number | null; endedAt: number | null; skipped: boolean; watchedMs: number; replays: number };
   /** Facilitator's first-minutes observations typed into the playtest panel. */
   facilitator: Record<string, string>;
+  /** Campaign progress when this case was first opened (set by the UI; "played Case 0 first?"). */
+  campaignAtStart?: { solved: string[]; skipped: string[]; tutorial?: string } | null;
 }
 
 type Listener = (payload?: unknown) => void;
@@ -127,7 +129,7 @@ export class Game {
       caseId: this.cs.id,
       createdAt: new Date().toISOString(),
       playMs: 0,
-      settings: { idleMinutes: this.cs.hints.idleMinutes, clockRate: 16, ...settings },
+      settings: { idleMinutes: this.cs.hints.idleMinutes, clockRate: this.cs.clock.rate ?? 16, ...settings },
       unlocked: false,
       clues: {},
       pins: [],
@@ -432,8 +434,10 @@ export class Game {
 
   // ---------------------------------------------------------------- accusation
 
+  /** Infinity when the case allows unlimited submissions (`maxSubmissions: 0`, the tutorial). */
   submissionsLeft(): number {
-    return this.cs.accusation.maxSubmissions - this.st.submissions.length;
+    const max = this.cs.accusation.maxSubmissions;
+    return max > 0 ? max - this.st.submissions.length : Infinity;
   }
 
   submit(sub: Submission): ScoreResult | null {
@@ -441,7 +445,8 @@ export class Game {
     const attempt = this.st.submissions.length + 1;
     const score = scoreSubmission(this.cs, sub, { attempt, pinnedKeyClues: this.pinnedKeyClues(), hintCost: this.ladder.totalCost() });
     this.st.submissions.push({ at: this.st.playMs, sub, score });
-    this.log('accuse', { attempt, sub, correct: { cause: score.slots.cause.correct, sequence: score.slots.sequence.correct, responsibility: score.slots.responsibility.correct }, total: score.total, blamed: score.blamed });
+    const correct = Object.fromEntries(Object.entries(score.slots).map(([k, v]) => [k, v!.correct]));
+    this.log('accuse', { attempt, sub, correct, total: score.total, blamed: score.blamed });
     if (score.allCorrect || this.submissionsLeft() <= 0) {
       this.st.finished = true;
       this.deliverMail(this.cs.debrief.closingMail);
@@ -545,7 +550,7 @@ export class Game {
       playMinutes: +(this.st.playMs / 60000).toFixed(1),
       summary: {
         solved: this.st.submissions.some((s) => s.score.allCorrect),
-        causeCorrectAt: this.st.submissions.find((s) => s.score.slots.cause.correct)?.at ?? null,
+        causeCorrectAt: this.st.submissions.find((s) => s.score.slots.cause?.correct)?.at ?? null,
         submissions: this.st.submissions.map((s) => ({ t: s.at, sub: s.sub, total: s.score.total, slots: s.score.slots })),
         frictionCount: friction.length,
         frictionByKind: friction.reduce<Record<string, number>>((a, e) => ((a[String(e.kind)] = (a[String(e.kind)] ?? 0) + 1), a), {}),
@@ -558,11 +563,22 @@ export class Game {
         pinnedKeyClues: this.pinnedKeyClues(),
         appSeconds: Object.fromEntries(Object.entries(this.st.appTime).map(([k, v]) => [k, Math.round(v / 1000)])),
         firstMinutes: this.firstMinutes(),
+        campaign: this.campaignSummary(),
       },
       commands,
       friction,
       events: L,
     };
+  }
+
+  /** Which cases were solved or skipped before this one was opened (docs/playtest.md, Case 0 block). */
+  campaignSummary(): Record<string, unknown> {
+    const c = this.st.campaignAtStart;
+    if (!c) return { known: false };
+    const others = (ids: string[]) => ids.filter((id) => id !== this.cs.id);
+    // null for the tutorial itself; otherwise whether the tutorial had been solved (not skipped) first
+    const playedTutorialFirst = !c.tutorial || c.tutorial === this.cs.id ? null : c.solved.includes(c.tutorial);
+    return { known: true, playedTutorialFirst, solvedBefore: others(c.solved), skippedBefore: others(c.skipped) };
   }
 
   serialize(): string {

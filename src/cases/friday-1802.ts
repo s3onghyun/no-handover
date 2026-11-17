@@ -838,6 +838,9 @@ done`,
     { label: 'review-web', host: 'review-web', cwd: '/home/eunjae' },
   ],
 
+  // the departed senior left 14 tabs open; these remote sessions are gone
+  deadTabs: ['pay-api-02', 'backup?', 'logs', 'db-ro', 'wiki', 'tmp', 'scratch', 'old', 'memo'],
+
   dashboard: [
     '결제 API — 대시보드 스냅샷 (토 11/14 02:00 ~ 07:00, 1분 간격, 보안팀 보관본)',
     '',

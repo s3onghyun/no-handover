@@ -75,9 +75,9 @@ test('scoring: attempt multiplier, evidence cap and hint cost', () => {
 
 test('scoring: blaming a person fails the responsibility slot even with all factors picked', () => {
   const r = scoreSubmission(cs, { ...correct, responsibility: [...correct.responsibility, 'blame-jihoon'] }, { attempt: 1, pinnedKeyClues: 0, hintCost: 0 });
-  assert.equal(r.slots.responsibility.correct, false);
+  assert.equal(r.slots.responsibility?.correct, false);
   assert.deepEqual(r.blamed, ['jihoon']);
-  assert.equal(r.slots.responsibility.points, 60);
+  assert.equal(r.slots.responsibility?.points, 60);
 });
 
 test('scoring: responsibility passes at 70 without negatives', () => {
@@ -88,7 +88,7 @@ test('scoring: responsibility passes at 70 without negatives', () => {
 
 test('scoring: wrong cause blames the person in the option', () => {
   const r = scoreSubmission(cs, { ...correct, cause: 'approve' }, { attempt: 1, pinnedKeyClues: 0, hintCost: 0 });
-  assert.equal(r.slots.cause.correct, false);
+  assert.equal(r.slots.cause?.correct, false);
   assert.deepEqual(r.blamed, ['seojin']);
   assert.equal(r.total, 200);
 });

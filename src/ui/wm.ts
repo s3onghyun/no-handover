@@ -16,6 +16,8 @@ export interface UiCtx {
   pinBtn(p: Omit<Pin, 'id' | 'ts' | 'onTimeline' | 'clueIds' | 'at'> & { sourceKey?: string; ts?: number | null }): HTMLElement;
   avatar(personId: string, size?: number): HTMLElement;
   name(personId: string): string;
+  /** The next playable case in the campaign, if any (debrief "다음 사건 →" button). */
+  nextCase?: () => { label: string; go(): void } | null;
 }
 
 export interface AppDef {
