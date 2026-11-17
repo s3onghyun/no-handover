@@ -3,7 +3,9 @@
 // active play, advanced by tick()) so reloads and backgrounded tabs do not skip ahead.
 
 import { buildWorld, type Message, type World } from './build.ts';
-import { HintLadder, type LadderState } from './hints.ts';
+import { HintLadder, type LadderState, type PanelRung } from './hints.ts';
+import { buildPanel, openStep, type PanelInput, type PanelSection } from './hintpanel.ts';
+import { playRecord } from './record.ts';
 import { emptyObjectiveState, Objectives, type Observation, type ObjectiveState } from './objectives.ts';
 import { scoreSubmission, type ScoreResult, type Submission } from './scoring.ts';
 import { Shell, type OutLine, type RunResult, type Session, type ShellEvent } from './shell.ts';
@@ -41,6 +43,16 @@ export interface LogEvent {
 export interface Settings {
   idleMinutes: number;
   clockRate: number;
+  /** Senior mode (`?senior=1`): hints cost points again. Default: hints are only a record. */
+  senior?: boolean;
+}
+
+/**
+ * How long a colleague shows "입력 중…" before a message lands: 1 s plus 20 ms per character,
+ * capped at 2 s (Emily is Away; web-escape analysis §9 item 11).
+ */
+export function typingMs(text: string): number {
+  return Math.max(1000, Math.min(2000, 1000 + 20 * [...text].length));
 }
 
 export interface SaveState {
@@ -76,11 +88,15 @@ export interface SaveState {
   campaignAtStart?: { solved: string[]; skipped: string[]; tutorial?: string } | null;
   /** Tutorial rail: items whose guide line was sent, items that already got an off-rail redirect. */
   rail?: { said: string[]; redirected: string[] };
+  /** Live messages the sender deletes again ("written, then deleted"): due play time, message id. */
+  unsend?: { due: number; id: string }[];
 }
 
 type Listener = (payload?: unknown) => void;
 
 const MAX_TAB_LINES = 600;
+/** After the player's quick reply, a short beat before the colleague starts typing. */
+export const ASK_BEAT_MS = 600;
 
 export class Game {
   readonly cs: CaseFile;
@@ -91,6 +107,7 @@ export class Game {
   objectives: Objectives;
   st: SaveState;
   private listeners = new Map<string, Set<Listener>>();
+  private typingSig = '';
   private clueRegex = new Map<string, { re: RegExp; host?: string }[]>();
 
   constructor(cs: CaseFile, saved?: SaveState | null, settings?: Partial<Settings>) {
@@ -111,6 +128,7 @@ export class Game {
     this.st.briefing ??= { startedAt: null, endedAt: null, skipped: false, watchedMs: 0, replays: 0 };
     this.st.facilitator ??= {};
     this.st.rail ??= { said: [], redirected: [] };
+    this.st.unsend ??= [];
     this.objectives = new Objectives(cs.opening?.objectives.items ?? [], this.st.objectives);
     this.st.objectives = this.objectives.state;
     if (settings) this.st.settings = { ...this.st.settings, ...settings };
@@ -190,6 +208,27 @@ export class Game {
     this.st.playMs += step;
     if (this.st.focusedApp) this.st.appTime[this.st.focusedApp] = (this.st.appTime[this.st.focusedApp] ?? 0) + step;
     this.runTimers();
+    this.checkTyping();
+  }
+
+  /** Colleagues typing right now: a queued message from someone other than the player is due within its typing time. */
+  typing(): { channel: string; from: string }[] {
+    const t = this.st.playMs;
+    const out: { channel: string; from: string }[] = [];
+    for (const q of this.st.queue) {
+      if (!('message' in q.action)) continue;
+      const m = q.action.message;
+      if (m.from === this.cs.player || t < q.due - typingMs(m.text) || t >= q.due) continue;
+      if (!out.some((x) => x.channel === m.channel && x.from === m.from)) out.push({ channel: m.channel, from: m.from });
+    }
+    return out;
+  }
+
+  private checkTyping(): void {
+    const sig = JSON.stringify(this.typing());
+    if (sig === this.typingSig) return;
+    this.typingSig = sig;
+    this.emit('typing');
   }
 
   private runTimers(): void {
@@ -199,6 +238,12 @@ export class Game {
     if (due.length) {
       this.st.queue = this.st.queue.filter((q) => q.due > t);
       for (const q of due) this.apply(q.trigger, q.action);
+    }
+    // written, then deleted
+    const gone = this.st.unsend!.filter((u) => u.due <= t);
+    if (gone.length) {
+      this.st.unsend = this.st.unsend!.filter((u) => u.due > t);
+      for (const u of gone) this.unsend(u.id);
     }
     // time-based triggers
     for (const tr of this.cs.triggers) {
@@ -279,14 +324,20 @@ export class Game {
     this.st.triggersFired.push(id);
     this.log('trigger', { trigger: id });
     for (const a of tr.actions) {
-      const delay = 'message' in a ? (a.message.delaySec ?? 0) * 1000 : 0;
+      let delay = 'message' in a ? (a.message.delaySec ?? 0) * 1000 : 0;
+      // a colleague is seen typing before the message lands (the player's own lines arrive at once)
+      if ('message' in a && a.message.from !== this.cs.player) delay = Math.max(delay, typingMs(a.message.text));
       if (delay > 0) this.st.queue.push({ due: this.st.playMs + delay, trigger: id, action: a });
       else this.apply(id, a);
     }
+    this.checkTyping();
   }
 
   private apply(trigger: string, a: TriggerAction): void {
-    if ('message' in a) this.pushLive({ channel: a.message.channel, from: a.message.from, text: a.message.text }, trigger);
+    if ('message' in a) {
+      const m = this.pushLive({ channel: a.message.channel, from: a.message.from, text: a.message.text }, trigger);
+      if (a.message.deleteAfterSec) this.st.unsend!.push({ due: this.st.playMs + a.message.deleteAfterSec * 1000, id: m.id });
+    }
     else if ('mail' in a) this.deliverMail(a.mail);
     else if ('note' in a) {
       if (!this.st.notesRevealed.includes(a.note)) this.st.notesRevealed.push(a.note);
@@ -303,6 +354,16 @@ export class Game {
     return msg;
   }
 
+  /** The sender deletes a live message: it stays in the channel as "삭제된 메시지입니다". */
+  private unsend(id: string): void {
+    const m = this.st.live.find((x) => x.id === id);
+    if (!m || m.deletedAt !== undefined) return;
+    m.deletedAt = this.now();
+    this.log('unsend', { channel: m.channel, from: m.from, text: m.text });
+    this.emit('unsend', m);
+    this.emit('save');
+  }
+
   deliverMail(id: string): void {
     if (this.st.mailsDelivered.includes(id)) return;
     this.st.mailsDelivered.push(id);
@@ -310,9 +371,58 @@ export class Game {
     this.emit('mail', id);
   }
 
-  private deliverNudge(n: NudgeDef, why: 'idle' | 'wrong'): void {
+  /** Rung 2: the colleague is seen typing for 1–2 s (plus `extraMs`), then the nudge lands. */
+  private deliverNudge(n: NudgeDef, why: 'idle' | 'wrong' | 'ask', extraMs = 0): void {
     this.log('rung2', { nudge: n.id, why, from: n.from });
-    this.pushLive({ channel: n.channel, from: n.from, text: n.text }, `nudge:${n.id}`);
+    const text = why === 'ask' ? n.askText ?? n.text : n.text;
+    this.queueMessage({ channel: n.channel, from: n.from, text }, `nudge:${n.id}`, extraMs);
+  }
+
+  /** Queue a colleague's message behind a typing indicator. */
+  private queueMessage(m: { channel: string; from: string; text: string }, trigger: string, extraMs = 0): void {
+    this.st.queue.push({ due: this.st.playMs + extraMs + typingMs(m.text), trigger, action: { message: m } });
+    this.checkTyping();
+    this.emit('save');
+  }
+
+  /**
+   * "Ask a colleague" (rung 2 on request): the player sends a quick reply and the right colleague
+   * answers after a short typing pause — the tutorial rail's guide while the checklist is open,
+   * otherwise whoever sends the next idle nudge, or `ask.none` when no nudge is left. Free, logged,
+   * and the idle timer restarts. Returns the channel the exchange happens in.
+   */
+  /** Who would answer an ask right now (the messenger names them next to the quick replies). */
+  askPreview(): { channel: string; from: string } | null {
+    const a = this.cs.hints.ask;
+    if (!a || this.st.finished) return null;
+    const rail = this.cs.rail;
+    const cur = rail && a.rail && !this.objectives.folded() ? this.objectives.current() : null;
+    if (rail && cur?.next) return { channel: rail.channel, from: rail.from };
+    const n = this.ladder.peekIdle(this.foundSet());
+    return n ? { channel: n.channel, from: n.from } : { channel: a.none.channel, from: a.none.from };
+  }
+
+  ask(prompt: string): { channel: string; from: string } | null {
+    const a = this.cs.hints.ask;
+    if (!a || this.st.finished) return null;
+    const now = this.st.playMs;
+    const rail = this.cs.rail;
+    const cur = rail && a.rail && !this.objectives.folded() ? this.objectives.current() : null;
+    let reply: { channel: string; from: string; text: string };
+    let nudge: NudgeDef | null = null;
+    if (rail && a.rail && cur?.next) {
+      reply = { channel: rail.channel, from: rail.from, text: a.rail.replace(/\{next\}/g, cur.next) };
+      this.ladder.state.asked!.push({ at: now, nudge: `rail:${cur.id}` });
+      this.ladder.progress(now);
+    } else {
+      nudge = this.ladder.ask(now, this.foundSet());
+      reply = nudge ? { channel: nudge.channel, from: nudge.from, text: nudge.askText ?? nudge.text } : { ...a.none };
+    }
+    this.pushLive({ channel: reply.channel, from: this.cs.player, text: prompt }, 'ask');
+    this.log('ask', { prompt, channel: reply.channel, from: reply.from, nudge: nudge?.id ?? (cur ? `rail:${cur.id}` : 'none') });
+    if (nudge) this.deliverNudge(nudge, 'ask', ASK_BEAT_MS);
+    else this.queueMessage(reply, cur ? `ask-rail:${cur.id}` : 'ask-none', ASK_BEAT_MS);
+    return { channel: reply.channel, from: reply.from };
   }
 
   // ---------------------------------------------------------------- messenger / mail queries
@@ -431,14 +541,40 @@ export class Game {
     return this.cs.clues.filter((c) => c.key && ids.has(c.id)).length;
   }
 
-  // ---------------------------------------------------------------- hints (rung 3)
+  // ---------------------------------------------------------------- hints (rung 3: the 💡 panel)
 
-  useHint(slot: SlotId): { text: string; cost: number } | null {
-    const h = this.ladder.useExplicit(slot, this.st.playMs);
-    if (!h) return null;
-    this.log('rung3', { slot, index: h.index, cost: h.cost });
+  private panelInput(): PanelInput {
+    const items = this.cs.opening?.objectives.items ?? [];
+    const open = !this.objectives.folded();
+    return {
+      cs: this.cs,
+      found: this.foundSet(),
+      ladder: this.ladder,
+      objective: open ? this.objectives.current() : null,
+      doneObjectives: items.filter((i) => this.objectives.isDone(i.id)),
+    };
+  }
+
+  /** The 💡 panel as it stands (요약 → 방향 → 정답 per section). */
+  hintPanel(): PanelSection[] {
+    return buildPanel(this.panelInput());
+  }
+
+  /** Open one step of a panel section ('cause', 'obj:df', …). Steps go in order; null = not available. */
+  openHint(key: string, rung: PanelRung): { rung: PanelRung; text: string; cost: number } | null {
+    const r = openStep(this.panelInput(), key, rung, this.st.playMs);
+    if (!r) return null;
+    const slot = key.startsWith('obj:') ? undefined : (key as SlotId);
+    if (rung === 'summary') this.log('hint-summary', { key });
+    else this.log('rung3', { key, slot, rung, index: r.index, cost: r.cost, hints: this.ladder.hintCount() });
+    this.emit('hint', { key, rung });
     this.emit('save');
-    return h;
+    return r;
+  }
+
+  /** Hints used so far (record). */
+  hintCount(): number {
+    return this.ladder.hintCount();
   }
 
   // ---------------------------------------------------------------- accusation
@@ -452,14 +588,16 @@ export class Game {
   submit(sub: Submission): ScoreResult | null {
     if (this.st.finished || this.submissionsLeft() <= 0) return null;
     const attempt = this.st.submissions.length + 1;
-    const score = scoreSubmission(this.cs, sub, { attempt, pinnedKeyClues: this.pinnedKeyClues(), hintCost: this.ladder.totalCost() });
+    // hints are a record; only senior mode takes their cost off the score
+    const score = scoreSubmission(this.cs, sub, { attempt, pinnedKeyClues: this.pinnedKeyClues(), hintCost: this.st.settings.senior ? this.ladder.totalCost() : 0 });
+    score.hints = this.ladder.hintCount();
     this.st.submissions.push({ at: this.st.playMs, sub, score });
     const correct = Object.fromEntries(Object.entries(score.slots).map(([k, v]) => [k, v!.correct]));
     this.log('accuse', { attempt, sub, correct, total: score.total, blamed: score.blamed });
     if (score.allCorrect || this.submissionsLeft() <= 0) {
       this.st.finished = true;
       this.deliverMail(this.cs.debrief.closingMail);
-      this.log('finish', { attempt, total: score.total, solved: score.allCorrect });
+      this.log('finish', { attempt, total: score.total, solved: score.allCorrect, hints: score.hints });
     } else {
       const n = this.ladder.onWrong(score.blamed, this.st.playMs);
       if (n) this.deliverNudge(n, 'wrong');
@@ -491,7 +629,7 @@ export class Game {
     const text = cur ? cur.say : rail.done;
     if (!text || st.said.includes(key)) return;
     st.said.push(key);
-    this.st.queue.push({ due: this.st.playMs + 1500, trigger: `rail:${key}`, action: { message: { channel: rail.channel, from: rail.from, text } } });
+    this.queueMessage({ channel: rail.channel, from: rail.from, text }, `rail:${key}`, 300);
   }
 
   /** Rail: a command that found nothing gets one redirect per item, in the guide's voice. */
@@ -505,7 +643,7 @@ export class Game {
     if (!cur?.next || st.redirected.includes(cur.id)) return;
     st.redirected.push(cur.id);
     this.log('rail-redirect', { item: cur.id, line });
-    this.st.queue.push({ due: this.st.playMs + 1200, trigger: `rail-off:${cur.id}`, action: { message: { channel: rail.channel, from: rail.from, text: rail.offRail.replace(/\{next\}/g, cur.next) } } });
+    this.queueMessage({ channel: rail.channel, from: rail.from, text: rail.offRail.replace(/\{next\}/g, cur.next) }, `rail-off:${cur.id}`, 200);
   }
 
   /** The player clicked or typed inside an app window (not the automatic focus on open). */
@@ -593,7 +731,10 @@ export class Game {
         frictionByKind: friction.reduce<Record<string, number>>((a, e) => ((a[String(e.kind)] = (a[String(e.kind)] ?? 0) + 1), a), {}),
         rung1At: first('rung1'),
         rung2: L.filter((e) => e.type === 'rung2').map((e) => ({ t: e.t, nudge: e.nudge, why: e.why })),
-        rung3: L.filter((e) => e.type === 'rung3').map((e) => ({ t: e.t, slot: e.slot, cost: e.cost })),
+        rung3: L.filter((e) => e.type === 'rung3').map((e) => ({ t: e.t, slot: e.slot, key: e.key, rung: e.rung, cost: e.cost })),
+        asks: L.filter((e) => e.type === 'ask').map((e) => ({ t: e.t, prompt: e.prompt, from: e.from, nudge: e.nudge })),
+        hintSummaries: L.filter((e) => e.type === 'hint-summary').map((e) => ({ t: e.t, key: e.key })),
+        record: playRecord(this),
         cluesFound: Object.entries(this.st.clues).map(([id, v]) => ({ id, t: v.at, via: v.via })).sort((a, b) => a.t - b.t),
         keyCluesTotal: this.cs.clues.filter((c) => c.key).length,
         pins: this.st.pins.length,

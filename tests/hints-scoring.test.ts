@@ -49,16 +49,19 @@ test('hint ladder: wrong accusation picks the blamed person\'s voice, once each,
   assert.equal(l.onWrong([], 4), null);
 });
 
-test('hint ladder: explicit hints are per slot, in order, each with a cost', () => {
+test('hint ladder: panel steps are counted as hints (summaries free); cost only matters in senior mode', () => {
   const l = new HintLadder(cs.hints, 0);
-  const a = l.useExplicit('cause', 1);
-  const b = l.useExplicit('cause', 2);
-  assert.ok(a && b && a.text !== b.text);
-  l.useExplicit('cause', 3);
-  assert.equal(l.useExplicit('cause', 4), null);
-  assert.equal(l.totalCost(), 30);
-  assert.equal(l.usedExplicit('cause').length, 3);
-  assert.equal(l.nextExplicit('sequence')?.index, 0);
+  l.usePanel({ key: 'cause', rung: 'summary', index: 0, at: 1, cost: 0 });
+  l.usePanel({ key: 'cause', rung: 'direction', index: 0, at: 2, cost: 10 });
+  l.usePanel({ key: 'cause', rung: 'answer', index: 0, at: 3, cost: 30 });
+  assert.equal(l.hintCount(), 2);
+  assert.equal(l.totalCost(), 40);
+  assert.equal(l.panelUses('cause').length, 3);
+  assert.equal(l.panelUses('sequence').length, 0);
+  // an old save with one-button hints still counts them
+  const old = new HintLadder(cs.hints, 0, {}, { lastProgressAt: 0, idleFired: [], wrongFired: [], explicitUsed: [{ slot: 'cause', index: 0, at: 1, cost: 10 }] });
+  assert.equal(old.hintCount(), 1);
+  assert.equal(old.totalCost(), 10);
 });
 
 const correct = { cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account', 'bottleneck', 'cover-seojin', 'cover-jihoon'] };

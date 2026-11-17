@@ -1,5 +1,6 @@
 // Accusation scoring: 100 per report slot (the case decides which slots exist: case 0 has two,
-// case 3 three), attempt multiplier, evidence bonus, hint cost.
+// case 3 three), attempt multiplier, evidence bonus, hint cost. The hint cost is only passed in
+// senior mode (`?senior=1`); otherwise hints are a record ("힌트 N회"), see src/engine/record.ts.
 
 import type { CaseFile, SlotDef, SlotId } from './types.ts';
 
@@ -22,6 +23,8 @@ export interface ScoreResult {
   multiplier: number;
   evidenceBonus: number;
   hintCost: number;
+  /** Hints used before this submission (record; added later, absent in old saves). */
+  hints?: number;
   total: number;
   max: number;
   /** Person ids blamed by wrong options (drives the colleague nudge). */
@@ -90,6 +93,26 @@ export function scoreSubmission(
     max: 100 * cs.accusation.slots.length + EVIDENCE_CAP,
     blamed: [...new Set(blamed)],
   };
+}
+
+/** Default reply texts (the UI passes its own string table's). */
+export const REPLY_DEFAULTS = {
+  partial: '{total}칸 중 {n}칸이 사실과 맞지 않습니다. 다시 확인해 주십시오.',
+  bundled: '보고서 어딘가가 사실과 맞지 않습니다. 어느 부분인지는 직접 다시 확인해 주십시오.',
+};
+
+/** How a wrong report is answered: 'bundled' (default) never says which slot or how many. */
+export function feedbackMode(cs: CaseFile): 'bundled' | 'per-slot' {
+  return cs.accusation.feedback ?? 'bundled';
+}
+
+/** The reply body after a wrong (not finished) report. */
+export function wrongReply(cs: CaseFile, score: ScoreResult, defaults: { partial: string; bundled: string } = REPLY_DEFAULTS): string {
+  const rp = cs.accusation.reply;
+  if (feedbackMode(cs) === 'bundled') return rp?.bundled ?? defaults.bundled;
+  const total = cs.accusation.slots.length;
+  const wrong = cs.accusation.slots.filter((x) => !score.slots[x.id]?.correct).length;
+  return (rp?.partial ?? defaults.partial).replace('{n}', String(wrong)).replace('{total}', String(total));
 }
 
 export function grade(total: number, max: number): string {

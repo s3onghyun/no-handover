@@ -154,6 +154,7 @@ test('case 0 scoring: two slots, max 230, unlimited submissions, wrong answers n
   const wrong = g.submit({ cause: 'pdf', sequence: 'slow', responsibility: [] })!;
   assert.equal(wrong.max, 230);
   assert.equal(wrong.allCorrect, false);
+  g.tick(2000);
   assert.equal(g.st.live.at(-1)?.from, 'jihoon');
   for (let i = 0; i < 4; i++) g.submit({ cause: 'memory', sequence: 'hardware', responsibility: [] });
   assert.equal(g.st.finished, false, 'five wrong reports and still going');

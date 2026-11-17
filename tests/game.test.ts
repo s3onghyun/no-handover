@@ -112,6 +112,8 @@ test('wrong accusation triggers rung 2 in the blamed person\'s voice and caps at
   const g = new Game(cs);
   const wrong = { cause: 'approve', sequence: 'sneaky', responsibility: ['blame-seojin'] };
   g.submit(wrong);
+  assert.equal(g.typing()[0]?.from, 'seojin', 'the nudge is typed first (1–2 s)');
+  g.tick(2000);
   assert.equal(g.st.live.at(-1)?.text, '음. 사람 말고 시간부터요. 03:15에 뭐가 시작됐는지.');
   g.submit(wrong);
   const last = g.submit(wrong);

@@ -275,6 +275,28 @@ export interface NudgeDef {
   text: string;
   /** Idle nudge is skipped if all of these clues are already found. */
   unlessClues?: string[];
+  /** Text when the player asked for it (the quick reply "뭐부터 봐요?"); default `text`. */
+  askText?: string;
+}
+
+/** Rung 2 on request: quick replies in the messenger composer (docs/case-format.md §9). */
+export interface AskDef {
+  /** Quick-reply chips the player can send, e.g. ['뭐부터 봐요?', '막혔어요']. */
+  prompts: string[];
+  /** Tutorial: while the rail has a current item, its guide answers with this; `{next}` = the item's `next`. */
+  rail?: string;
+  /** Answer once every idle nudge is used or already covered by found clues. */
+  none: { from: string; channel: string; text: string };
+}
+
+/** One "방향" (direction) line of the hint panel for a report slot. */
+export interface DirectionDef {
+  slot: SlotId;
+  text: string;
+  /** Senior mode only: points taken off when it is revealed. */
+  cost: number;
+  /** Shown first while these clues are not all found yet ("where to look next"). */
+  unlessClues?: string[];
 }
 
 export interface HintsDef {
@@ -283,13 +305,25 @@ export interface HintsDef {
   idle: NudgeDef[];
   /** person id -> nudge when an accusation blames that person; 'default' for other wrong answers. */
   wrong: Record<string, NudgeDef>;
-  /** Rung 3, per slot, in order. */
-  explicit: { slot: SlotId; text: string; cost: number }[];
+  /**
+   * Rung 3, the 💡 panel's "방향" lines per slot (also the old explicit hints). The panel also has
+   * "요약" (found clues, generated) and "정답" (`answers`, default: the correct option text).
+   */
+  explicit: DirectionDef[];
+  /** "정답" rung per slot; default is generated from the slot's correct option(s). */
+  answers?: Partial<Record<SlotId, string>>;
+  /** Senior mode only: points taken off for a revealed answer (default 30). */
+  answerCost?: number;
+  /** Rung 2 on request ("ask a colleague"). Omitted = no quick replies. */
+  ask?: AskDef;
+  /** The 💡 panel also covers the current "오늘 할 일" item while the checklist is open (Case 0). */
+  objectivePanel?: boolean;
 }
 
 export type TriggerWhen = { clue: string } | { afterMin: number } | { allClues: string[] };
 export type TriggerAction =
-  | { message: { channel: string; from: string; text: string; delaySec?: number } }
+  /** `deleteAfterSec`: the sender deletes it again after this long (written, then deleted). */
+  | { message: { channel: string; from: string; text: string; delaySec?: number; deleteAfterSec?: number } }
   | { mail: string }
   | { note: string }
   | { toast: string };
@@ -349,8 +383,16 @@ export interface CaseFile {
     slots: SlotDef[];
     maxSubmissions: number;
     intro?: string;
-    /** Reply after a wrong report: who answers, the text ({n} wrong of {total}), signature. */
-    reply?: { from: string; partial: string; sign: string };
+    /**
+     * Reply after a wrong report: who answers, the text ({n} wrong of {total}), signature.
+     * `bundled`: the text when `feedback` is 'bundled' (no count, no slot).
+     */
+    reply?: { from: string; partial: string; sign: string; bundled?: string };
+    /**
+     * 'bundled' (default, main cases): a wrong report only hears "something is wrong", never which
+     * slot or how many. 'per-slot' (Case 0): "{n} of {total} slots are wrong".
+     */
+    feedback?: 'bundled' | 'per-slot';
   };
   hints: HintsDef;
   triggers: TriggerDef[];
@@ -426,6 +468,8 @@ export interface ObjectiveDef {
   say?: string;
   /** Rail: the exact command named in the off-rail redirect ("그건 나중에요 ㅋㅋ {next} 부터!!"). */
   next?: string;
+  /** 💡 panel "정답" for this item (`hints.objectivePanel`); default: "터미널에 그대로: {next}". */
+  answer?: string;
 }
 
 export interface BriefingLine {
