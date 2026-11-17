@@ -957,9 +957,9 @@ done`,
   hints: {
     idleMinutes: 6,
     idle: [
-      { id: 'idle-1', from: 'jihoon', channel: 'me-dm-jihoon', unlessClues: ['c_cron'], text: '도윤님 ㅋㅋ 아직 보고서 중?? 은재 선배는 뭐든 자기 홈에 넣어 두는 스타일이었어요~ history 같은 거 한번 봐요!! 🙏' },
+      { id: 'idle-1', from: 'jihoon', channel: 'me-dm-jihoon', unlessClues: ['c_cron'], text: '도윤님 ㅋㅋ 아직 보고서 중?? 은재 선배는 뭐든 자기 홈에 넣어 두는 스타일이었어요~ history 같은 거 한번 봐요!! 🙏', askText: '음 ㅋㅋ 은재 선배는 뭐든 자기 홈에 넣어 두는 스타일이었어요~ history 같은 거 한번 봐요!! 🙏' },
       { id: 'idle-2', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c_cron'], text: '로그 봤어요. 03:15부터. 그 시각에 뭐가 시작됐는지 보세요.' },
-      { id: 'idle-3', from: 'jihoon', channel: 'me-dm-jihoon', unlessClues: ['c_cron'], text: '아 근데 은재 선배 금요일에 터미널 탭 그대로 두고 가셨잖아요 ㅋㅋ 마지막 탭 한번 봐요~ 뭐 치다 마신 거 같던데!!' },
+      { id: 'idle-3', from: 'jihoon', channel: 'me-dm-jihoon', unlessClues: ['c_cron'], text: '아 근데 은재 선배 금요일에 터미널 탭 그대로 두고 가셨잖아요 ㅋㅋ 마지막 탭 한번 봐요~ 뭐 치다 마신 거 같던데!!', askText: '아 은재 선배 금요일에 터미널 탭 그대로 두고 가셨잖아요 ㅋㅋ 마지막 탭 한번 봐요~ 뭐 치다 마신 거 같던데!!' },
       { id: 'idle-4', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c_limit', 'c_fds'], text: '음. 풀 크기 올리면 fd도 같이 봐야 해요. LimitNOFILE 확인 부탁해요.' },
     ],
     wrong: {
@@ -968,17 +968,24 @@ done`,
       eunjae: { id: 'wrong-eunjae', from: 'seojin', channel: 'me-dm-seojin', text: '선배는 퇴사했어요. 그 cron이 왜 아직 돌 수 있었는지가 질문이에요.' },
       default: { id: 'wrong-default', from: 'jihoon', channel: 'me-dm-jihoon', text: '도윤님 ㅋㅋ 미래님 메일은 무섭지만… 사람 이름보다 로그 시각부터 맞춰 보는 거 어때요~? 🙏' },
     },
+    // 💡 panel "방향" lines: the first one whose clues are not all found is offered next.
+    // 요약 is generated from found clues; 정답 defaults to the correct option(s). Costs apply in senior mode only.
     explicit: [
-      { slot: 'cause', cost: 10, text: '03:15에 무엇이 시작됐는지 보세요: journalctl -u cron, 그리고 crontab -l.' },
-      { slot: 'cause', cost: 10, text: '은재님 history의 4984~4990, 퇴사일 오후 다섯 줄을 그대로 다시 쳐 보세요.' },
-      { slot: 'cause', cost: 10, text: '지금 열린 fd 수(fds) + 백업이 여는 파일 수(tail ~/log/backup.log)를 LimitNOFILE 4096과 더해 비교해 보세요.' },
-      { slot: 'sequence', cost: 10, text: 'pay-cfg 탭에서 cd /srv/git/pay-config.git 후 git log --format=fuller, git branch -a.' },
-      { slot: 'sequence', cost: 10, text: 'bastion 탭에서 last, review-web 탭에서 grep sjkang /var/log/nginx/access.log | tail.' },
-      { slot: 'sequence', cost: 10, text: '지워진 메시지 원문은 알림 센터(작업 표시줄 🔔)와 은재님 메일함의 "읽지 않은 메시지 요약"에 남아 있어요.' },
-      { slot: 'responsibility', cost: 10, text: 'pay-cfg에서 getent group git-admins 와 cat /srv/git/pay-config.git/hooks/pre-receive 를 같이 보세요.' },
-      { slot: 'responsibility', cost: 10, text: '알림 37건은 왜 퇴사자에게 갔을까요? bastion의 서진님 휴가 인수인계 메모(sudo로만 열림).' },
-      { slot: 'responsibility', cost: 10, text: '이 칸은 "누가"가 아니라 "무엇이 그걸 가능하게 했나"입니다. 사람을 범인으로 고르면 감점이에요.' },
+      { slot: 'cause', cost: 10, unlessClues: ['c_cron'], text: '03:15에 무엇이 시작됐는지 보세요: journalctl -u cron, 그리고 crontab -l.' },
+      { slot: 'cause', cost: 10, unlessClues: ['c_history'], text: '은재님 history의 4984~4990, 퇴사일 오후 다섯 줄을 그대로 다시 쳐 보세요.' },
+      { slot: 'cause', cost: 10, unlessClues: ['c_fds', 'c_limit', 'c_backup_files'], text: '지금 열린 fd 수(fds) + 백업이 여는 파일 수(tail ~/log/backup.log)를 LimitNOFILE 4096과 더해 비교해 보세요.' },
+      { slot: 'sequence', cost: 10, unlessClues: ['s_commit', 's_revert'], text: 'pay-cfg 탭에서 cd /srv/git/pay-config.git 후 git log --format=fuller, git branch -a.' },
+      { slot: 'sequence', cost: 10, unlessClues: ['s_last', 's_approve'], text: 'bastion 탭에서 last, review-web 탭에서 grep sjkang /var/log/nginx/access.log | tail.' },
+      { slot: 'sequence', cost: 10, unlessClues: ['s_notif', 's_summary'], text: '지워진 메시지 원문은 알림 센터(작업 표시줄 🔔)와 은재님 메일함의 "읽지 않은 메시지 요약"에 남아 있어요.' },
+      { slot: 'responsibility', cost: 10, unlessClues: ['r_group', 'r_hook'], text: 'pay-cfg에서 getent group git-admins 와 cat /srv/git/pay-config.git/hooks/pre-receive 를 같이 보세요.' },
+      { slot: 'responsibility', cost: 10, unlessClues: ['s_vacation'], text: '알림 37건은 왜 퇴사자에게 갔을까요? bastion의 서진님 휴가 인수인계 메모(sudo로만 열림).' },
+      { slot: 'responsibility', cost: 10, text: '이 칸은 "누가"가 아니라 "무엇이 그걸 가능하게 했나"입니다. 사람을 범인으로 고르면 틀린 칸이 돼요.' },
     ],
+    // "뭐부터 봐요?" / "막혔어요": the next idle nudge right away, from whoever sends it
+    ask: {
+      prompts: ['뭐부터 봐요?', '막혔어요'],
+      none: { from: 'jihoon', channel: 'me-dm-jihoon', text: 'ㅋㅋ 저도 이제 아는 게 없어요… 💡 힌트 패널 한번 봐요!! 🙏' },
+    },
   },
 
   // ------------------------------------------------------------------ live events
@@ -1017,6 +1024,15 @@ done`,
       id: 'seojin-runbook',
       when: { allClues: ['c_cron', 's_revert'] },
       actions: [{ message: { channel: 'me-dm-seojin', from: 'seojin', delaySec: 25, text: '그 cron은 몰랐어요. 런북에 없었으니까. …제가 쓴 런북에.' } }],
+    },
+    {
+      // written, then deleted (characters.md §8-1: under pressure he laughs "ㅋㅋ 설마", then deletes)
+      id: 'jihoon-unsend',
+      when: { clue: 's_commit' },
+      actions: [
+        { message: { channel: 'me-dm-jihoon', from: 'jihoon', delaySec: 6, deleteAfterSec: 3, text: 'ㅋㅋ 설마 제 커밋 보시는 거예요??' } },
+        { message: { channel: 'me-dm-jihoon', from: 'jihoon', delaySec: 13, text: '아 아니에요 ㅋㅋ 도윤님 화이팅!! 👍' } },
+      ],
     },
     { id: 'pressure-mail', when: { afterMin: 30 }, actions: [{ mail: 'pressure' }, { toast: '새 메일: RE: [긴급] 토요일 결제 장애 원인 보고' }] },
   ],

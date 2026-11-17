@@ -457,6 +457,8 @@ export const caseZeroWiki: CaseFile = {
   // ------------------------------------------------------------------ report (two slots, unlimited)
   accusation: {
     maxSubmissions: 0,
+    // the tutorial keeps per-slot feedback ("2칸 중 1칸이…"); main cases only hear "어딘가 틀렸다"
+    feedback: 'per-slot',
     intro: '서진님께 보낼 원인 보고. 두 칸만 채우면 된다. 제출은 몇 번이든 할 수 있다 — 틀리면 서진님이 짧게 답해 준다.',
     reply: { from: '강서진', partial: '{total}칸 중 {n}칸이 로그랑 안 맞아요. 다시요.', sign: '강서진' },
     slots: [
@@ -501,11 +503,20 @@ export const caseZeroWiki: CaseFile = {
       jihoon: { id: 'wrong-jihoon', from: 'jihoon', channel: 'me-dm-jihoon', text: '헉 제 회의록 PDF요?? 😂 근데… PDF 하나로 위키가 통째로 죽어요?? 그 PDF가 서버에서 뭘 했는지 로그 한번 봐 주세요 🙏' },
       default: { id: 'wrong-default', from: 'seojin', channel: 'me-dm-seojin', text: '음. 그 답이면 df -h 의 100%가 설명 안 돼요. 다시요.' },
     },
+    // 💡 panel "방향" lines (요약 is generated from found clues; 정답 defaults to the correct option)
     explicit: [
-      { slot: 'cause', cost: 5, text: 'df -h 에서 Use% 100% 인 줄의 Mounted on(/var)을 보세요. 그 안에서 du -sh /var/log/* 로 가장 큰 것을 찾으세요.' },
-      { slot: 'cause', cost: 5, text: 'tail -n 20 /var/log/wiki/wiki.log — 같은 오류가 반복되면 그게 디스크를 채운 쓰기예요. systemctl status wiki 의 맨 아래 줄이 멈춘 이유예요.' },
-      { slot: 'sequence', cost: 5, text: 'journalctl -u wiki 에서 시각 두 개: 반복이 시작된 시각(월 21:14)과 No space left on device 가 처음 나온 시각(화 08:47).' },
+      { slot: 'cause', cost: 5, unlessClues: ['c0_df', 'c0_du'], text: 'df -h 에서 Use% 100% 인 줄의 Mounted on(/var)을 보세요. 그 안에서 du -sh /var/log/* 로 가장 큰 것을 찾으세요.' },
+      { slot: 'cause', cost: 5, unlessClues: ['c0_loop', 'c0_status'], text: 'tail -n 20 /var/log/wiki/wiki.log — 같은 오류가 반복되면 그게 디스크를 채운 쓰기예요. systemctl status wiki 의 맨 아래 줄이 멈춘 이유예요.' },
+      { slot: 'sequence', cost: 5, unlessClues: ['c0_start', 'c0_full'], text: 'journalctl -u wiki 에서 시각 두 개: 반복이 시작된 시각(월 21:14)과 No space left on device 가 처음 나온 시각(화 08:47).' },
     ],
+    // the panel also walks the open checklist item (요약 = ticked items, 방향 = its hint, 정답 = its command)
+    objectivePanel: true,
+    // "뭐부터 봐요?": 지훈 names the current checklist command; after the checklist, 서진's idle nudges
+    ask: {
+      prompts: ['뭐부터 봐요?', '막혔어요'],
+      rail: '지금은 {next} 요!! 그대로 쳐 보면 돼요 ㅋㅋ 🙏',
+      none: { from: 'seojin', channel: 'me-dm-seojin', text: '찾은 것부터 보고서에. 원인, 경위. 그래도 막히면 💡.' },
+    },
   },
 
   // ------------------------------------------------------------------ live scene
@@ -590,6 +601,7 @@ export const caseZeroWiki: CaseFile = {
         {
           id: 'history', text: 'Enter — 은재님 history 보기', hint: '반짝이는 터미널을 누르고 Enter. history 가 이미 쳐져 있어요. 노란 줄이 단서예요.',
           any: [{ cmd: '^\\s*history\\b', host: W }], pulse: 'terminal', next: 'Enter (history)',
+          answer: '터미널 창을 한 번 누르고 Enter. history 가 이미 쳐져 있어요.',
         },
         {
           id: 'df', text: '디스크 확인: df -h', hint: 'df -h 를 치고 Use% 열을 보세요. 100% 인 줄이 있나요? 어디(Mounted on)인가요?', any: [{ clue: 'c0_df' }],
@@ -598,6 +610,7 @@ export const caseZeroWiki: CaseFile = {
         {
           id: 'tail', text: '가장 큰 로그의 끝 읽기: du, tail', hint: 'du -sh /var/log/* 로 가장 큰 것을 찾고, tail -n 20 <그 안의 파일> 로 끝을 보세요.', any: [{ clue: 'c0_loop' }],
           say: '/var 100% ㅋㅋㅋ 꽉 찼네요. 누가 채웠는지: du -sh /var/log/* 그다음 tail -n 20 /var/log/wiki/wiki.log 👍', next: 'du -sh /var/log/*',
+          answer: '터미널에 그대로: du -sh /var/log/* → 가장 큰 wiki 폴더 → tail -n 20 /var/log/wiki/wiki.log',
         },
         {
           id: 'service', text: '서비스 상태 보기: systemctl status wiki', hint: 'Active 줄과 맨 아래 몇 줄을 보세요. 멈춘 이유가 거기 있어요.', any: [{ output: 'Active: failed \\(Result: exit-code\\)', host: W }],
@@ -606,6 +619,7 @@ export const caseZeroWiki: CaseFile = {
         {
           id: 'pins', text: '증거 2개 보드에 올리기 📌', hint: '증거가 되는 줄에 마우스를 올리면 오른쪽에 📌 가 보여요. df -h 의 100% 줄부터.', any: [{ pins: 2 }],
           say: '찾았다!! 노란 줄 옆 📌 눌러서 증거 두 개만 보드에 올려 봐요~',
+          answer: 'df -h 의 "/dev/sdb1 … 100% /var" 줄과 systemctl status 의 "No space left on device" 줄에 마우스를 올리고 오른쪽 📌.',
         },
       ],
       after: ['다음: 📝 원인 보고서 — 원인과 경위 두 칸', '언제부터였는지: journalctl -u wiki', '막히면: history, ~/README.txt'],
