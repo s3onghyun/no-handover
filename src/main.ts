@@ -1,5 +1,6 @@
 import './ui/style.css';
-import { caseFriday1802 } from './cases/friday-1802.ts';
+import { CAMPAIGN } from './cases/index.ts';
+import { Campaign, parseProgress, type CampaignEntry, type Progress } from './engine/campaign.ts';
 import { Game, type SaveState } from './engine/game.ts';
 import { fmtHM, fmtKoShort, parseLocal } from './engine/time.ts';
 import { getLang, setLang, t, type Lang } from './i18n.ts';
@@ -21,16 +22,37 @@ import type { Message } from './engine/build.ts';
 import type { ScoreResult } from './engine/scoring.ts';
 import type { SlotId } from './engine/types.ts';
 
-const CASE = caseFriday1802;
-const SAVE_KEY = `no-handover:save:${CASE.id}`;
+// ------------------------------------------------------------------ campaign: which case runs (docs/campaign-ladder.md)
+const campaign = new Campaign(CAMPAIGN);
+const PROGRESS_KEY = 'no-handover:campaign';
+const CURRENT_KEY = 'no-handover:current';
 const params = new URLSearchParams(location.search);
 setLang((params.get('lang') as Lang) === 'en' ? 'en' : 'ko');
 document.documentElement.lang = getLang();
-document.title = `${t('game.title')} — ${t('game.titleKo')}`;
 
+// ?fresh=1 = a new participant: every case's save and the campaign progress are wiped
 if (params.has('fresh')) {
-  storage.remove(SAVE_KEY);
-  storage.remove(`no-handover:report:${CASE.id}`);
+  for (const e of campaign.playable()) {
+    storage.remove(`no-handover:save:${e.id}`);
+    storage.remove(`no-handover:report:${e.id}`);
+  }
+  storage.remove(PROGRESS_KEY);
+  storage.remove(CURRENT_KEY);
+}
+let progress: Progress = parseProgress(storage.get(PROGRESS_KEY));
+const saveProgress = () => storage.set(PROGRESS_KEY, JSON.stringify(progress));
+const ENTRY = campaign.pick(params.get('case'), storage.get(CURRENT_KEY), progress);
+const CASE = ENTRY.cs!;
+storage.set(CURRENT_KEY, CASE.id);
+const SAVE_KEY = `no-handover:save:${CASE.id}`;
+const caseLabel = (e: CampaignEntry) => `${t('case.label', { n: e.slot })}${e.tutorial ? ` · ${t('case.tutorial')}` : ''}`;
+document.title = `${t('game.title')} — ${caseLabel(ENTRY)} ${CASE.title}`;
+/** Open another case (full reload: one Game per page). */
+function goCase(id: string): void {
+  storage.set(CURRENT_KEY, id);
+  const q = new URLSearchParams({ case: id });
+  if (params.get('lang')) q.set('lang', params.get('lang')!);
+  location.href = `${location.pathname}?${q}`;
 }
 
 function loadGame(): Game {
@@ -47,6 +69,14 @@ function loadGame(): Game {
 }
 
 const game = loadGame();
+// "played Case 0 first?" — remember the campaign as it was when this case was first opened
+if (!game.st.unlocked && !game.st.campaignAtStart) game.st.campaignAtStart = { ...progress, tutorial: campaign.tutorialId() };
+const markSolved = () => {
+  if (progress.solved.includes(CASE.id)) return;
+  progress = campaign.solve(CASE.id, progress);
+  saveProgress();
+};
+if (game.st.finished) markSolved(); // saves from before the campaign existed
 const audio = new AudioManager(MANIFEST, { storage });
 (window as unknown as { __game: Game; __audio: AudioManager }).__game = game; // e2e and facilitator console access
 (window as unknown as { __audio: AudioManager }).__audio = audio;
@@ -94,7 +124,21 @@ volume.oninput = () => {
 };
 volume.onchange = logAudio;
 renderSound();
-const taskbar = h('div#taskbar', null, h('div.brand', null, t('game.title'), h('small', null, t('game.titleKo'))), tasks, hintBtn, notifBtn, helpBtn, h('div.soundctl', null, soundBtn, volume), ptBtn, clock);
+// tutorial only: a visible way out for experienced players (Case 0 is marked skipped)
+const nextAfterTutorial = ENTRY.tutorial ? campaign.next(CASE.id) : null;
+function skipTutorial(): void {
+  if (!nextAfterTutorial) return;
+  game.log('tutorial-skip', { to: nextAfterTutorial.id });
+  storage.set(SAVE_KEY, game.serialize());
+  progress = campaign.skipTo(nextAfterTutorial.id, progress);
+  saveProgress();
+  goCase(nextAfterTutorial.id);
+}
+const skipBtn =
+  nextAfterTutorial && !progress.solved.includes(CASE.id)
+    ? h('button.tray-btn.skiptut', { title: `${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」`, onclick: () => confirm(`${t('case.skipShort')} → ${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」?`) && skipTutorial() }, `⏭ ${t('case.skipShort')}`)
+    : null;
+const taskbar = h('div#taskbar', null, h('div.brand', null, t('game.title'), h('small', null, t('game.titleKo'))), tasks, skipBtn, hintBtn, notifBtn, helpBtn, h('div.soundctl', null, soundBtn, volume), ptBtn, clock);
 const toasts = h('div.toasts', { 'aria-live': 'polite' });
 document.body.append(desktop, taskbar, toasts);
 
@@ -143,6 +187,10 @@ const ctx: UiCtx = {
     return el;
   },
   name: (id) => game.cs.people[id]?.name ?? id,
+  nextCase: () => {
+    const n = campaign.next(CASE.id);
+    return n ? { label: `${caseLabel(n)} 「${n.title}」`, go: () => goCase(n.id) } : null;
+  },
 };
 wm.ctx = ctx;
 wm.onFocus = (id) => game.focus(id);
@@ -165,22 +213,24 @@ desktop.addEventListener('keydown', interact, true);
 for (const app of [terminalApp, messengerApp, mailApp, notesApp, boardApp, reportApp, dashboardApp, playtestApp]) wm.register(app);
 
 // ------------------------------------------------------------------ desktop icons + stickies + wallpaper
-const ICONS: { app: string; badge?: () => number }[] = [
-  { app: 'terminal' },
-  { app: 'messenger', badge: () => game.cs.channels.reduce((a, c) => a + game.unread(c.id), 0) },
-  { app: 'mail', badge: () => game.cs.mails.filter((m) => m.folder === 'inbox' && (!m.later || game.st.mailsDelivered.includes(m.id)) && !game.st.opened.includes(`mail:${m.id}`)).length },
-  { app: 'notes' },
-  { app: 'board', badge: () => game.st.pins.length },
-  { app: 'dashboard' },
-  { app: 'report' },
-];
+const BADGES: Record<string, () => number> = {
+  messenger: () => game.cs.channels.reduce((a, c) => a + game.unread(c.id), 0),
+  mail: () => game.cs.mails.filter((m) => m.folder === 'inbox' && (!m.later || game.st.mailsDelivered.includes(m.id)) && !game.st.opened.includes(`mail:${m.id}`)).length,
+  board: () => game.st.pins.length,
+};
+/** The case's icon list (Case 0 starts with three and unlocks the rest as the checklist progresses). */
+const ICONS = (game.cs.desktop?.icons ?? ['terminal', 'messenger', 'mail', 'notes', 'board', 'dashboard', 'report'].map((app) => ({ app, after: undefined as string | undefined }))).map((i) => ({ ...i, badge: BADGES[i.app] }));
+const iconVisible = (i: { after?: string }) => !i.after || game.objectives.isDone(i.after) || game.objectives.folded();
+const shownIcons = new Set<string>();
 const iconsEl = h('div.icons');
 const renderIcons = () => {
   clear(iconsEl);
-  for (const i of ICONS) {
+  for (const i of ICONS.filter(iconVisible)) {
+    const isNew = shownIcons.size > 0 && !shownIcons.has(i.app);
+    shownIcons.add(i.app);
     const def = wm.apps.get(i.app)!;
     const n = i.badge?.() ?? 0;
-    iconsEl.appendChild(h('button.icon', { ondblclick: () => wm.open(i.app), onclick: (e: MouseEvent) => e.detail === 0 && wm.open(i.app), onkeydown: (e: KeyboardEvent) => e.key === 'Enter' && wm.open(i.app), dataset: { app: i.app } }, h('span.glyph', null, def.icon, n ? h('span.badge', null, n > 99 ? '99+' : n) : null), def.title()));
+    iconsEl.appendChild(h(`button.icon${isNew ? '.unlocked' : ''}`, { ondblclick: () => wm.open(i.app), onclick: (e: MouseEvent) => e.detail === 0 && wm.open(i.app), onkeydown: (e: KeyboardEvent) => e.key === 'Enter' && wm.open(i.app), dataset: { app: i.app } }, h('span.glyph', null, def.icon, n ? h('span.badge', null, n > 99 ? '99+' : n) : null), def.title()));
   }
 };
 // single click also opens on touch devices
@@ -236,7 +286,7 @@ notifBtn.onclick = () => {
 
 hintBtn.onclick = () => {
   if (pop) return closePop();
-  pop = h('div.popover', { role: 'dialog' }, h('h3', null, `💡 ${t('hint.title')}`), h('p.muted', { style: 'margin:0 4px 8px;font-size:12.5px' }, '먼저 은재님 PC 안의 흔적(history, 메모, crontab 주석)과 동료 메시지를 보세요. 그래도 막히면:'));
+  pop = h('div.popover', { role: 'dialog' }, h('h3', null, `💡 ${t('hint.title')}`), h('p.muted', { style: 'margin:0 4px 8px;font-size:12.5px' }, '먼저 은재님 PC 안의 흔적(history, README, 주석, 메모)과 동료 메시지를 보세요. 그래도 막히면:'));
   for (const slot of game.cs.accusation.slots) {
     const used = game.ladder.usedExplicit(slot.id as SlotId);
     const next = game.ladder.nextExplicit(slot.id as SlotId);
@@ -319,11 +369,15 @@ game.on('mail', (id) => {
   if (id !== game.cs.debrief.closingMail) void audio.play('sfx.mail');
   if (m && id !== game.cs.debrief.closingMail) ctx.toast(h('div', null, h('b', null, '✉ '), m.subject), () => wm.open('mail', id));
 });
-game.on('toast', (text) => ctx.toast(h('div', null, String(text)), () => wm.open('notes', 'farewell')));
+const memoNote = game.cs.notes.find((n) => n.highlight !== undefined)?.id;
+game.on('toast', (text) => ctx.toast(h('div', null, String(text)), () => wm.open('notes', memoNote)));
 game.on('note', (id) => {
   wm.open('notes', id);
 });
 game.on('friction', () => void audio.play('sfx.error'));
+game.on('hint-panel', () => {
+  if (!pop) hintBtn.click();
+});
 // a very quiet key tick when a command runs (Enter in the terminal prompt; not while an IME composes)
 desktop.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.isComposing && (e.target as HTMLElement).closest?.('.tin')) void audio.play('sfx.key');
@@ -332,6 +386,7 @@ game.on('pinned', () => void audio.play('sfx.pin'));
 game.on('accuse', (sc) => {
   // the debrief opens once the case is finished (solved, or out of submissions): reveal theme
   if (game.st.finished) {
+    markSolved();
     audio.stopLoop('music.tension', 1500);
     void audio.play('music.reveal', { gain: (sc as ScoreResult).allCorrect ? 1 : 0.8 });
   } else audio.loop('music.tension'); // a wrong report raises the stakes
@@ -339,7 +394,7 @@ game.on('accuse', (sc) => {
 document.addEventListener('nh-reset', () => {
   storage.remove(SAVE_KEY);
   storage.remove(`no-handover:report:${CASE.id}`);
-  location.href = location.pathname + (params.get('lang') ? `?lang=${params.get('lang')}` : '');
+  goCase(CASE.id);
 });
 
 // ------------------------------------------------------------------ clock + loop
@@ -352,7 +407,7 @@ function renderClock() {
 
 let last = performance.now();
 let lastSave = 0;
-const TENSION_AT = game.deadline() - 3 * 3600_000; // last three game hours (18:00 for case 1)
+const TENSION_AT = game.start + 0.75 * (game.deadline() - game.start); // last quarter of the day (18:00 for case 3)
 function loop() {
   const n = performance.now();
   if (game.st.unlocked && !document.hidden && !briefingActive) game.tick(n - last);
@@ -379,7 +434,9 @@ function revealDesktop(first: boolean) {
   objectivesUi.refresh();
   if (first) {
     void audio.play('sfx.pulse');
-    setTimeout(() => ctx.toast(h('div', null, h('b', null, '✉ '), '새 메일 2통 — 오미래, 보안팀'), () => wm.open('mail', 'brief')), 600);
+    const fresh = game.cs.mails.filter((m) => m.account === 'me' && m.folder === 'inbox' && !m.later);
+    const who = [...new Set(fresh.map((m) => ctx.name(m.from)))].join(', ');
+    if (fresh.length) setTimeout(() => ctx.toast(h('div', null, h('b', null, '✉ '), `새 메일 ${fresh.length}통 — ${who}`), () => wm.open('mail', 'brief')), 600);
   }
   audio.loop('amb.office');
 }
@@ -418,6 +475,33 @@ function start(first: boolean) {
 }
 
 const resumable = game.st.unlocked && game.st.playMs > 0;
+/** Tutorial only: experienced players jump to the next case (Case 0 is marked skipped). */
+const skipLink = skipBtn && nextAfterTutorial ? h('button.linkbtn.skip', { onclick: skipTutorial }, `${t('case.skip')} ${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」`) : null;
+
+/** Case list: the five rungs, locked until the previous playable case is solved. */
+function showCaseList(): void {
+  document.querySelector('#cases')?.remove();
+  const statusText: Record<string, string> = { solved: `✓ ${t('case.solved')}`, skipped: t('case.skipped'), open: '', locked: `🔒 ${t('case.locked')}`, soon: t('case.soon') };
+  const list = h('ol.caselist');
+  for (const e of campaign.entries) {
+    const st = campaign.status(e.id, progress);
+    const current = e.id === CASE.id;
+    list.appendChild(
+      h(
+        `li.case-${st}${current ? '.current' : ''}`,
+        { dataset: { id: e.id } },
+        h('div.cl-head', null, h('b', null, caseLabel(e)), h('span.cl-when', null, e.when), statusText[st] ? h('span.cl-st', null, statusText[st]) : null),
+        h('div.cl-title', null, e.title),
+        h('div.cl-pr', null, e.principle),
+        e.cs && (st === 'open' || st === 'solved' || st === 'skipped') && !current ? h('button', { onclick: () => goCase(e.id) }, t('case.play')) : null,
+      ),
+    );
+  }
+  const close = () => dlg.remove();
+  const dlg = h('div#cases', { role: 'dialog', 'aria-label': t('case.listTitle') }, h('div.cl-card', null, h('h3', null, t('case.listTitle')), list, h('button.primary', { onclick: close }, t('case.close'))));
+  document.body.appendChild(dlg);
+}
+
 const boot = h(
   'div#boot',
   null,
@@ -425,14 +509,16 @@ const boot = h(
     'div.bootcard',
     null,
     h('div.logo', null, t('game.title'), h('small', null, `「${t('game.titleKo')}」`)),
-    h('div.case', null, `1화 · ${game.cs.title}`, h('br'), h('span', { style: 'font-size:13px' }, game.cs.subtitle)),
+    h('div.case', null, h('span.caselabel', null, caseLabel(ENTRY)), ` ${game.cs.title}`, h('br'), h('span', { style: 'font-size:13px' }, game.cs.subtitle)),
     h('div.avatar', null, ctx.avatar(game.cs.owner, 84)),
     h('div.who', null, `${t('boot.owner')} — ${t('boot.locked')}`),
-    h('div.status', null, t('boot.status')),
+    h('div.status', null, game.cs.boot?.status ?? t('boot.status')),
     resumable
       ? [h('button.primary', { onclick: () => start(false) }, t('boot.resume')), h('button', { onclick: () => document.dispatchEvent(new CustomEvent('nh-reset')) }, t('boot.restart'))]
-      : h('button.primary', { onclick: () => start(true), autofocus: true }, t('boot.unlock')),
-    h('div.fine', null, t('boot.note'), h('br'), `${game.cs.company}(가칭) · 모든 인물·회사·서버는 가상입니다.`),
+      : h('button.primary', { onclick: () => start(true), autofocus: true }, game.cs.boot?.unlock ?? t('boot.unlock')),
+    skipLink,
+    h('div', null, h('button.linkbtn.cases', { onclick: showCaseList }, `☰ ${t('case.list')}`)),
+    h('div.fine', null, game.cs.boot?.note ?? t('boot.note'), h('br'), `${game.cs.company}(가칭) · 모든 인물·회사·서버는 가상입니다.`),
   ),
 );
 document.body.appendChild(boot);

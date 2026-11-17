@@ -32,7 +32,9 @@ export const terminalApp: AppDef = {
     const host = () => g.shell.frame(tab().session).host;
 
     const lineEl = (l: OutLine, source: string) => {
-      const el = h(`div.tline${l.cls ? '.' + l.cls : ''}`, null, l.text || '​');
+      // tutorial: lines that prove a clue are marked yellow (clmystery's CLUE marker)
+      const clue = g.cs.rail?.highlightClues && l.cls !== 'sys' && l.cls !== 'err' && l.text.trim() && g.cluesFor(l.text).length > 0;
+      const el = h(`div.tline${l.cls ? '.' + l.cls : ''}${clue ? '.clue' : ''}`, null, l.text || '​');
       if (l.text.trim() && l.cls !== 'sys') el.appendChild(ctx.pinBtn({ kind: 'line', text: l.text, source }));
       return el;
     };

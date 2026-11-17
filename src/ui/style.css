@@ -370,3 +370,28 @@ input, textarea, select { font: inherit; }
   .todo { width: 200px; right: 8px; }
   .brief-time { font-size: 64px; }
 }
+
+/* ---- campaign: case label, skip link, case list, next case, tutorial rail */
+#boot .caselabel { display: inline-block; padding: 2px 9px; border-radius: 999px; background: #f2d94e; color: #23262b; font-weight: 700; font-size: 13px; margin-right: 6px; }
+#boot button.linkbtn { background: none; border: none; color: #f2d94e; text-decoration: underline; text-underline-offset: 3px; font-size: 14px; padding: 6px 4px; }
+#boot button.linkbtn.cases { color: #f1efe9; opacity: 0.8; font-size: 13px; }
+#boot .skip { display: block; margin: 10px auto 0; }
+#cases { position: fixed; inset: 0; z-index: 210000; display: grid; place-items: center; background: rgba(20, 22, 26, 0.72); }
+#cases .cl-card { background: var(--paper, #f4f2ec); color: #23262b; border-radius: 12px; padding: 18px 20px; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; box-shadow: 0 18px 50px rgba(0,0,0,.4); }
+#cases h3 { margin: 0 0 10px; }
+#cases .caselist { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+#cases li { border: 1px solid #d8d3c7; border-radius: 9px; padding: 9px 12px; background: #fff; }
+#cases li.current { border-color: #2f3e5c; box-shadow: inset 3px 0 0 #2f3e5c; }
+#cases li.case-locked, #cases li.case-soon { opacity: 0.6; background: #efece4; }
+#cases .cl-head { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
+#cases .cl-when { opacity: 0.7; }
+#cases .cl-st { margin-left: auto; font-size: 12px; }
+#cases .cl-title { font-weight: 700; margin: 2px 0; }
+#cases .cl-pr { font-size: 12.5px; opacity: 0.8; }
+#cases li button { margin-top: 6px; padding: 4px 12px; border-radius: 6px; border: 1px solid #2f3e5c; background: #2f3e5c; color: #fff; }
+#cases button.primary { padding: 8px 16px; border-radius: 8px; border: none; background: #2f3e5c; color: #fff; }
+.debrief .nextcase { margin: 22px 0 4px; padding: 14px; border-radius: 10px; background: #fff7d1; text-align: center; }
+.tline.clue { background: rgba(242, 217, 78, 0.32); box-shadow: inset 3px 0 0 #e0b800; }
+.tray-btn.skiptut { font-size: 12px; opacity: 0.85; }
+.icon.unlocked { animation: icon-in 900ms ease-out; }
+@keyframes icon-in { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
