@@ -7,16 +7,22 @@ import { caseFriday1802 as cs } from '../src/cases/friday-1802.ts';
 const MIN = 60000;
 const none = new Set<string>();
 
-test('hint ladder: no idle nudge before the configured idle time (default 10 min)', () => {
+test('hint ladder: no idle nudge before the configured idle time (case 3: 6 min)', () => {
   const l = new HintLadder(cs.hints, 0);
-  assert.equal(l.idleMs, 10 * MIN);
-  assert.equal(l.tick(9 * MIN, none, false), null);
-  const n = l.tick(10 * MIN, none, false);
+  assert.equal(l.idleMs, 6 * MIN);
+  assert.equal(l.tick(5 * MIN, none, false), null);
+  const n = l.tick(6 * MIN, none, false);
   assert.equal(n?.id, 'idle-1');
   assert.equal(n?.from, 'jihoon');
   // the next one waits another full interval
-  assert.equal(l.tick(15 * MIN, none, false), null);
-  assert.equal(l.tick(20 * MIN, none, false)?.id, 'idle-2');
+  assert.equal(l.tick(9 * MIN, none, false), null);
+  assert.equal(l.tick(12 * MIN, none, false)?.id, 'idle-2');
+});
+
+test('hint ladder: a clue found in the last minute holds the idle nudge', () => {
+  const l = new HintLadder(cs.hints, 0);
+  assert.equal(l.tick(6 * MIN, none, false, 5.5 * MIN), null, 'clue 30 s ago: held');
+  assert.equal(l.tick(6.5 * MIN, none, false, 5.5 * MIN)?.id, 'idle-1', 'a minute later it fires');
 });
 
 test('hint ladder: progress (new key evidence) restarts the stuck timer', () => {
