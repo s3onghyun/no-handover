@@ -7,6 +7,7 @@ import type { Game } from '../engine/game.ts';
 import type { PanelSection } from '../engine/hintpanel.ts';
 import { DEFAULT_ANSWER_COST } from '../engine/hintpanel.ts';
 import { playRecord } from '../engine/record.ts';
+import { ASK_COST, SUMMARY_COST } from '../engine/expert.ts';
 
 export function renderHintPanel(game: Game, opts: { focus?: string; rerender: () => void }): HTMLElement {
   const senior = !!game.st.settings.senior;
@@ -23,7 +24,15 @@ export function renderHintPanel(game: Game, opts: { focus?: string; rerender: ()
       h('div.hp-count.hp-opens', null, h('dt', null, t('hint.opens')), h('dd', null, t('hint.opensVal', { n: rec.panelOpens }))),
       h('div.hp-count.hp-steps', null, h('dt', null, t('hint.steps')), h('dd', null, t('hint.stepsVal', { n: rec.hints }))),
     ),
-    h('p.hp-record', null, senior ? t('hint.senior', { cost: game.cs.hints.answerCost ?? DEFAULT_ANSWER_COST }) : t('hint.record')),
+    h(
+      'p.hp-record',
+      null,
+      game.expert()
+        ? t('hint.expert', { summary: SUMMARY_COST, direction: game.cs.hints.explicit[0]?.cost ?? 10, cost: game.cs.hints.answerCost ?? DEFAULT_ANSWER_COST, ask: ASK_COST })
+        : senior
+          ? t('hint.senior', { cost: game.cs.hints.answerCost ?? DEFAULT_ANSWER_COST })
+          : t('hint.record'),
+    ),
   );
   for (const sec of game.hintPanel()) root.appendChild(section(game, sec, opts));
   return root;
@@ -39,7 +48,8 @@ function section(game: Game, sec: PanelSection, opts: { focus?: string; rerender
 
   // ① 요약
   const s1 = h('div.hp-step', { dataset: { rung: 'summary' } }, h('span.hp-n', null, '①'));
-  if (!sec.summaryOpen) s1.appendChild(h('button.hint-btn', { onclick: () => open('summary') }, t('hint.summary')));
+  const paid = sec.kind === 'slot' && game.expert();
+  if (!sec.summaryOpen) s1.appendChild(h('button.hint-btn', { onclick: () => open('summary') }, paid ? t('hint.summaryCost', { n: SUMMARY_COST }) : t('hint.summary')));
   else
     s1.appendChild(
       h(

@@ -7,7 +7,8 @@
 //   ③ 정답   the answer (`hints.answers[slot]`, default: the correct option text). The UI asks
 //            twice before opening it. One hint.
 //
-// Hints are a record ("힌트 N회"), not a penalty: only senior mode turns them into score cost.
+// Hints are a record ("힌트 N회"), not a penalty: only 숙련자 모드 turns them into score cost (and,
+// in Cases 0–2, charges the 요약 too: src/engine/expert.ts).
 // Pure functions over the case, the found clues and the ladder state (no DOM).
 
 import type { HintLadder, PanelRung } from './hints.ts';
@@ -40,6 +41,8 @@ export interface PanelInput {
   /** The current (first unticked) checklist item while the checklist is open, else null. */
   objective: ObjectiveDef | null;
   doneObjectives: ObjectiveDef[];
+  /** Cost of a slot's ① 요약 (숙련자 모드 with an overlay; default 0 = free). */
+  summaryCost?: number;
 }
 
 /**
@@ -136,6 +139,7 @@ export function openStep(input: PanelInput, key: string, rung: PanelRung, now: n
   if (rung === 'summary') {
     if (sec.summaryOpen) return null;
     text = sec.summary.join('\n');
+    cost = input.summaryCost ?? 0;
   } else if (rung === 'direction') {
     if (!sec.moreDirections) return null;
     if (sec.kind === 'slot') {

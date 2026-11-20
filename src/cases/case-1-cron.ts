@@ -876,4 +876,30 @@ export const caseOneCron: CaseFile = {
     unlock: '은재님이 열어 둔 세션으로 들어가기',
     note: '조사 세션 — 읽기 전용이라 아무것도 망가지지 않아요.',
   },
+
+  // ------------------------------------------------------------------ 숙련자 모드 (docs/campaign-ladder.md §숙련자 모드)
+  // Red herring: "cron's /bin/sh chokes on bash syntax". ~/log/cron-env.txt says SHELL=/bin/sh and
+  // in this mode the script's size check is written with [[ … ]]. But SHELL only runs the crontab
+  // line; the script itself is exec'd by its #!/bin/bash line (`head -1 ~/bin/wiki-log-clean.sh`),
+  // and ~/wiki-clean.log shows it got past that check to line 15 every hour.
+  expert: {
+    maxSubmissions: 2,
+    parMin: 12,
+    intro: '서진님께 보낼 원인 보고. 두 칸. 제출은 2번까지 — 틀리면 어느 칸인지는 알려 주지 않는다.',
+    goalIntro: '서진님께 보낼 원인 보고서를 채우면 사건이 끝나요. 제출은 2번까지 — 틀리면 어느 칸인지는 알려 주지 않아요.',
+    after: ['다음: 📝 보고서 — 원인, 경위 두 칸 (제출 2번)', '막히면: crontab 맨 위 주석, history, 💡 (숙련자 모드: 감점)'],
+    files: [
+      {
+        host: W,
+        // same script, the size check in bash's [[ ]] (line 10); line 15 is still the wikictl call
+        file: { path: '/home/eunjae/bin/wiki-log-clean.sh', content: SCRIPT.replace('if [ "$SIZE_MB" -lt "$LIMIT_MB" ] && [ "$1" != "--force" ]; then', 'if [[ "$SIZE_MB" -lt "$LIMIT_MB" && "$1" != "--force" ]]; then'), mode: '755', mtime: '2026-11-10T18:35' },
+      },
+    ],
+    clues: [
+      { id: 'c1x_shebang', label: '스크립트 첫 줄 #!/bin/bash — 스크립트는 cron 의 /bin/sh 가 아니라 bash 로 돈다', slot: 'cause', match: [{ output: '^#!/bin/bash$', host: W }] },
+    ],
+    options: [
+      { slot: 'cause', at: 3, option: { id: 'sh-syntax', text: '스크립트는 매시간 돌았지만 cron 의 셸(/bin/sh)이 bash 문법을 못 읽어, 매번 첫 조건문에서 멈췄다' } },
+    ],
+  },
 };

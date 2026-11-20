@@ -23,6 +23,7 @@ import { mountObjectives } from './ui/objectives.ts';
 import { applyMotionPref, showMoment } from './ui/motion.ts';
 import { flashAnchor, mountTour, toolGuide, tourKey, TOUR_SEEN_KEY } from './ui/tour.ts';
 import { EXPERIENCE_KEY, experienceRules, parseExperience, shouldAskExperience, type Experience } from './engine/experience.ts';
+import { EXPERT_KEY, parseExpert } from './engine/expert.ts';
 import { goalCard } from './ui/goal.ts';
 import { modal } from './ui/modal.ts';
 import type { ClueDef, TourStep } from './engine/types.ts';
@@ -47,6 +48,7 @@ if (params.has('fresh')) {
   }
   storage.remove(TOUR_SEEN_KEY);
   storage.remove(EXPERIENCE_KEY); // asked again on the lock screen
+  storage.remove(EXPERT_KEY);
   storage.remove(PROGRESS_KEY);
   storage.remove(CURRENT_KEY);
 }
@@ -54,6 +56,8 @@ let progress: Progress = parseProgress(storage.get(PROGRESS_KEY));
 /** "터미널이 익숙해요 / 처음이에요" (src/engine/experience.ts): null until the player has chosen. */
 let experience: Experience | null = parseExperience(storage.get(EXPERIENCE_KEY));
 const rules = () => experienceRules(experience);
+/** 숙련자 모드 (src/engine/expert.ts): per profile, off unless chosen; a started case keeps its own mode. */
+let expertPref = parseExpert(storage.get(EXPERT_KEY));
 const saveProgress = () => storage.set(PROGRESS_KEY, JSON.stringify(progress));
 const ENTRY = campaign.pick(params.get('case'), storage.get(CURRENT_KEY), progress);
 const CASE = ENTRY.cs!;
@@ -96,8 +100,8 @@ function loadGame(): Game {
   const settings: Partial<{ idleMinutes: number; clockRate: number; senior: boolean }> = {};
   if (params.get('nudge')) settings.idleMinutes = Math.max(0.1, +params.get('nudge')!);
   if (params.get('rate')) settings.clockRate = Math.max(1, +params.get('rate')!);
-  // senior mode: hints cost points again (default: hints are only a record)
-  if (params.has('senior')) settings.senior = params.get('senior') !== '0';
+  // 숙련자 모드: `?senior=1` or the profile's choice; ignored for a case already started in the other mode
+  settings.senior = params.has('senior') ? params.get('senior') !== '0' : expertPref;
   return new Game(CASE, saved, Object.keys(settings).length ? settings : undefined);
 }
 
@@ -460,6 +464,19 @@ helpBtn.onclick = () => {
   const expBtn = (e: Experience, label: string) =>
     h('button.ghost-btn', { type: 'button', 'aria-pressed': String((experience ?? 'new') === e), dataset: { exp: e }, onclick: () => (setExperience(e, 'help'), closePop(), helpBtn.click()) }, label);
   pop.appendChild(h('div.exp-set', { role: 'group', 'aria-label': t('exp.setting') }, h('span', null, `${t('exp.setting')}:`), expBtn('familiar', t('exp.familiar')), expBtn('new', t('exp.new'))));
+  // 숙련자 모드: applies to the next case that starts; this one keeps the mode it began in
+  const xBtn = (on: boolean) =>
+    h('button.ghost-btn', { type: 'button', 'aria-pressed': String(expertPref === on), dataset: { expert: on ? '1' : '0' }, onclick: () => (setExpert(on, 'help'), closePop(), helpBtn.click()) }, on ? t('exp.expertOn') : t('exp.expertOff'));
+  pop.appendChild(
+    h(
+      'div.exp-set.expert-set',
+      { role: 'group', 'aria-label': t('exp.expertSetting') },
+      h('span', null, `${t('exp.expertSetting')}:`),
+      xBtn(true),
+      xBtn(false),
+      h('small.muted', null, t('exp.expertNote', { mode: game.st.settings.senior ? t('exp.modeExpert') : t('exp.modeNormal') })),
+    ),
+  );
   if (guideSteps.length) pop.appendChild(h('div.help-acts', null, h('button.ghost-btn.guide-open', { type: 'button', onclick: openGuide }, `🧭 ${t('guide.open')}`)));
   document.body.appendChild(pop);
 };
@@ -500,6 +517,11 @@ function setExperience(e: Experience, via: 'boot' | 'help'): void {
   game.log('experience', { choice: e, via });
   syncGuideBtn();
   tourUi?.refresh();
+}
+function setExpert(on: boolean, via: 'boot' | 'help'): void {
+  expertPref = on;
+  storage.set(EXPERT_KEY, on ? '1' : '0');
+  game.log('expert', { on, via });
 }
 syncGuideBtn();
 
@@ -697,8 +719,12 @@ function start(first: boolean) {
 const resumable = game.st.unlocked && game.st.playMs > 0;
 /** First run on this profile: the unlock button becomes the "터미널이 익숙해요 / 처음이에요" choice. */
 const askExperience = shouldAskExperience(experience, resumable);
-const choose = (e: Experience) => {
+const choose = (e: Experience, expert = false) => {
+  // 처음이에요 never starts in 숙련자 모드; the case is rebuilt in the chosen mode before it starts
+  // (first: the rebuild starts a fresh play log, which then records the choice)
+  game.setSenior(expert);
   setExperience(e, 'boot');
+  setExpert(expert, 'boot');
   start(true);
 };
 const expChoice = h(
@@ -711,6 +737,8 @@ const expChoice = h(
     h('button.exp-familiar', { type: 'button', dataset: { exp: 'familiar' }, onclick: () => choose('familiar') }, h('span', null, `⌨ ${t('exp.familiar')}`), h('small', null, t('exp.familiarSub'))),
     h('button.primary.exp-new', { type: 'button', dataset: { exp: 'new' }, onclick: () => choose('new'), autofocus: true }, h('span', null, `🌱 ${t('exp.new')}`), h('small', null, t('exp.newSub'))),
   ),
+  // the harder way for terminal-savvy players: 익숙해요 plus 숙련자 모드 (src/engine/expert.ts)
+  h('button.linkbtn.exp-expert', { type: 'button', dataset: { exp: 'expert' }, onclick: () => choose('familiar', true) }, h('span', null, `🧗 ${t('exp.familiar')} · ${t('exp.expert')}`), h('small', null, t('exp.expertSub'))),
   h('p.expq-note', null, t('exp.note')),
 );
 /** Tutorial only: experienced players jump to the next case (Case 0 is marked skipped). */

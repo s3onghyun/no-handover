@@ -727,4 +727,69 @@ export const caseZeroWiki: CaseFile = {
     unlock: '은재님이 열어 둔 세션으로 들어가기',
     note: '연습용 조사 세션 — 읽기 전용이라 아무것도 망가지지 않아요.',
   },
+
+  // ------------------------------------------------------------------ 숙련자 모드 (docs/campaign-ladder.md §숙련자 모드)
+  // Red herring: "the journal ate /var". The hourly "Suppressed … messages" lines and journald
+  // rotating its file overnight make a flooded systemd journal look plausible. It is ruled out by
+  // `du -sh /var/log/*` (the journal is ~0.5G next to an 11G wiki.log) and by journald.conf's
+  // SystemMaxUse=1G: journald dropped the flood (rate limit) and vacuums old files at the cap.
+  expert: {
+    maxSubmissions: 2,
+    parMin: 8,
+    intro: '서진님께 보낼 원인 보고. 두 칸. 제출은 2번까지 — 틀리면 몇 칸이 틀렸는지만 서진님이 짧게 답해 준다.',
+    after: ['다음: 📝 원인 보고서 — 원인과 경위 두 칸 (제출 2번)', '막히면: history, ~/README.txt, 💡 (숙련자 모드: 감점)'],
+    files: [
+      {
+        host: W,
+        file: {
+          path: '/etc/systemd/journald.conf',
+          mtime: '2025-06-17T10:52',
+          content: [
+            '#  This file is part of systemd.',
+            '#',
+            '# Entries in this file show the compile time defaults. Local configuration',
+            '# should be created by either modifying this file, or by creating "drop-ins" in',
+            '# the journald.conf.d/ subdirectory.',
+            '#',
+            '# See journald.conf(5) for details.',
+            '',
+            '[Journal]',
+            '#Storage=auto',
+            '#Compress=yes',
+            '#RateLimitIntervalSec=30s',
+            '#RateLimitBurst=10000',
+            '# 2025-06 은재: /var 가 20G 뿐이라 저널은 1G 까지만',
+            'SystemMaxUse=1G',
+            '#SystemKeepFree=',
+            '#MaxRetentionSec=',
+          ].join('\n'),
+        },
+      },
+    ],
+    timeline: [
+      {
+        at: '2026-11-09T23:41:07',
+        emits: [
+          j('systemd-journald.service', 'Data hash table of /var/log/journal/3f9c2e17b84d4a5e/system.journal has a fill level at 75.0 (174763 of 233016 items, 33554432 file size, 192 bytes per hash table item), suggesting rotation.', { ident: 'systemd-journald', pid: 298 }),
+          j('systemd-journald.service', '/var/log/journal/3f9c2e17b84d4a5e/system.journal: Journal header limits reached or header out-of-date, rotating.', { ident: 'systemd-journald', pid: 298 }),
+        ],
+      },
+      {
+        at: '2026-11-10T04:12:55',
+        emits: [
+          j('systemd-journald.service', 'Deleted archived journal /var/log/journal/3f9c2e17b84d4a5e/system@0005f3a1c2d7e0b8-7c41e2a90b3f1d55.journal~ (128.0M).', { ident: 'systemd-journald', pid: 298 }),
+          j('systemd-journald.service', 'Vacuuming done, freed 128.0M of archived journals from /var/log/journal/3f9c2e17b84d4a5e.', { ident: 'systemd-journald', pid: 298 }),
+        ],
+      },
+    ],
+    clues: [
+      {
+        id: 'c0x_journal', label: '저널은 500M 남짓, 상한 1G (journald.conf) — 밤새 불어난 건 저널이 아니다', slot: 'sequence',
+        match: [{ output: '^5\\d\\dM\\s+/var/log/journal/?$', host: W }, { output: '^SystemMaxUse=1G$', host: W }, { output: 'Vacuuming done, freed', host: W }],
+      },
+    ],
+    options: [
+      { slot: 'sequence', at: 1, option: { id: 'journal', text: '같은 오류가 밤새 쏟아지자 시스템 저널(journald)이 그걸 다 받아 적으며 불었고, 화요일 아침 공간이 바닥나자 위키가 멈췄다' } },
+    ],
+  },
 };

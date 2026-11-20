@@ -23,7 +23,7 @@ export interface PanelUse {
   /** Direction: index into hints.explicit (slots) or 0 (objectives). */
   index: number;
   at: number;
-  /** Senior-mode cost of this step (0 for summaries). */
+  /** 숙련자-mode cost of this step (summaries: 0, or SUMMARY_COST in a case with an overlay). */
   cost: number;
 }
 
@@ -35,8 +35,8 @@ export interface LadderState {
   explicitUsed: { slot: SlotId; index: number; at: number; cost: number }[];
   /** 💡 panel steps opened (added later; filled in on load when missing). */
   panel?: PanelUse[];
-  /** Nudges delivered because the player asked. */
-  asked?: { at: number; nudge: string }[];
+  /** Nudges delivered because the player asked (`cost`: 숙련자 모드 only). */
+  asked?: { at: number; nudge: string; cost?: number }[];
 }
 
 export class HintLadder {
@@ -124,13 +124,16 @@ export class HintLadder {
     return this.state.panel!.filter((u) => key === undefined || u.key === key);
   }
 
-  /** Hints used for the record: every 방향/정답 step (summaries are free) plus old one-button hints. */
+  /**
+   * Hints used for the record: every 방향/정답 step plus old one-button hints. Summaries and asks
+   * are free and not counted — except in 숙련자 모드 with an overlay, where they cost points and count.
+   */
   hintCount(): number {
-    return this.state.panel!.filter((u) => u.rung !== 'summary').length + this.state.explicitUsed.length;
+    return this.state.panel!.filter((u) => u.rung !== 'summary' || u.cost > 0).length + this.state.explicitUsed.length + this.state.asked!.filter((a) => (a.cost ?? 0) > 0).length;
   }
 
-  /** Senior mode: the score cost of every hint used. */
+  /** 숙련자 모드: the score cost of every hint used. */
   totalCost(): number {
-    return this.state.panel!.reduce((a, u) => a + u.cost, 0) + this.state.explicitUsed.reduce((a, u) => a + u.cost, 0);
+    return this.state.panel!.reduce((a, u) => a + u.cost, 0) + this.state.explicitUsed.reduce((a, u) => a + u.cost, 0) + this.state.asked!.reduce((a, u) => a + (u.cost ?? 0), 0);
   }
 }

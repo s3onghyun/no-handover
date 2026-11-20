@@ -1,4 +1,5 @@
 import { clear, h } from '../dom.ts';
+import { ASK_COST } from '../../engine/expert.ts';
 import { t } from '../../i18n.ts';
 import type { AppDef } from '../wm.ts';
 import type { Message } from '../../engine/build.ts';
@@ -136,7 +137,7 @@ export const messengerApp: AppDef = {
         if (r) select(r.channel);
       } }, p)));
       const to = g.askPreview();
-      if (to) wrap.appendChild(h('span.ask-to', null, t('msg.askTo', { who: ctx.name(to.from) })));
+      if (to) wrap.appendChild(h('span.ask-to', null, ctx.game.expert() ? t('msg.askToCost', { who: ctx.name(to.from), n: ASK_COST }) : t('msg.askTo', { who: ctx.name(to.from) })));
       return wrap;
     };
 
