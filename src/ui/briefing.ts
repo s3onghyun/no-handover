@@ -53,7 +53,8 @@ export function runBriefing(o: BriefingOpts): { skip(): void; el: HTMLElement } 
     });
 
   // ---------------------------------------------------------------- DOM
-  const skipBtn = h('button.brief-skip', { onclick: () => skip(), 'aria-label': t('brief.skip') }, t('brief.skip'), h('kbd', null, t('brief.skipKey')));
+  // skips the briefing only: the desktop of this same case appears (moving to another case is elsewhere, and asks first)
+  const skipBtn = h('button.brief-skip', { type: 'button', onclick: () => skip(), 'aria-label': t('brief.skip'), 'aria-keyshortcuts': 'Escape' }, t('brief.skip'), h('kbd', { 'aria-hidden': 'true' }, t('brief.skipKey')));
   const lock = h('div.brief-lock', null, h('div.brief-time', null, b.lockTime), h('div.brief-date', null, b.lockDate));
   const waves = h('div.brief-wave', { 'aria-hidden': 'true' }, ...Array.from({ length: 24 }, (_, i) => h('i', { style: { animationDelay: `${(i % 6) * 0.11}s` } })));
   const subs = h('div.brief-subs', { 'aria-live': 'polite' });

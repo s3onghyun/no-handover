@@ -462,6 +462,14 @@ export class Game {
     const tab = this.st.tabs[tabIndex];
     const host = this.shell.frame(tab.session).host;
     const prompt = this.shell.prompt(tab.session);
+    // an empty (or blank) Enter only prints a fresh prompt, as bash does: it is not a command,
+    // so it is not logged, does not count toward 명령 수, and moves no clue, objective or rail
+    if (!line.trim()) {
+      tab.lines.push({ text: `${prompt} ${line}`, cls: 'sys' });
+      if (tab.lines.length > MAX_TAB_LINES) tab.lines = tab.lines.slice(-MAX_TAB_LINES);
+      tab.input = '';
+      return { lines: [], events: [], expanded: '' };
+    }
     const authBefore = new Map([...this.world.hosts].map(([h, hw]) => [h, String(hw.vfs.lookup('/var/log/auth.log')?.content ?? '')]));
     const r = this.shell.run(tab.session, line);
     // persist sudo lines appended to auth.log (so a reload keeps the player's own trace)

@@ -143,3 +143,22 @@ test('game clock runs at clockRate and ends near the 21:00 deadline after ~45 mi
   for (let i = 0; i < 540; i++) g.tick(5000); // 45 min
   assert.equal(g.now(), g.deadline());
 });
+
+test('a blank Enter prints a prompt only: not a command, no time, no rail redirect', async () => {
+  const { caseZeroWiki: case0Wiki } = await import('../src/cases/case-0-wiki.ts');
+  for (const c of [cs, case0Wiki]) {
+    const g = new Game(c, null);
+    const lines = g.st.tabs[0].lines.length;
+    const cmds = () => g.st.log.filter((e) => e.type === 'cmd').length;
+    const before = { cmds: cmds(), playMs: g.st.playMs, now: g.now(), live: g.st.live.length, queue: g.st.queue.length };
+    for (const blank of ['', '   ', '\t']) g.runCommand(0, blank);
+    assert.equal(cmds(), before.cmds, c.id);
+    assert.equal(g.st.playMs, before.playMs);
+    assert.equal(g.now(), before.now);
+    assert.equal(g.st.queue.length, before.queue, 'no colleague message queued (Case 0 rail)');
+    assert.equal(g.st.tabs[0].lines.length, lines + 3, 'each blank Enter echoes a fresh prompt');
+    assert.ok(g.st.tabs[0].lines.slice(-3).every((l) => l.cls === 'sys'));
+    g.runCommand(0, 'pwd');
+    assert.equal(cmds(), before.cmds + 1, 'a real command still counts');
+  }
+});

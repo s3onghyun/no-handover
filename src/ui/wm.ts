@@ -97,11 +97,11 @@ export class WM {
       { style: { left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${hh}px` }, dataset: { app: id }, role: 'dialog', 'aria-label': def.title() },
       h(
         'div.titlebar',
-        { ondblclick: () => el.classList.toggle('max') },
+        { ondblclick: () => this.toggleMax(id) },
         h('span', null, def.icon),
         title,
         h('button', { title: '최소화', 'aria-label': 'minimize', onclick: (e: Event) => (e.stopPropagation(), this.minimize(id)) }, '–'),
-        h('button', { title: '최대화', 'aria-label': 'maximize', onclick: (e: Event) => (e.stopPropagation(), el.classList.toggle('max')) }, '▢'),
+        h('button', { title: '최대화', 'aria-label': 'maximize', onclick: (e: Event) => (e.stopPropagation(), this.toggleMax(id)) }, '▢'),
         h('button.close', { title: '닫기', 'aria-label': 'close', onclick: (e: Event) => (e.stopPropagation(), this.close(id)) }, '✕'),
       ),
       body,
@@ -136,6 +136,20 @@ export class WM {
     const limit = (this.root.clientWidth || window.innerWidth) - this.reserveRight() - 8;
     const x = limit - bRight - 8 >= a.offsetWidth ? bRight + 8 : colLeft - 8 - a.offsetWidth;
     if (x >= 8) a.style.left = `${x}px`;
+  }
+
+  /**
+   * Maximize / restore. A maximized window stops short of the "오늘 할 일" sticky (it sits above
+   * every window), as a newly opened one does, so its ✕ and the right-hand 📌 column stay clickable;
+   * unless that would leave too narrow a window.
+   */
+  toggleMax(id: string): void {
+    const el = this.wins.get(id)?.el;
+    if (!el) return;
+    const on = el.classList.toggle('max');
+    const vw = this.root.clientWidth || window.innerWidth;
+    const r = on ? this.reserveRight() : 0;
+    el.style.setProperty('--max-right', r && vw - r - 8 >= 480 ? `${r + 8}px` : '0px');
   }
 
   private taskClick(id: string): void {

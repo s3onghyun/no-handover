@@ -14,6 +14,9 @@
 // with the memo and the checklist on screen. The first launch asks "터미널이 익숙해요 / 처음이에요"
 // once; the main run answers 처음이에요 (the tour), a sixth page answers 익숙해요 by keyboard (no
 // coach marks, a 도구 안내 entry, no window opening by itself) and switches back in ❓.
+// A seventh page (1280x800): the briefing's 건너뛰기 stays in Case 0, every way to another case asks
+// in an in-game dialog, a blank Enter is not a command, a maximized terminal closes and reopens, and
+// the last submission's dialog says so; no browser confirm()/alert() anywhere.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
@@ -38,7 +41,12 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, dev
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? '11-14 03:15' : undefined));
+/** Native confirm()/alert() would mean an in-game modal was skipped (a tool that auto-accepts them used to jump cases). */
+const nativeDialogs = [];
+page.on('dialog', (d) => {
+  if (d.type() !== 'prompt') nativeDialogs.push(`${d.type()}: ${d.message()}`);
+  d.accept(d.type() === 'prompt' ? '11-14 03:15' : undefined);
+});
 
 const step = (name) => console.log(`  ✓ ${name}`);
 const shot = async (name) => shots && (await page.screenshot({ path: join(shots, name) }));
@@ -59,6 +67,16 @@ async function pinLine(re) {
 }
 
 const todoItem = (id) => page.locator(`.todo li[data-id="${id}"]`);
+/** Report submit: the in-game confirm (copy per the case's submission rule), then 제출하기. */
+async function submit(rep, copy, pg = page) {
+  await rep.locator('.submitbar .primary-btn').click();
+  const m = pg.locator('.modal-back .modal-submit[role="alertdialog"]');
+  await m.waitFor({ timeout: 2000 });
+  assert.match(await m.locator('.modal-body').innerText(), copy);
+  assert.doesNotMatch(await m.innerText(), /되돌릴 수 없/, 'no "cannot be undone" while it can be resubmitted');
+  await m.locator('.modal-ok').click();
+  await m.waitFor({ state: 'detached' });
+}
 /** Report: pick an option by id; cite the pin whose line matches `re` for a slot. */
 const pick = (rep, slot, id) => rep.locator(`input[name="slot-${slot}"][value="${id}"]`).check();
 const cite = (rep, slot, re) => rep.locator(`label.citeopt:has(input[name="cite-${slot}"])`, { hasText: re }).first().locator('input').check();
@@ -271,18 +289,22 @@ try {
   // options are hypotheses of similar length; every slot needs a cited pin
   await pick(rep0, 'cause', 'pdf'); // blames 지훈's PDF
   await pick(rep0, 'sequence', 'true');
-  await rep0.locator('.submitbar .primary-btn').click(); // no citation yet: an alert, nothing sent
+  await rep0.locator('.submitbar .primary-btn').click(); // no citation yet: an in-game notice, nothing sent
+  const notice0 = page.locator('.modal-back .modal-notice[role="alertdialog"]');
+  assert.match(await notice0.locator('.modal-body').innerText(), /근거 핀/);
+  await page.keyboard.press('Escape');
+  await notice0.waitFor({ state: 'detached' });
   assert.equal(await page.evaluate(() => window.__game.st.submissions.length), 0, 'no submission without a cited pin');
   await cite(rep0, 'cause', /100%\s+\/var/);
   await cite(rep0, 'sequence', /100%\s+\/var/); // disk usage does not back the timeline
-  await rep0.locator('.submitbar .primary-btn').click();
+  await submit(rep0, /몇 번이든/); // Case 0: unlimited
   await rep0.locator('.reply', { hasText: '강서진의 회신' }).waitFor();
   assert.match(await rep0.locator('.reply').innerText(), /근거가 그 칸을 뒷받침하지 않아요: 경위\./);
   await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /PDF 하나로/.test(m.text)), null, { timeout: 5000 });
   await pick(rep0, 'cause', 'disk');
   await rep0.locator('input[name="cite-sequence"]:checked').uncheck();
   await cite(rep0, 'sequence', /21:14:03 .*thumbnail/);
-  await rep0.locator('.submitbar .primary-btn').click();
+  await submit(rep0, /몇 번이든/);
   await rep0.locator('.debrief h2').waitFor();
   const total0 = await rep0.locator('.scorebox .s').nth(1).innerText();
   assert.match(total0, /\/ 230/);
@@ -391,12 +413,12 @@ try {
   await pick(rep1, 'sequence', 'true');
   await cite(rep1, 'cause', /line 15: wikictl: command not found/);
   await cite(rep1, 'sequence', /\(eunjae\) CMD \(~\/bin\/wiki-log-clean/);
-  await rep1.locator('.submitbar .primary-btn').click();
+  await submit(rep1, /1번째 제출이에요 \(남은 제출 5\/5\)/);
   await rep1.locator('.reply', { hasText: '어딘가 로그랑 안 맞아요' }).waitFor();
   assert.doesNotMatch(await rep1.locator('.reply').innerText(), /칸 중|근거가/, 'bundled: no slot count; the citations were fine');
   await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'seojin' && /스크립트가 남긴 출력/.test(m.text)), null, { timeout: 5000 });
   await pick(rep1, 'cause', 'cron-path');
-  await rep1.locator('.submitbar .primary-btn').click();
+  await submit(rep1, /2번째 제출이에요 \(남은 제출 4\/5\)/);
   await page.locator('.moment.moment-result.good').waitFor({ timeout: 3000 });
   await rep1.locator('.debrief h2').waitFor();
   assert.match(await rep1.locator('.scorebox .s').nth(1).innerText(), /\/ 230/);
@@ -464,7 +486,7 @@ try {
   await cite(rep2, 'cause', /\(deleted\)/);
   await cite(rep2, 'sequence', /COMMAND=\/usr\/bin\/rm pay-api-01\.log/);
   await cite(rep2, 'responsibility', /max_source_bytes = 0/);
-  await rep2.locator('.submitbar .primary-btn').click();
+  await submit(rep2, /1번째 제출이에요 \(남은 제출 4\/4\)/);
   await page.locator('.moment.moment-result.good').waitFor({ timeout: 3000 });
   await rep2.locator('.debrief h2').waitFor();
   assert.match(await rep2.locator('.scorebox .s').nth(1).innerText(), /\/ 330/);
@@ -657,7 +679,7 @@ try {
   await cite(report, 'cause', /too many open files/);
   await cite(report, 'sequence', /AuthorDate: Fri Nov 13 18:02:11/);
   await cite(report, 'responsibility', /git-admins:x:1050/);
-  await report.locator('.submitbar .primary-btn').click();
+  await submit(report, /1번째 제출이에요 \(남은 제출 3\/3\)/);
   await report.locator('.debrief h2').waitFor();
   const total = await report.locator('.scorebox .s').nth(1).innerText();
   assert.match(total, /330 \/ 330/);
@@ -925,6 +947,155 @@ try {
   assert.equal(await p6.evaluate(() => localStorage.getItem('no-handover:experience')), null);
   step('the choice persists across cases; ?fresh=1 asks again');
   await p6.close();
+
+  // ---- seventh page (1280x800): flow — the briefing's 건너뛰기 stays in the case, moving to
+  // another case asks in game, a blank Enter is not a command, a maximized window still closes,
+  // and the last submission says so
+  const p7 = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+  p7.on('pageerror', (e) => errors.push(String(e)));
+  p7.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  p7.on('dialog', (d) => (nativeDialogs.push(`p7 ${d.type()}: ${d.message()}`), d.accept()));
+  const centre7 = async (loc, what) => {
+    const b = await loc.boundingBox();
+    const [x, y] = [b.x + b.width / 2, b.y + b.height / 2];
+    const hit = await p7.evaluate(([x, y, sel]) => { const e = document.elementFromPoint(x, y); return e?.closest(sel) ? 'self' : `${e?.className} in ${e?.closest('.window,.todo,.tour,.toasts')?.className ?? '-'}`; }, [x, y, what]);
+    assert.equal(hit, 'self', `${what} is the topmost element at its centre`);
+    await p7.mouse.click(x, y);
+  };
+  const okMarks7 = () => p7.evaluate(() => document.querySelectorAll('.tour .tour-ok').forEach((b) => b.click()));
+  await p7.goto(`${url}?fresh=1`);
+  await p7.locator('#boot .exp-new').click();
+  await p7.locator('#briefing').waitFor();
+  const skips7 = p7.getByRole('button', { name: /건너뛰기/ });
+  assert.equal(await skips7.count(), 1, 'during the briefing only its own 건너뛰기 is reachable (the taskbar behind it is inert)');
+  assert.equal(await skips7.getAttribute('aria-label'), '브리핑 건너뛰기');
+  await centre7(p7.locator('.brief-skip'), '.brief-skip');
+  await p7.locator('#briefing').waitFor({ state: 'detached', timeout: 2000 });
+  await p7.locator('.window[data-app="terminal"]').waitFor();
+  assert.match(await p7.title(), /Case 0 · 튜토리얼/);
+  assert.equal(new URL(p7.url()).searchParams.get('case'), null, 'still on the Case 0 page');
+  assert.equal(await p7.evaluate(() => window.__game.st.briefing.skipped), true);
+  assert.equal(await p7.evaluate(() => document.activeElement === document.querySelector('.tin input')), true, 'the prompt has focus after the skip');
+  step('Case 0 briefing: one reachable 건너뛰기 ("브리핑 건너뛰기"), it skips only the briefing — same case, prompt focused');
+  // the taskbar's ⏭ 튜토리얼 건너뛰기 asks in game; Esc / 이 사건 계속하기 stays
+  await okMarks7();
+  await centre7(p7.locator('#taskbar .skiptut'), '.skiptut');
+  const caseModal = p7.locator('.modal-back .modal-case[role="alertdialog"]');
+  await caseModal.waitFor({ timeout: 2000 });
+  assert.equal(await caseModal.getAttribute('aria-modal'), 'true');
+  assert.match(await caseModal.innerText(), /Case 1 「밤에만 실패하는 스크립트」\(으\)로 옮길까요\?[\s\S]*건너뜀/);
+  assert.equal(await p7.evaluate(() => document.activeElement?.classList.contains('modal-cancel')), true, 'focus starts on 이 사건 계속하기');
+  await p7.keyboard.press('Tab');
+  assert.equal(await p7.evaluate(() => document.activeElement?.classList.contains('modal-ok')), true);
+  await p7.keyboard.press('Tab');
+  assert.equal(await p7.evaluate(() => document.activeElement?.classList.contains('modal-cancel')), true, 'focus stays inside the dialog');
+  await p7.keyboard.press('Escape');
+  await caseModal.waitFor({ state: 'detached' });
+  await p7.waitForTimeout(300);
+  assert.equal(new URL(p7.url()).searchParams.get('case'), null);
+  assert.deepEqual(JSON.parse(await p7.evaluate(() => localStorage.getItem('no-handover:campaign') ?? '{"skipped":[]}')).skipped ?? [], []);
+  step('⏭ 튜토리얼 건너뛰기 opens an in-game dialog (focus on 계속하기, Tab stays inside); Esc keeps Case 0');
+  // a blank Enter prints a prompt and nothing else: no command, no 명령 수
+  const tin7 = p7.locator('.tin input');
+  await tin7.fill('');
+  const before7 = await p7.evaluate(() => ({ cmds: window.__game.st.log.filter((e) => e.type === 'cmd').length, rec: window.__game.playtestReport().summary }));
+  const sysBefore = await p7.locator('.tline.sys').count();
+  for (const v of ['', '   ', '']) {
+    await tin7.fill(v);
+    await tin7.press('Enter');
+  }
+  await p7.waitForTimeout(150);
+  assert.equal(await p7.locator('.tline.sys').count(), sysBefore + 3, 'each blank Enter echoes a fresh prompt');
+  const after7 = await p7.evaluate(() => ({ cmds: window.__game.st.log.filter((e) => e.type === 'cmd').length, rec: window.__game.playtestReport().summary }));
+  assert.equal(after7.cmds, before7.cmds, 'a blank Enter is not a command');
+  assert.equal(await p7.evaluate(() => window.__game.st.live.some((m) => m.text === '그건 나중에요 ㅋㅋ 디스크부터 봐요!!')), false, 'and gets no off-rail redirect');
+  await tin7.fill('history');
+  await tin7.press('Enter');
+  await p7.locator('.todo li[data-id="history"].done').waitFor();
+  step('blank / whitespace Enter: a fresh prompt only — not logged as a command, no rail redirect');
+  // a maximized terminal still closes from its ✕ (the checklist sticky used to sit on it), and reopens
+  await okMarks7();
+  const term7 = p7.locator('.window[data-app="terminal"]');
+  await centre7(term7.locator('.titlebar button[aria-label="maximize"]'), 'button[aria-label="maximize"]');
+  await p7.locator('.window[data-app="terminal"].max').waitFor();
+  const tb7 = await term7.boundingBox();
+  const todo7 = await p7.locator('.todo').boundingBox();
+  assert.ok(tb7.x + tb7.width <= todo7.x, `maximized terminal (right ${tb7.x + tb7.width}) stops short of the checklist (left ${todo7.x})`);
+  await centre7(term7.locator('.titlebar button.close'), 'button.close');
+  await term7.waitFor({ state: 'detached' });
+  assert.equal(await p7.locator('#taskbar .task', { hasText: '터미널' }).count(), 0);
+  await centre7(p7.locator('.icon[data-app="terminal"]'), '.icon[data-app="terminal"]');
+  await term7.waitFor();
+  assert.equal(await p7.locator('.window[data-app="terminal"].max').count(), 0, 'reopens at its normal size');
+  await p7.locator('.window[data-app="terminal"] .tline', { hasText: '디스크 먼저' }).first().waitFor({ timeout: 2000 });
+  await centre7(term7.locator('.titlebar button.close'), 'button.close');
+  await term7.waitFor({ state: 'detached' });
+  await p7.locator('.icon[data-app="terminal"]').click();
+  await term7.waitFor();
+  step('terminal: maximized it clears the checklist, ✕ closes it, the icon reopens it with its output');
+  // ☰ case list: opening another case asks too; then 열기 really moves
+  await p7.reload();
+  await p7.locator('#boot .linkbtn.cases').click();
+  await p7.locator('#cases li[data-id="case0-wiki"]').waitFor();
+  await p7.locator('#cases .primary').click();
+  await p7.locator('#boot .skip').click();
+  await caseModal.waitFor();
+  await caseModal.locator('.modal-ok').click();
+  await p7.locator('#boot .caselabel', { hasText: 'Case 1' }).waitFor();
+  assert.deepEqual(JSON.parse(await p7.evaluate(() => localStorage.getItem('no-handover:campaign'))).skipped, ['case0-wiki']);
+  await p7.locator('#boot .linkbtn.cases').click();
+  await p7.locator('#cases li[data-id="case0-wiki"] button').click();
+  await caseModal.waitFor();
+  assert.match(await caseModal.innerText(), /Case 0 · 튜토리얼 「위키가 안 열려요」\(으\)로 옮길까요\?[\s\S]*진행은 저장/);
+  await caseModal.locator('.modal-cancel').click();
+  await caseModal.waitFor({ state: 'detached' });
+  await p7.waitForTimeout(300);
+  assert.equal(new URL(p7.url()).searchParams.get('case'), 'case1-cron-env');
+  await p7.locator('#cases .primary').click();
+  step('lock screen skip link and ☰ 사건 목록 ask in game too; 열기 moves (Case 0 marked 건너뜀), 계속하기 stays');
+  // the last of Case 1's five submissions: the dialog says it ends the case, focus on 더 살펴볼게요
+  await p7.locator('#boot button.primary').click();
+  await p7.locator('#briefing .brief-skip').click().catch(() => {});
+  await p7.locator('.tin input').waitFor();
+  await okMarks7();
+  for (const c of ['crontab -l', 'journalctl -u cron --since "2026-11-11 00:50" --until "2026-11-11 01:10"', 'cat ~/wiki-clean.log']) {
+    await p7.locator('.tin input').fill(c);
+    await p7.locator('.tin input').press('Enter');
+  }
+  await p7.evaluate(() => {
+    for (const w of document.querySelectorAll('.window:not([data-app="terminal"])')) w.classList.add('min');
+  });
+  for (const re of [/^0 \* \* \* \* ~\/bin\/wiki-log-clean\.sh/, /line 15: wikictl: command not found/, /\(eunjae\) CMD \(~\/bin\/wiki-log-clean/]) {
+    const line = p7.locator('.tline', { hasText: re }).last();
+    await line.hover();
+    await line.locator('.pinbtn').click();
+  }
+  await p7.evaluate(() => {
+    for (let i = 0; i < 4; i++) window.__game.submit({ cause: 'not-run', sequence: 'false', responsibility: [], cites: {} });
+    for (const w of document.querySelectorAll('.window')) w.classList.add('min');
+    document.querySelector('.moment')?.remove();
+  });
+  await p7.locator('.icon[data-app="report"]').waitFor({ timeout: 8000 }); // unlocks once the checklist folds
+  await p7.locator('.icon[data-app="report"]').click();
+  const rep7 = p7.locator('.window[data-app="report"]:not(.min)');
+  await rep7.waitFor();
+  assert.match(await rep7.locator('.submitbar .primary-btn').innerText(), /남은 제출 1\/5/);
+  await pick(rep7, 'cause', 'cron-path');
+  await pick(rep7, 'sequence', 'true');
+  await cite(rep7, 'cause', /line 15: wikictl: command not found/);
+  await cite(rep7, 'sequence', /\(eunjae\) CMD \(~\/bin\/wiki-log-clean/);
+  await rep7.locator('.submitbar .primary-btn').click();
+  const sub7 = p7.locator('.modal-back .modal-submit');
+  await sub7.waitFor();
+  assert.match(await sub7.locator('.modal-body').innerText(), /마지막 제출이에요 \(남은 제출 1\/5\)\. 틀려도 이걸로 사건이 끝나고/);
+  assert.equal(await sub7.locator('.modal-ok').innerText(), '마지막으로 제출하기');
+  assert.equal(await p7.evaluate(() => document.activeElement?.classList.contains('modal-cancel')), true, 'the last one starts on 더 살펴볼게요');
+  await p7.keyboard.press('Escape');
+  await sub7.waitFor({ state: 'detached' });
+  assert.equal(await p7.evaluate(() => window.__game.st.submissions.length), 4, 'Esc sends nothing');
+  step('last submission: the in-game dialog says it is the last and ends the case, focus on 더 살펴볼게요, Esc sends nothing');
+  await p7.close();
+  assert.deepEqual(nativeDialogs, [], 'no browser confirm()/alert() anywhere');
 
   assert.deepEqual(errors, []);
   console.log('e2e passed');
