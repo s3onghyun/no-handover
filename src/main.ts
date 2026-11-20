@@ -20,7 +20,7 @@ import { runBriefing } from './ui/briefing.ts';
 import { renderHintPanel } from './ui/hintpanel.ts';
 import { mountObjectives } from './ui/objectives.ts';
 import { applyMotionPref, showMoment } from './ui/motion.ts';
-import { mountTour, tourKey } from './ui/tour.ts';
+import { mountTour, tourKey, TOUR_SEEN_KEY } from './ui/tour.ts';
 import { goalCard } from './ui/goal.ts';
 import type { ClueDef } from './engine/types.ts';
 import type { Message } from './engine/build.ts';
@@ -42,6 +42,7 @@ if (params.has('fresh')) {
     storage.remove(`no-handover:report:${e.id}`);
     storage.remove(tourKey(e.id));
   }
+  storage.remove(TOUR_SEEN_KEY);
   storage.remove(PROGRESS_KEY);
   storage.remove(CURRENT_KEY);
 }

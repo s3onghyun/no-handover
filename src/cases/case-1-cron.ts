@@ -799,19 +799,9 @@ export const caseOneCron: CaseFile = {
 
   goal: { intro: '서진님께 보낼 원인 보고서를 채우면 사건이 끝나요. 제출은 5번까지 — 틀리면 어느 칸인지는 알려 주지 않아요.' },
 
-  // a coach mark per tool, each shown once when it first matters (owner request 2026-11-20)
+  // the tool marks moved to Case 0 (owner feedback 2026-11-20); Case 1 adds no new tool, so only the goal card
   tour: {
-    steps: [
-      { id: 'terminal', app: 'terminal', title: '터미널', text: '서버에 명령을 치는 곳. 증거는 대부분 여기서 나와요. help 로 쓸 수 있는 명령을 봐요.' },
-      { id: 'goal', app: 'goal', title: '🎯 이번 사건에서 밝혀낼 것', text: '최종 목표예요. 보고서 두 칸(원인, 경위)을 채우면 끝. 언제든 여기서 다시 봐요.' },
-      { id: 'messenger', app: 'messenger', title: '메신저', text: '동료들의 말. 막히면 입력창 위 "뭐부터 봐요?" 로 물어볼 수 있어요.' },
-      { id: 'mail', app: 'mail', title: '메일', text: '브리핑 메일과 지난 기록. 은재님이 어제 보낸 메일도 여기 있어요.' },
-      { id: 'notes', app: 'notes', title: '메모장', text: '단서 정리. 도윤의 메모와 어제 배운 것. 단서를 찾으면 저절로 넘어가기도 해요.', after: 'crontab' },
-      { id: 'board', app: 'board', title: '증거 보드', text: '📌 한 줄이 시간순으로 모이는 곳. 보고서는 여기서 시작해요.', after: 'ran' },
-      { id: 'dashboard', app: 'dashboard', title: '대시보드', text: '지표와 타임라인. "언제부터였나"를 한눈에 봐요.', after: 'ran' },
-      { id: 'hint', app: 'hint', title: '💡 힌트', text: '막힐 때 보는 곳. 요약 → 방향 → 정답 순서로 열려요. 점수는 그대로, 기록만 남아요.', afterMin: 4 },
-      { id: 'report', app: 'report', title: '📝 보고서', text: '마지막 단계. 두 칸을 고르고 제출하면 서진님이 답해요. 제출은 5번까지.', after: 'pins' },
-    ],
+    steps: [{ id: 'goal', app: 'goal', title: '🎯 이번 사건에서 밝혀낼 것', text: '최종 목표예요. 보고서 두 칸(원인, 경위)을 채우면 끝. 언제든 여기서 다시 봐요.' }],
   },
 
   // ------------------------------------------------------------------ first minutes

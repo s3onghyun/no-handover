@@ -1,7 +1,9 @@
 // Guided tool tour: one short coach mark at a time, anchored by app id (a window, its desktop
 // icon, or a tray control with data-tour="<id>"), never blocking — no overlay, no focus theft.
-// Each mark is shown once; the seen state lives in localStorage (no-handover:tour:<case id>).
-// Esc or "알겠어요" dismisses the current mark, "투어 건너뛰기" ends the tour for this case.
+// Each mark is shown once across the whole campaign: the seen step ids live in one localStorage
+// record (no-handover:tour), so a tool introduced in Case 0 is not introduced again in Case 1.
+// Esc or "알겠어요" dismisses the current mark, "투어 건너뛰기" ends the tour for this case
+// (no-handover:tour:<case id>).
 
 import { nextTourStep, parseTourState, type TourState } from '../engine/tour.ts';
 import type { TourStep } from '../engine/types.ts';
@@ -9,6 +11,7 @@ import type { Game } from '../engine/game.ts';
 import { h, storage } from './dom.ts';
 import { t } from '../i18n.ts';
 
+export const TOUR_SEEN_KEY = 'no-handover:tour';
 export const tourKey = (caseId: string) => `no-handover:tour:${caseId}`;
 const AUTO_HIDE_MS = 15000;
 
@@ -16,8 +19,14 @@ export function mountTour(game: Game, opts: { blocked: () => boolean }): { refre
   const steps = game.cs.tour?.steps;
   if (!steps?.length) return null;
   const key = tourKey(game.cs.id);
-  const st: TourState = parseTourState(storage.get(key));
-  const save = () => storage.set(key, JSON.stringify(st));
+  const own = parseTourState(storage.get(key));
+  // seen marks are shared by every case; older saves kept them per case, so fold those in
+  const st: TourState = { seen: [...new Set([...parseTourState(storage.get(TOUR_SEEN_KEY)).seen, ...own.seen])], skipped: own.skipped };
+  const save = () => {
+    const shared = parseTourState(storage.get(TOUR_SEEN_KEY)).seen;
+    storage.set(TOUR_SEEN_KEY, JSON.stringify({ seen: [...new Set([...shared, ...st.seen])] }));
+    storage.set(key, JSON.stringify({ skipped: st.skipped }));
+  };
   let cur: { step: TourStep; el: HTMLElement; timer: number } | null = null;
 
   const anchor = (app: string): HTMLElement | null =>

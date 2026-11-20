@@ -1,14 +1,15 @@
 // Browser end-to-end run: builds nothing, serves dist/ with `vite preview`, drives the real UI
 // with playwright-core: first launch opens Case 0 (tutorial) — its short briefing, the pre-typed
-// `history`, Jihoon's rail, the five checklist items and icon unlocks, a wrong then a right
+// `history`, Jihoon's rail, the five checklist items and icon unlocks with one coach mark each, a wrong then a right
 // report — and the debrief's "다음 사건" button opens Case 1 「밤에만 실패하는 스크립트」 (full
-// briefing, the tool tour once and skipped, the goal card, the aha moment, a bundled wrong reply,
+// briefing, only the 🎯 goal coach mark, the goal card, the aha moment, a bundled wrong reply,
 // the result moment), then Case 2 「지웠는데 안 비워지는 디스크」 (two hosts, the deleted open file,
 // three slots), then Case 3 「금요일 18:02」. There it watches
 // the whole opening briefing, ticks the three "오늘 할 일" boxes, solves the case from the
 // departed senior's history line, then checks the skip path, the help-menu replay and the
 // persisted mute toggle in a second page, the board/dashboard once more with reduced motion, and a
-// fourth page with reduced motion where the tour, the aha moment and typing never block each other.
+// fourth page with reduced motion where the tour, the aha moment and typing never block each other,
+// and "투어 건너뛰기" ends Case 0's tour.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
@@ -54,6 +55,18 @@ async function pinLine(re) {
 }
 
 const todoItem = (id) => page.locator(`.todo li[data-id="${id}"]`);
+/** A coach mark: waits for it, checks it is the only one on screen, then "알겠어요". */
+async function mark(id, shotName) {
+  const m = page.locator(`.tour[data-step="${id}"]`);
+  await m.waitFor({ timeout: 6000 });
+  assert.equal(await page.locator('.tour').count(), 1, 'one mark at a time');
+  if (shotName) {
+    await page.waitForTimeout(500);
+    await shot(shotName);
+  }
+  await m.locator('.tour-ok').click();
+  await m.waitFor({ state: 'detached' });
+}
 
 try {
   console.log(`e2e against ${url}`);
@@ -81,12 +94,22 @@ try {
   assert.equal(await page.locator('.icons .icon').count(), 3, 'three icons at first');
   assert.equal(await page.locator('.tin input').inputValue(), 'history');
   assert.equal(await page.locator('.todo li').count(), 5);
+
+  // ---- tool tour: the three starting tools, one coach mark at a time; the terminal input stays live
+  await mark('terminal', 'case0-tour-terminal.png');
+  await mark('messenger');
+  await mark('mail');
+  await page.waitForTimeout(800);
+  assert.equal(await page.locator('.tour').count(), 0, 'the next marks wait for their unlock');
+  step('tool tour: 터미널 → 메신저 → 메일 marks for the three starting icons, one at a time');
   await page.locator('.window[data-app="terminal"] .tout').click();
   await page.locator('.tin input').press('Enter');
   await todoItem('history').and(page.locator('.done')).waitFor();
   await page.locator('.tline.clue', { hasText: '디스크 먼저' }).waitFor();
   await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /df -h !!/.test(m.text)), null, { timeout: 5000 });
   step('the pre-typed `history` succeeds on Enter, clue lines are yellow, 지훈 names the next command (df -h)');
+  await mark('hint');
+  step('tool tour: the 💡 mark once the first checklist item is ticked');
 
   // ---- ask a colleague: the "뭐부터 봐요?" quick reply in the messenger, answered after "입력 중…"
   await page.locator('.icon[data-app="messenger"]').dblclick();
@@ -136,18 +159,21 @@ try {
   await run('df -h');
   await todoItem('df').and(page.locator('.done')).waitFor();
   await page.locator('.icon[data-app="notes"]').waitFor();
+  await mark('notes', 'case0-tour-notes.png');
   await pinLine(/100%\s+\/var/);
   await page.waitForTimeout(300);
   await shot('case0-02-terminal-df.png');
-  step('df -h: /var 100% (highlighted, pinned); the notebook icon appears');
+  step('df -h: /var 100% (highlighted, pinned); the notebook icon appears with its 메모장 mark');
 
   await run('du -sh /var/log/*');
   await page.locator('.tline.clue', { hasText: /^11G\s+\/var\/log\/wiki(?!\/)/ }).waitFor();
   await run('tail -n 20 /var/log/wiki/wiki.log');
   await todoItem('tail').and(page.locator('.done')).waitFor();
   await page.locator('.icon[data-app="board"]').waitFor();
+  await mark('board');
   await run('systemctl status wiki');
   await todoItem('service').and(page.locator('.done')).waitFor();
+  await mark('dashboard');
   const notesWin = page.locator('.window[data-app="notes"] .titlebar button.close');
   await page.waitForTimeout(400);
   if (await notesWin.count()) await notesWin.click(); // the memo scene opened the notebook
@@ -155,7 +181,11 @@ try {
   await todoItem('pins').and(page.locator('.done')).waitFor();
   await page.locator('.todo').waitFor({ state: 'detached', timeout: 6000 });
   await page.locator('.icon[data-app="report"]').waitFor();
-  step('du → tail → systemctl status → 2 pins: all five boxes tick, the sticky folds, every icon is unlocked');
+  await mark('report');
+  const tourLog0 = await page.evaluate(() => window.__game.st.log.filter((e) => e.type === 'tour-step').map((e) => e.step));
+  assert.deepEqual(tourLog0, ['terminal', 'messenger', 'mail', 'hint', 'notes', 'board', 'dashboard', 'report'], 'each Case 0 mark once, at its unlock');
+  assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('no-handover:tour'))).seen, tourLog0);
+  step('du → tail → systemctl status → 2 pins: all five boxes tick, the sticky folds, every icon is unlocked, each with its mark (8 marks, each once)');
 
   await run('journalctl -u wiki --since "2026-11-09 21:00" --until "2026-11-09 21:20"');
   await pinLine(/21:14:03 .*thumbnail/);
@@ -257,18 +287,16 @@ try {
   assert.ok(secs >= 28 && secs <= 62, `Case 1 briefing took ${secs}s`);
   step(`Case 1 briefing: 서진's voice message (subtitles), the mail slides in, ends on its own after ${secs.toFixed(1)} s`);
 
-  // ---- tool tour: one coach mark at a time, shown once, skippable
-  await page.locator('.tour[data-step="terminal"]').waitFor({ timeout: 5000 });
+  // ---- tool tour: the tools were introduced in Case 0, so only the 🎯 goal mark is new here
+  await page.locator('.tour[data-step="goal"]').waitFor({ timeout: 5000 });
   assert.equal(await page.locator('.tour').count(), 1, 'one mark at a time');
   await page.waitForTimeout(500);
   await shot('case1-03-tour.png');
   await page.locator('.tour .tour-ok').click();
-  await page.locator('.tour[data-step="goal"]').waitFor({ timeout: 3000 });
-  await page.locator('.tour .tour-skip').click();
   await page.waitForTimeout(1500);
-  assert.equal(await page.locator('.tour').count(), 0, 'skipped: no more marks');
-  assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('no-handover:tour:case1-cron-env'))), { seen: ['terminal', 'goal'], skipped: true });
-  step('tool tour: 터미널 → 🎯 목표, one at a time; "투어 건너뛰기" ends it and the seen state is saved');
+  assert.equal(await page.locator('.tour').count(), 0, 'no tool mark repeats in Case 1');
+  assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('no-handover:tour'))).seen, ['terminal', 'messenger', 'mail', 'hint', 'notes', 'board', 'dashboard', 'report', 'goal']);
+  step('tool tour: Case 1 shows only the 🎯 목표 mark; no tool mark from Case 0 repeats');
 
   // ---- goal card: in the checklist and behind 🎯
   assert.match(await page.locator('.todo-goal').innerText(), /원인 · 경위/);
@@ -653,6 +681,7 @@ try {
   assert.equal(await b3.locator('.snap').count(), 0, 'no snap under reduced motion');
   await b3.locator('.obs-lanes .obs-mk.k-error').click();
   assert.equal(await b3.locator('.flash').count(), 0, 'jump-to-row without the flash animation');
+  await p3.waitForTimeout(100); // the click's hover/focus transitions are 1 ms under reduced motion; let them end
   const boardAnims = await p3.evaluate(() => document.getAnimations().filter((a) => a.effect?.target?.closest?.('.window[data-app="board"]')).length);
   assert.equal(boardAnims, 0);
   await b3.locator('.titlebar button.close').click();
@@ -675,7 +704,7 @@ try {
   await p4.goto(`${url}?fresh=1&case=case1-cron-env&briefing=0`);
   await p4.locator('#boot button.primary').click();
   assert.equal(await p4.evaluate(() => document.documentElement.classList.contains('reduce-motion')), true);
-  await p4.locator('.tour[data-step="terminal"]').waitFor({ timeout: 5000 });
+  await p4.locator('.tour[data-step="goal"]').waitFor({ timeout: 5000 });
   const tin = p4.locator('.tin input');
   await tin.click();
   await tin.fill('cat ~/wiki-clean.log');
@@ -690,6 +719,23 @@ try {
   await p4.locator('.moment').waitFor({ state: 'detached', timeout: 2500 });
   await p4.locator('.tour .tour-ok').click();
   step('reduced motion: html.reduce-motion, the aha card appears still and leaves on its own; typing works with the coach mark and the moment on screen');
+  // "투어 건너뛰기" in a fresh Case 0: the remaining marks stay off for that case, typing still works
+  await p4.goto(`${url}?fresh=1&case=case0-wiki&briefing=0`);
+  await p4.locator('#boot button.primary').click();
+  const m4 = p4.locator('.tour[data-step="terminal"]');
+  await m4.waitFor({ timeout: 5000 });
+  assert.equal(await p4.locator('.tour-skip').innerText(), '투어 건너뛰기');
+  assert.equal(await m4.getAttribute('role'), 'dialog');
+  await m4.locator('.tour-skip').focus();
+  await p4.keyboard.press('Enter');
+  await m4.waitFor({ state: 'detached' });
+  await p4.locator('.window[data-app="terminal"] .tout').click();
+  await p4.locator('.tin input').press('Enter');
+  await p4.locator('.todo li[data-id="history"].done').waitFor();
+  await p4.waitForTimeout(1500);
+  assert.equal(await p4.locator('.tour').count(), 0, 'skipped: no more marks in this case');
+  assert.deepEqual(JSON.parse(await p4.evaluate(() => localStorage.getItem('no-handover:tour:case0-wiki'))), { skipped: true });
+  step('Case 0 tour: "투어 건너뛰기" (keyboard) ends it for the case; the 💡 mark does not follow; skip is saved');
   await p4.close();
 
   assert.deepEqual(errors, []);

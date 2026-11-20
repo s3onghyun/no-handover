@@ -2,7 +2,7 @@
 
 사건 하나는 TypeScript 파일 하나다: `src/cases/<id>.ts`가 `CaseFile` 객체 하나를 내보낸다. 타입 정의는 `src/engine/types.ts`에 있고, 편집기가 빠진 칸과 오타를 바로 알려 준다. YAML 대신 TS를 고른 이유는 의존성을 늘리지 않고, 긴 로그 줄이나 반복되는 37건 알림 같은 것을 짧은 함수로 만들 수 있어서다. 엔진 코드는 사건 이름을 하나도 모른다. 새 사건은 파일 하나를 추가하고 `src/cases/index.ts`의 사다리(`CAMPAIGN`, 5절 사다리는 [`campaign-ladder.md`](campaign-ladder.md))에 그 사건을 한 줄로 붙이면 된다. 잠금·건너뛰기·다음 사건 규칙은 `src/engine/campaign.ts`.
 
-> 읽는 순서 추천: ① `timeline` ② `clues` ③ `accusation` ④ `hints` ⑤ `triggers` ⑥ `debrief`. Case 3(예전 1화)의 실제 예시는 `src/cases/friday-1802.ts`, 튜토리얼은 `src/cases/case-0-wiki.ts`, 본편의 작은 사건은 `src/cases/case-1-cron.ts`(호스트 1대, 보고서 2칸, 툴 투어)와 `src/cases/case-2-deleted.ts`(호스트 2대, 3칸).
+> 읽는 순서 추천: ① `timeline` ② `clues` ③ `accusation` ④ `hints` ⑤ `triggers` ⑥ `debrief`. Case 3(예전 1화)의 실제 예시는 `src/cases/friday-1802.ts`, 튜토리얼은 `src/cases/case-0-wiki.ts`, 본편의 작은 사건은 `src/cases/case-1-cron.ts`(호스트 1대, 보고서 2칸, 🎯 목표 마크)와 `src/cases/case-2-deleted.ts`(호스트 2대, 3칸).
 
 ## 1. 큰 그림
 
@@ -244,20 +244,21 @@ desktop: { icons: [{ app: 'terminal' }, { app: 'messenger' }, { app: 'mail' }, {
 - `desktop.icons`: 아이콘 순서와 해금 조건. `after`가 없는 아이콘만 처음에 보이고, 나머지는 그 항목이 체크되거나 체크리스트가 접히면 나타난다. 아이콘이 없어도 메시지 알림이나 보드의 "보고서 쓰기"로는 창이 열린다.
 - 은재는 레일 동료가 될 수 없다(§8-3, 실시간 대사 없음). `tests/case0.test.ts`가 검사한다.
 
-**도구 안내 `tour` (코치 마크, Case 1)** — 캡틴 요청(2026-11-20) "이건 메모장 이건 대시보드 이건 모를 때 보는 거, 그리고 최종적으로 이거 푸는 거구나를 알아야 몰입이". 레일과 달리 명령을 알려 주지 않고 **도구가 무엇에 쓰는지**만 한 번씩 말한다.
+**도구 안내 `tour` (코치 마크, Case 0)** — 캡틴 요청(2026-11-20) "이건 메모장 이건 대시보드 이건 모를 때 보는 거, 그리고 최종적으로 이거 푸는 거구나를 알아야 몰입이", 플레이테스트 뒤 "가이드는 case0에 나왔어야하는거 아냐?". 레일과 달리 명령을 알려 주지 않고 **도구가 무엇에 쓰는지**만 한 번씩 말한다. 도구 마크는 튜토리얼(Case 0)에 있고, 각 마크는 그 아이콘이 해금되는 체크 항목(`desktop.icons[].after`)과 같은 `after`를 써서 아이콘이 나오는 순간 뜬다(💡는 첫 체크 항목 뒤). 뒤 사건의 `tour`에는 그 사건에서 처음 나오는 도구와 🎯 목표만 넣는다(Case 1은 `goal` 하나, Case 2·3은 없음).
 
 ```ts
 tour: { steps: [
-  { id: 'terminal', app: 'terminal', title: '터미널', text: '서버에 명령을 치는 곳. …' },
-  { id: 'goal', app: 'goal', title: '🎯 이번 사건에서 밝혀낼 것', text: '최종 목표예요. …' },
-  { id: 'notes', app: 'notes', title: '메모장', text: '단서 정리. …', after: 'crontab' },   // 그 체크 항목 뒤
-  { id: 'hint', app: 'hint', title: '💡 힌트', text: '막힐 때 보는 곳. …', afterMin: 4 },   // 플레이 4분 뒤
+  { id: 'terminal', app: 'terminal', title: '터미널', text: '서버에 명령을 치는 곳. …' },   // 처음부터 있는 아이콘
+  { id: 'hint', app: 'hint', title: '💡 힌트', text: '막힐 때 보는 곳. …', after: 'history' },
+  { id: 'notes', app: 'notes', title: '메모장', text: '단서 정리. …', after: 'df' },   // 메모장 아이콘과 같은 체크 항목 뒤
 ] }
+// Case 1: tour: { steps: [{ id: 'goal', app: 'goal', title: '🎯 이번 사건에서 밝혀낼 것', … }] }
+// afterMin: n (플레이 n분 뒤)도 쓸 수 있다
 ```
 
 - 기준점은 앱 id 하나뿐이다: 열린 창 → 바탕화면 아이콘 → 작업 표시줄의 `data-tour="<id>"`(`hint`, `goal`, `help`) 순으로 찾는다. 화면 구조(보드·대시보드 마크업)에 묶이지 않는다.
 - 한 번에 하나, 데이터 순서대로, 조건(`after` 체크 항목, `afterMin` 분, 기준점이 화면에 있음)이 맞는 첫 단계. 아이콘이 아직 안 나온 단계는 건너뛰었다가 나오면 보인다(`src/engine/tour.ts`, `tests/tour.test.ts`).
-- 막지 않는다: 덮개 없음, 포커스를 가져가지 않음(터미널 입력이 그대로). "알겠어요"·Esc로 닫고, 15초 뒤에는 저절로 닫히며(본 것으로 침), "투어 건너뛰기"는 그 사건의 나머지를 모두 끈다. 본 상태는 `no-handover:tour:<사건 id>`에 남고 `?fresh=1`이 지운다. 로그: `tour-step`, `tour-skip`.
+- 막지 않는다: 덮개 없음, 포커스를 가져가지 않음(터미널 입력이 그대로). "알겠어요"·Esc로 닫고, 15초 뒤에는 저절로 닫히며(본 것으로 침), "투어 건너뛰기"는 그 사건의 나머지를 모두 끈다. 본 단계 id는 사건을 가리지 않고 `no-handover:tour` 하나에 남아(같은 id는 어느 사건에서도 다시 뜨지 않는다), 건너뛰기는 `no-handover:tour:<사건 id>`에 남고, `?fresh=1`이 둘 다 지운다. 로그: `tour-step`, `tour-skip`.
 - `role="dialog"`(`aria-modal="false"`) + 제목·본문 연결, 버튼은 Tab으로 닿는다.
 
 ## 14. 새 사건 체크리스트
