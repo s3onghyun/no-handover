@@ -13,7 +13,9 @@
 // clicks at element centres (the blind playtester's tool): board icon, taskbar, Enter, and pins
 // with the memo and the checklist on screen. The first launch asks "터미널이 익숙해요 / 처음이에요"
 // once; the main run answers 처음이에요 (the tour), a sixth page answers 익숙해요 by keyboard (no
-// coach marks, a 도구 안내 entry, no window opening by itself) and switches back in ❓.
+// coach marks, a 도구 안내 entry, no window opening by itself — not even the terminal in Case 0 — and
+// a goals-only checklist), switches back in ❓, and restarts Case 0 from the case list and the lock
+// screen (both ask first). Between Case 0 and Case 1 the case list shows done + grade, next, locked.
 // A seventh page (1280x800): the briefing's 건너뛰기 stays in Case 0, every way to another case asks
 // in an in-game dialog, a blank Enter is not a command, a maximized terminal closes and reopens, and
 // the last submission's dialog says so; no browser confirm()/alert() anywhere.
@@ -333,6 +335,9 @@ try {
   assert.match(await rep0.locator('.cites').innerText(), /✓ 원인[\s\S]*디스크 사용량[\s\S]*✓ 경위[\s\S]*처음 시작된 시각/);
   step('debrief: record "힌트 단계 3개 · 소요 · 명령 수" with panel opens noted as not counted, no penalty; 결과 카드 downloads as a 1200×630 PNG');
   assert.match(await rep0.locator('.nextcase').innerText(), /다음 사건 → Case 1 「밤에만 실패하는 스크립트」/);
+  // round 2: the way on stays in the taskbar after the debrief is closed
+  assert.match(await page.locator('#taskbar .nextcase-btn').innerText(), /다음 사건 → Case 1/);
+  assert.equal(await page.locator('#taskbar .nextcase-btn').isVisible(), true);
   step(`no citation → no submission; a wrong report (and a citation that does not back 경위) gets 서진's reply naming the slot and 지훈's nudge; the second solves Case 0, the debrief lists the evidence`);
   step(`Case 0 solved (${total0.replace(/\s+/g, ' ')})`);
 
@@ -343,6 +348,22 @@ try {
   assert.equal(await page.locator('#boot .expq').count(), 0, 'the experience question is asked once');
   await shot('case1-01-boot.png');
   step('debrief → 다음 사건: Case 1 lock screen; Case 0 recorded as solved');
+  // round 2: the case list says done (with grade) / next / locked, and Case 0's lock screen leads on to Case 1
+  await page.locator('#boot .linkbtn.cases').click();
+  const cl = page.locator('#cases');
+  assert.match(await cl.locator('li[data-id="case0-wiki"] .cl-st').innerText(), /^✓ 해결 · 등급 [SABCD]$/);
+  assert.equal(await cl.locator('li[data-id="case0-wiki"] .cl-restart').count(), 1, 'a solved case can be restarted');
+  assert.equal(await cl.locator('li[data-id="case1-cron-env"].next .cl-next').innerText(), '다음 사건');
+  assert.equal(await cl.locator('li[data-id="case1-cron-env"] .cl-here').count(), 1, 'the case on screen is marked, not offered');
+  assert.equal(await cl.locator('li[data-id="case2-deleted-open"][data-state="locked"]').count(), 1);
+  await shot('case-list-01.png');
+  await cl.locator('li[data-id="case0-wiki"] .cl-open').click();
+  await page.locator('.modal-case .modal-ok').click(); // leaving a case asks first (in-game dialog)
+  await page.locator('#boot .caselabel', { hasText: 'Case 0' }).waitFor();
+  assert.match(await page.locator('#boot button.boot-next').innerText(), /^다음 사건 → Case 1 「밤에만 실패하는 스크립트」$/);
+  await page.locator('#boot button.boot-next').click();
+  await page.locator('#boot .caselabel', { hasText: 'Case 1' }).waitFor();
+  step('case list: Case 0 ✓ 해결 · 등급, Case 1 다음 사건, Case 2 locked; a finished case\'s lock screen offers 다음 사건 → Case 1');
 
   // ================================================================ Case 1 「밤에만 실패하는 스크립트」
   await page.locator('#boot button.primary').click();
@@ -913,6 +934,18 @@ try {
   await guideBtn.waitFor();
   await p6.waitForTimeout(2500);
   assert.equal(await p6.locator('.tour').count(), 0, 'familiar: no coach mark');
+  // round 2: as the choice promised, the terminal does not open by itself; the sticky shows the goal, not the steps
+  assert.equal(await p6.locator('.window[data-app="terminal"]').count(), 0, 'familiar: no terminal opens by itself in Case 0');
+  assert.equal(await p6.locator('.icon[data-app="terminal"].pulse').count(), 1, 'its icon pulses instead');
+  const todo6 = p6.locator('.todo.goals-only');
+  await todo6.waitFor();
+  assert.match(await todo6.locator('.todo-goal').innerText(), /🎯 .*원인 · 경위/);
+  assert.equal(await todo6.locator('li, small.hint').count(), 0, 'no numbered steps or step hints');
+  assert.match(await todo6.locator('header .todo-n').innerText(), /^0\/5$/);
+  if (shots) await p6.screenshot({ path: join(shots, 'familiar-00-desktop.png') });
+  await p6.locator('.icon[data-app="terminal"]').click();
+  await p6.locator('.window[data-app="terminal"] .tin input').waitFor();
+  step('익숙해요: Case 0 opens on the desktop with no window; the sticky shows 🎯 and the count, no steps; one click opens the terminal');
   await guideBtn.click();
   const guide = p6.locator('.popover.guidepop');
   await guide.waitFor();
@@ -939,6 +972,9 @@ try {
   assert.ok(await p6.evaluate(() => window.__game.st.log.some((e) => e.type === 'auto-window-held' && e.app === 'notes')));
   assert.equal(await p6.locator('.tour').count(), 0, 'still no coach mark after the icons unlock');
   step('익숙해요: the memo scene leaves the notebook closed (its toast still offers it); no mark as icons unlock');
+  assert.equal(await p6.locator('.todo li').count(), 0, 'still goals only');
+  await p6.locator('.todo .todo-steps').click();
+  assert.equal(await p6.locator('.todo li').count(), 5, '단계 보기 unfolds the steps');
   // ❓: switch to 처음이에요 — the tour comes back, the entry goes away
   await p6.locator('#taskbar button[data-tour="help"]').click();
   await p6.locator('.exp-set button[data-exp="familiar"][aria-pressed="true"]').waitFor();
@@ -950,6 +986,36 @@ try {
   const exp6 = await p6.evaluate(() => window.__game.playtestReport().summary.experience);
   assert.equal(exp6, 'new');
   step('❓ 터미널 경험 → 처음이에요: coach marks resume, 🧭 entry hidden, the play log records the choice');
+  // round 2: "이 사건 처음부터" from the case list (in ❓): in progress → confirm (Esc keeps it) → the save is gone
+  await p6.locator('#taskbar button[data-tour="help"]').click();
+  await p6.locator('.popover .cases-open').click();
+  const row6 = p6.locator('#cases li[data-id="case0-wiki"]');
+  assert.equal(await row6.getAttribute('data-state'), 'playing');
+  assert.match(await row6.locator('.cl-st').innerText(), /^▶ 진행 중$/);
+  await row6.locator('.cl-restart').click();
+  await p6.locator('.modal-restart .modal-ok').waitFor();
+  assert.match(await p6.locator('.modal-restart').innerText(), /Case 0 · 튜토리얼 「위키가 안 열려요」, 처음부터 다시 할까요\?[\s\S]*지워지고/);
+  if (shots) await p6.screenshot({ path: join(shots, 'case-list-02-restart.png') });
+  await p6.keyboard.press('Escape');
+  await p6.locator('.modal-restart').waitFor({ state: 'detached' });
+  assert.equal(await p6.locator('#cases').count(), 1, 'Esc only closes the question');
+  await row6.locator('.cl-restart').click();
+  await p6.locator('.modal-restart .modal-ok').click();
+  await p6.locator('#boot .caselabel', { hasText: 'Case 0' }).waitFor();
+  assert.equal(await p6.locator('#boot button', { hasText: '이어서 하기' }).count(), 0, 'nothing left to resume');
+  assert.equal(await p6.evaluate(() => window.__game.st.playMs), 0);
+  // the lock screen's 처음부터 asks too, and really clears the save (before, the unload handler wrote it back)
+  await p6.goto(`${url}?briefing=0`);
+  await p6.locator('#boot button.primary').click();
+  await p6.locator('#boot').waitFor({ state: 'detached' });
+  await p6.waitForFunction(() => window.__game.st.playMs > 1500, null, { timeout: 8000 });
+  await p6.goto(`${url}?briefing=0`);
+  await p6.locator('#boot button', { hasText: /^처음부터$/ }).click();
+  await p6.locator('.modal-restart .modal-ok').click();
+  await p6.locator('#boot .caselabel', { hasText: 'Case 0' }).waitFor();
+  await p6.waitForTimeout(300);
+  assert.equal(await p6.locator('#boot button', { hasText: '이어서 하기' }).count(), 0, 'the lock screen 처음부터 clears the save');
+  step('case list (❓ → 사건 목록): Case 0 ▶ 진행 중 → 이 사건 처음부터 asks (Esc keeps it), then the save is gone; the lock screen 처음부터 asks and clears it too');
   // asked once: another case opens with its normal unlock button; ?fresh=1 asks again
   await p6.goto(`${url}?case=case1-cron-env&briefing=0`);
   await p6.locator('#boot .caselabel', { hasText: 'Case 1' }).waitFor();
@@ -1056,7 +1122,7 @@ try {
   await p7.locator('#boot .caselabel', { hasText: 'Case 1' }).waitFor();
   assert.deepEqual(JSON.parse(await p7.evaluate(() => localStorage.getItem('no-handover:campaign'))).skipped, ['case0-wiki']);
   await p7.locator('#boot .linkbtn.cases').click();
-  await p7.locator('#cases li[data-id="case0-wiki"] button').click();
+  await p7.locator('#cases li[data-id="case0-wiki"] .cl-open').click();
   await caseModal.waitFor();
   assert.match(await caseModal.innerText(), /Case 0 · 튜토리얼 「위키가 안 열려요」\(으\)로 옮길까요\?[\s\S]*진행은 저장/);
   await caseModal.locator('.modal-cancel').click();

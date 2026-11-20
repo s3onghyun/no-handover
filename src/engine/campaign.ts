@@ -3,6 +3,7 @@
 // "Solved" means the case reached its debrief (right answer or out of submissions).
 
 import type { CaseFile } from './types.ts';
+import { grade } from './scoring.ts';
 
 export interface CampaignEntry {
   /** Ladder position: Case 0 … Case 4. */
@@ -24,6 +25,42 @@ export interface Progress {
 }
 
 export type EntryStatus = 'solved' | 'skipped' | 'open' | 'locked' | 'soon';
+
+/** What the case list shows: like EntryStatus, with a started-but-unfinished save as 'playing'. */
+export type CaseState = 'locked' | 'soon' | 'new' | 'playing' | 'done' | 'skipped';
+
+/** The parts of a case's save the case list needs (no Game is built for it). */
+export interface SaveInfo {
+  /** Unlocked and played for a moment: there is something to resume or throw away. */
+  started: boolean;
+  finished: boolean;
+  /** S…D of the finishing report, when finished. */
+  grade: string | null;
+}
+
+export function saveInfo(raw: string | null | undefined): SaveInfo | null {
+  try {
+    const s = JSON.parse(raw ?? 'null') as { unlocked?: unknown; playMs?: unknown; finished?: unknown; submissions?: { score?: { total?: unknown; max?: unknown } }[] } | null;
+    if (!s || typeof s !== 'object') return null;
+    const last = Array.isArray(s.submissions) ? s.submissions[s.submissions.length - 1]?.score : undefined;
+    const finished = s.finished === true;
+    const g = finished && typeof last?.total === 'number' && typeof last?.max === 'number' && last.max > 0 ? grade(last.total, last.max) : null;
+    return { started: s.unlocked === true && typeof s.playMs === 'number' && s.playMs > 0, finished, grade: g };
+  } catch {
+    return null;
+  }
+}
+
+/** Last grade per finished case; kept apart from the save so "이 사건 처음부터" does not erase it. */
+export function parseGrades(raw: string | null | undefined): Record<string, string> {
+  try {
+    const g = JSON.parse(raw ?? 'null') as Record<string, unknown> | null;
+    if (!g || typeof g !== 'object' || Array.isArray(g)) return {};
+    return Object.fromEntries(Object.entries(g).filter(([, v]) => typeof v === 'string' && /^[SABCD]$/.test(v))) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
 
 export function parseProgress(raw: string | null | undefined): Progress {
   try {
@@ -79,6 +116,21 @@ export class Campaign {
     if (!this.unlocked(id, p)) return 'locked';
     if (p.skipped.includes(id)) return 'skipped';
     return 'open';
+  }
+
+  /** The case list's state: a started, unfinished save reads 'playing' even on a case solved before. */
+  state(id: string, p: Progress, save: SaveInfo | null): CaseState {
+    const st = this.status(id, p);
+    if (st === 'soon' || st === 'locked') return st;
+    if (save?.started && !save.finished) return 'playing';
+    if (st === 'solved') return 'done';
+    if (st === 'skipped') return 'skipped';
+    return 'new';
+  }
+
+  /** Where to go next: the first open playable case that is neither solved nor skipped. */
+  upNext(p: Progress): CampaignEntry | null {
+    return this.playable().find((e) => this.unlocked(e.id, p) && !p.solved.includes(e.id) && !p.skipped.includes(e.id)) ?? null;
   }
 
   solve(id: string, p: Progress): Progress {

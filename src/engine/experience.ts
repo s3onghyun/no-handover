@@ -4,7 +4,9 @@
 // - 'new' (처음이에요) = the Case 0 tool tour as designed: one coach mark per tool, windows such
 //   as the memo page open by themselves when a scene calls for it.
 // - 'familiar' (터미널이 익숙해요) = the tour is collapsed into a small "도구 안내 보기" entry and no
-//   window opens by itself (the toast that goes with it still offers to open it).
+//   window opens by itself (the toast that goes with it still offers to open it); in the tutorial
+//   that includes the terminal at the start. The "오늘 할 일" sticky keeps the goal line and the
+//   count but folds its numbered steps away behind "단계 보기".
 //
 // Kept per profile, not per case: one localStorage record shared by every case.
 
@@ -23,7 +25,7 @@ export function shouldAskExperience(stored: Experience | null, resumable: boolea
 }
 
 /** What a choice turns on or off (src/ui/tour.ts, src/main.ts). Unknown = the original behaviour. */
-export function experienceRules(e: Experience | null): { coachMarks: boolean; autoWindows: boolean } {
+export function experienceRules(e: Experience | null): { coachMarks: boolean; autoWindows: boolean; steps: boolean } {
   const familiar = e === 'familiar';
-  return { coachMarks: !familiar, autoWindows: !familiar };
+  return { coachMarks: !familiar, autoWindows: !familiar, steps: !familiar };
 }
