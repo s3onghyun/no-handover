@@ -506,7 +506,7 @@ export const caseTwoDeleted: CaseFile = {
   // ------------------------------------------------------------------ clues
   clues: [
     { id: 'c2_df', label: 'df -h: /data 97% (180G 사용)', slot: 'cause', key: true, match: [{ output: `^/dev/sdb1\\s+196G\\s+180G\\s+5\\.9G\\s+97%\\s+/data$`, host: L }] },
-    { id: 'c2_du', label: 'du: 파일을 다 더하면 95G — df 와 85G 차이', slot: 'cause', key: true, match: [{ output: '^9[45]G\\s+/data(/collector)?/?$', host: L }, { output: '^9[45]G\\s+total$', host: L }] },
+    { id: 'c2_du', label: 'du: 파일을 다 더하면 95G (archive 67G + raw 28G) — df 와 85G 차이', slot: 'cause', key: true, match: [{ output: '^9[45]G\\s+/data(/collector)?/?$', host: L }, { output: '^9[45]G\\s+total$', host: L }, { output: '^67G\\s+/data/collector/archive/?$', host: L }] },
     {
       id: 'c2_pid', label: 'logshipd 는 PID 1187, 11/02 부터 한 번도 재시작 안 함', slot: 'cause', key: true,
       match: [{ output: '^1187( |$)', host: L }, { output: '^MainPID=1187$', host: L }, { output: '^logship\\s+1187\\s', host: L }, { output: 'Main PID: 1187 \\(logshipd\\)', host: L }],
