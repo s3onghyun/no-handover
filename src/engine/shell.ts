@@ -1336,14 +1336,31 @@ export class Shell {
   private git(c: Ctx): IO {
     let args = [...c.args];
     let dir: string | undefined;
-    if (args[0] === '-C') {
-      dir = args[1];
-      args = args.slice(2);
+    // global options before the subcommand: -C <dir>, --git-dir=<dir> / --git-dir <dir> (the usual way to read a bare repository)
+    for (;;) {
+      if (args[0] === '-C' && args.length > 1) {
+        dir = dir && !args[1].startsWith('/') ? `${dir}/${args[1]}` : args[1];
+        args = args.slice(2);
+      } else if (args[0]?.startsWith('--git-dir=')) {
+        dir = args[0].slice('--git-dir='.length);
+        args = args.slice(1);
+      } else if (args[0] === '--git-dir' && args.length > 1) {
+        dir = args[1];
+        args = args.slice(2);
+      } else break;
     }
     const sub = args[0];
     if (!sub || sub === 'help' || sub === '--help') return ok(manFor('git') ?? []);
     const repo = this.repo(c, dir);
-    if (!repo) return fail('fatal: not a git repository (or any of the parent directories): .git', 128);
+    if (!repo) {
+      // investigation-mode pointer on a host that has a repository: where it is, relative to here
+      const here = dir ? this.path(c, dir) : c.f.cwd;
+      const pointers = c.hw.repos.map((r) => {
+        const rel = r.path.startsWith(here === '/' ? '/' : `${here}/`) ? r.path.slice(here === '/' ? 1 : here.length + 1) : r.path;
+        return `  (조사 모드: 이 서버의 저장소는 ${r.path} 이에요. cd ${rel} 후 git log, 또는 git -C ${rel} log)`;
+      });
+      return fail(['fatal: not a git repository (or any of the parent directories): .git', ...pointers], 128);
+    }
     const byId = new Map(repo.commits.map((x) => [x.sha, x]));
     const resolve = (ref: string): CommitDef | undefined => {
       const r = ref.replace(/^refs\/heads\//, '').replace(/^refs\/remotes\//, 'remotes/');

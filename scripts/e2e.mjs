@@ -575,7 +575,14 @@ try {
   step('journalctl shows 03:15:40 "too many open files"');
 
   await tab('pay-cfg');
-  await run('cd /srv/git/pay-config.git');
+  // round 2: `git log` one level above the bare repository keeps git's own error and says where the repository is
+  await run('cd /srv/git');
+  await run('git log');
+  const gitErr = page.locator('.window[data-app="terminal"] .tline', { hasText: 'fatal: not a git repository' }).last();
+  await gitErr.waitFor();
+  await page.locator('.window[data-app="terminal"] .tline', { hasText: /저장소는 \/srv\/git\/pay-config\.git .*cd pay-config\.git 후 git log/ }).last().waitFor();
+  await run('cd pay-config.git');
+  step('pay-cfg: git log in /srv/git keeps "not a git repository" and points at /srv/git/pay-config.git; cd pay-config.git follows it');
   await run('git log --format=fuller -1');
   await pinLine(/^AuthorDate: Fri Nov 13 18:02:11/);
   await run('git branch -a');
