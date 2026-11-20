@@ -86,7 +86,12 @@ test('game: objectives tick from real commands, pins and window interaction; fol
   g.runCommand(0, 'crontab -');
   g.runCommand(0, 'history | tail -5');
   assert.deepEqual(ticks, ['terminal', 'last-command']);
+  // only pins that meet a report slot's evidence kind count toward "증거 3개"
   for (const text of ['a 1', 'b 2', 'c 3']) g.pin({ kind: 'line', text, source: 'x' });
+  assert.deepEqual(ticks, ['terminal', 'last-command']);
+  assert.equal(g.evidencePins().length, 0);
+  for (const text of ['Nov 14 03:15:40 pay-api-01 payment-api[2211]: accept: too many open files', 'LimitNOFILE=4096', '  revert-pool-bump']) g.pin({ kind: 'line', text, source: 'pay-api-01' });
+  assert.equal(g.evidencePins().length, 3);
   assert.deepEqual(ticks, ['terminal', 'last-command', 'pins']);
   assert.ok(g.foldObjectives());
   assert.ok(g.st.log.some((e) => e.type === 'objectives-folded'));

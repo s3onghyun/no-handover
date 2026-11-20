@@ -668,6 +668,7 @@ export const caseOneCron: CaseFile = {
     maxSubmissions: 5,
     intro: '서진님께 보낼 원인 보고. 두 칸. 제출은 5번까지 — 틀리면 어느 칸인지는 알려 주지 않는다.',
     reply: { from: '강서진', partial: '{total}칸 중 {n}칸이 로그랑 안 맞아요.', bundled: '어딘가 로그랑 안 맞아요. 다시요.', sign: '강서진' },
+    // options are hypotheses of the same length and grain; the pinned evidence decides
     slots: [
       {
         id: 'cause',
@@ -675,11 +676,16 @@ export const caseOneCron: CaseFile = {
         prompt: '도윤의 정리 스크립트는 왜 밤새 아무것도 지우지 못했나?',
         type: 'single',
         options: [
-          { id: 'not-run', text: 'cron 이 스크립트를 아예 실행하지 않았다 (crontab 줄이 틀렸거나 cron 이 멈춰 있었다)' },
-          { id: 'perm', text: '은재 계정에는 /var/log/wiki/wiki.log 를 줄일 권한이 없어서 Permission denied 로 실패했다' },
-          { id: 'cron-path', correct: true, text: 'cron 은 로그인 셸이 아니다. cron 의 PATH(/usr/bin:/bin)에는 wikictl 이 있는 /opt/wiki/bin 이 없어 매번 "command not found" 였다. 내 터미널에서는 ~/.bashrc 가 PATH 를 늘려 줘서 됐다. 출력은 상대 경로라 홈의 wiki-clean.log 로 가서 아무도 못 봤다' },
-          { id: 'nginx', blames: 'jihoon', text: '지훈님이 밤에 바꾼 nginx 설정 때문에 스크립트가 위키에 접속하지 못했다' },
-          { id: 'noexec', text: '스크립트 파일에 실행 권한(x)이 없어 cron 이 실행하지 못했다' },
+          { id: 'not-run', text: 'cron 이 그 줄을 한 번도 실행하지 않았다 — 시간 필드가 틀렸거나, cron 서비스가 밤사이 계속 멈춰 있었다' },
+          { id: 'perm', text: '스크립트는 매시간 돌았지만 은재 계정에 위키 로그를 줄일 권한이 없어서, 매번 권한 오류로 중간에 멈췄다' },
+          { id: 'cron-path', correct: true, text: '스크립트는 매시간 돌았지만 cron 의 환경이 내 터미널과 달라, 안에서 부르는 명령을 찾지 못해 매번 실패했다' },
+          { id: 'nginx', blames: 'jihoon', needs: ['jihoon-nginx'], text: '어젯밤 지훈님이 바꾼 nginx 설정 때문에 스크립트가 위키에 붙지 못해서, 정리 요청이 매번 거절됐다' },
+          { id: 'noexec', text: '스크립트 파일에 실행 권한(x)이 빠져 있어서, cron 이 정각마다 시도했지만 실행 자체가 거부됐다' },
+        ],
+        evidence: [
+          { id: 'output', label: '스크립트가 남긴 출력', clues: ['c1_notfound'] },
+          { id: 'env', label: '실행 환경 비교 (내 터미널 ↔ 예약 실행)', clues: ['c1_where', 'c1_cronpath', 'c1_bashrc', 'c1_comment', 'c1_envtest', 'c1_absolute', 'c1_testlog'] },
+          { id: 'schedule', label: '예약 설정', clues: ['c1_crontab'] },
         ],
       },
       {
@@ -688,10 +694,15 @@ export const caseOneCron: CaseFile = {
         prompt: '화요일 오후부터 수요일 09:30 까지, 무슨 순서로 일어났나?',
         type: 'single',
         options: [
-          { id: 'nginx-first', blames: 'jihoon', text: '화 23:12 지훈의 nginx 변경 직후부터 위키 로그가 폭주했고, 정리 스크립트는 cron 에서 한 번도 돌지 않았다' },
-          { id: 'true', correct: true, text: '화 10:38 깨진 미리보기 작업을 "실패"로 표시 (재시도 간격 0 은 그대로) → 18:41 정리 스크립트를 매시 정각 cron 에 등록, 터미널에서만 시험 → 19:00~00:00 매시간 돌았지만 로그가 작아 할 일이 없었다 → 수 00:00:05 위키가 실패 작업을 자동으로 다시 큐에 넣어 재시도 폭주 재개 → 01:00 부터 매시간 "wikictl: command not found", 그래도 "정리 끝 ✓" → 07:15 /var 80% 알림 → 09:30 92%' },
-          { id: 'leftover', text: 'cron 이 스크립트를 실행하지 않아 화요일 장애 때 남은 로그가 그대로 쌓여 있다 (밤사이 새로 쓰인 로그는 없다)' },
-          { id: 'crash', text: '01:00 스크립트가 wiki.log 를 지우다 실패하면서 위키가 다시 멈췄고, 그 오류가 로그를 채웠다' },
+          { id: 'nginx-first', blames: 'jihoon', needs: ['jihoon-nginx'], text: '밤사이 지훈님의 nginx 변경 직후부터 위키 로그가 다시 폭주했고, 정리 스크립트는 그동안 cron 에서 한 번도 돌지 않아 아침 알림까지 갔다' },
+          { id: 'true', correct: true, text: '정리는 저녁부터 매시간 돌았지만 자정 전엔 지울 게 없었고, 자정 무렵 위키가 같은 오류를 다시 쏟은 뒤로는 매시간 실패만 남기며 아침 알림까지 갔다' },
+          { id: 'leftover', text: '정리 스크립트가 밤새 한 번도 돌지 않아, 화요일 장애 때 남은 로그가 그대로 있다가 아침 알림에 걸렸다 (밤사이 새로 쓰인 로그는 거의 없다)' },
+          { id: 'crash', text: '정리는 매시간 돌았고 처음엔 잘 지웠지만, 새벽 한 번의 정리가 로그를 지우다 위키를 멈춰 세웠고 그 뒤 쌓인 오류가 디스크를 다시 채워 알림이 울렸다' },
+        ],
+        evidence: [
+          { id: 'runs', label: '실행 기록', clues: ['c1_cronran', 'c1_quiet'] },
+          { id: 'wiki', label: '위키 서비스 기록', clues: ['c1_requeue', 'c1_failed'] },
+          { id: 'usage', label: '디스크 사용량', clues: ['c1_df'] },
         ],
       },
     ],
@@ -713,6 +724,11 @@ export const caseOneCron: CaseFile = {
     wrong: {
       jihoon: { id: 'wrong-jihoon', from: 'jihoon', channel: 'me-dm-jihoon', text: '헉 제 nginx요?? 😂 그건 업로드 크기만 바꾼 건데… 스크립트가 남긴 출력에 뭐라고 찍혔는지 먼저 봐 주세요 🙏' },
       default: { id: 'wrong-default', from: 'seojin', channel: 'me-dm-seojin', text: '음. 추측 말고 스크립트가 남긴 출력부터요. 어디에 썼는지.' },
+    },
+    // 💡 정답: the specifics behind the correct option (the options themselves stay hypotheses)
+    answers: {
+      cause: 'cron 은 로그인 셸이 아니다. cron 의 PATH(/usr/bin:/bin)에는 wikictl 이 있는 /opt/wiki/bin 이 없어 매번 "command not found" 였다. 내 터미널에서는 ~/.bashrc 가 PATH 를 늘려 줘서 됐다. 출력은 상대 경로라 홈의 wiki-clean.log 로 가서 아무도 못 봤다',
+      sequence: '화 10:38 깨진 미리보기 작업을 "실패"로 표시 (재시도 간격 0 은 그대로) → 18:41 정리 스크립트를 매시 정각 cron 에 등록, 터미널에서만 시험 → 19:00~00:00 매시간 돌았지만 로그가 작아 할 일이 없었다 → 수 00:00:05 위키가 실패 작업을 자동으로 다시 큐에 넣어 재시도 폭주 재개 → 01:00 부터 매시간 "wikictl: command not found", 그래도 "정리 끝 ✓" → 07:15 /var 80% 알림 → 09:30 92%',
     },
     explicit: [
       { slot: 'cause', cost: 5, unlessClues: ['c1_cronran'], text: 'journalctl -u cron 에서 01:00, 02:00 … 에 "(eunjae) CMD (~/bin/wiki-log-clean.sh" 줄이 있는지 보세요. 있으면 cron 은 돌았어요.' },

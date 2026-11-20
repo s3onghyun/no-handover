@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HintLadder } from '../src/engine/hints.ts';
-import { scoreSubmission, scoreSlot, grade, ATTEMPT_MULTIPLIER } from '../src/engine/scoring.ts';
+import { scoreSubmission, scoreSlot, grade, ATTEMPT_MULTIPLIER, citeReply, missingCites } from '../src/engine/scoring.ts';
+import { backing } from './case-integrity.ts';
 import { caseFriday1802 as cs } from '../src/cases/friday-1802.ts';
 
 const MIN = 60000;
@@ -64,10 +65,11 @@ test('hint ladder: panel steps are counted as hints (summaries free); cost only 
   assert.equal(old.totalCost(), 10);
 });
 
-const correct = { cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account', 'bottleneck', 'cover-seojin', 'cover-jihoon'] };
+const { pins, cites } = backing(cs);
+const correct = { cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account', 'bottleneck', 'cover-seojin', 'cover-jihoon'], cites };
 
 test('scoring: perfect first submission', () => {
-  const r = scoreSubmission(cs, correct, { attempt: 1, pinnedKeyClues: 6, hintCost: 0 });
+  const r = scoreSubmission(cs, correct, { attempt: 1, pinnedKeyClues: 6, hintCost: 0, pins });
   assert.equal(r.allCorrect, true);
   assert.equal(r.base, 300);
   assert.equal(r.evidenceBonus, 30);
@@ -76,14 +78,14 @@ test('scoring: perfect first submission', () => {
 });
 
 test('scoring: attempt multiplier, evidence cap and hint cost', () => {
-  const r = scoreSubmission(cs, correct, { attempt: 3, pinnedKeyClues: 20, hintCost: 40 });
+  const r = scoreSubmission(cs, correct, { attempt: 3, pinnedKeyClues: 20, hintCost: 40, pins });
   assert.equal(r.multiplier, ATTEMPT_MULTIPLIER[2]);
   assert.equal(r.evidenceBonus, 30);
   assert.equal(r.total, Math.round(300 * 0.7) + 30 - 40);
 });
 
 test('scoring: blaming a person fails the responsibility slot even with all factors picked', () => {
-  const r = scoreSubmission(cs, { ...correct, responsibility: [...correct.responsibility, 'blame-jihoon'] }, { attempt: 1, pinnedKeyClues: 0, hintCost: 0 });
+  const r = scoreSubmission(cs, { ...correct, responsibility: [...correct.responsibility, 'blame-jihoon'] }, { attempt: 1, pinnedKeyClues: 0, hintCost: 0, pins });
   assert.equal(r.slots.responsibility?.correct, false);
   assert.deepEqual(r.blamed, ['jihoon']);
   assert.equal(r.slots.responsibility?.points, 60);
@@ -96,7 +98,7 @@ test('scoring: responsibility passes at 70 without negatives', () => {
 });
 
 test('scoring: wrong cause blames the person in the option', () => {
-  const r = scoreSubmission(cs, { ...correct, cause: 'approve' }, { attempt: 1, pinnedKeyClues: 0, hintCost: 0 });
+  const r = scoreSubmission(cs, { ...correct, cause: 'approve' }, { attempt: 1, pinnedKeyClues: 0, hintCost: 0, pins });
   assert.equal(r.slots.cause?.correct, false);
   assert.deepEqual(r.blamed, ['seojin']);
   assert.equal(r.total, 200);
@@ -105,4 +107,21 @@ test('scoring: wrong cause blames the person in the option', () => {
 test('scoring never goes below zero', () => {
   const r = scoreSubmission(cs, { cause: null, sequence: null, responsibility: [] }, { attempt: 3, pinnedKeyClues: 0, hintCost: 90 });
   assert.equal(r.total, 0);
+});
+
+test('scoring: a right option needs a cited pin that meets the slot\'s evidence kinds', () => {
+  const none = scoreSubmission(cs, { ...correct, cites: { ...cites, cause: [] } }, { attempt: 1, pinnedKeyClues: 0, hintCost: 0, pins });
+  assert.equal(none.slots.cause?.cite, 'missing');
+  assert.equal(none.slots.cause?.optionCorrect, true);
+  assert.equal(none.slots.cause?.correct, false);
+  assert.equal(none.slots.cause?.points, 0);
+  assert.equal(none.allCorrect, false);
+  // a pin proving a sequence clue does not back the cause slot
+  const off = scoreSubmission(cs, { ...correct, cites: { ...cites, cause: ['test-sequence'] } }, { attempt: 1, pinnedKeyClues: 0, hintCost: 0, pins });
+  assert.equal(off.slots.cause?.cite, 'unsupported');
+  assert.equal(off.slots.sequence?.cite, 'ok');
+  assert.match(citeReply(cs, off)!, /원인/);
+  assert.doesNotMatch(citeReply(cs, off)!, /경위/);
+  assert.deepEqual(missingCites(cs, { ...correct, cites: { cause: ['test-cause'] } }, pins), ['sequence', 'responsibility']);
+  assert.equal(citeReply(cs, scoreSubmission(cs, correct, { attempt: 1, pinnedKeyClues: 0, hintCost: 0, pins })), null);
 });

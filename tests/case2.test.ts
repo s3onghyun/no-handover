@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { Game } from '../src/engine/game.ts';
 import { caseTwoDeleted as cs, DELETED_BYTES } from '../src/cases/case-2-deleted.ts';
 import { caseFriday1802 } from '../src/cases/friday-1802.ts';
-import { checkIntegrity, briefingSecs, at } from './case-integrity.ts';
+import { checkIntegrity, briefingSecs, at, cited } from './case-integrity.ts';
 
 const out = (g: Game, cmd: string) => g.runCommand(0, cmd).lines.filter((l) => l.cls !== 'dim').map((l) => l.text);
 const ALL = ['c2_rm', 'c2_debug', 'c2_growth', 'r2_quota', 'r2_noverify'];
@@ -85,17 +85,17 @@ test('case 2: scripted solve, three slots (max 330), wrong reports nudge in the 
   assert.ok(g.st.live.some((m) => m.from === 'seojin' && m.text.startsWith('그거예요. 이름 없는 85G')));
   for (const l of g.tab(0).lines) if (g.cluesFor(l.text).some((c) => g.clue(c)?.key)) g.pin({ kind: 'line', text: l.text, source: 'logs-01' });
   assert.ok(g.objectives.allDone(), JSON.stringify(g.st.objectives.done));
-  const w = g.submit({ cause: 'rotate', sequence: 'freed-then', responsibility: ['blame-seojin'] })!;
+  const w = g.submit(cited(g, { cause: 'rotate', sequence: 'freed-then', responsibility: ['blame-seojin'] }))!;
   assert.equal(w.max, 330);
   assert.equal(w.allCorrect, false);
   g.tick(2500);
   assert.equal(g.st.live.at(-1)?.from, 'seojin');
-  const r = g.submit({ cause: 'open', sequence: 'true', responsibility: ['no-verify', 'open-rule', 'debug-expiry', 'quota', 'silent-drop'] })!;
+  const r = g.submit(cited(g, { cause: 'open', sequence: 'true', responsibility: ['no-verify', 'open-rule', 'debug-expiry', 'quota', 'silent-drop'] }))!;
   assert.equal(r.allCorrect, true);
   assert.equal(r.base, 300);
   assert.ok(g.st.finished && g.st.mailsDelivered.includes('closing'));
   const g2 = new Game(cs);
-  for (let i = 0; i < 4; i++) g2.submit({ cause: 'hidden', sequence: 'sunday', responsibility: ['bigger-disk'] });
+  for (let i = 0; i < 4; i++) g2.submit(cited(g2, { cause: 'hidden', sequence: 'sunday', responsibility: ['bigger-disk'] }));
   assert.ok(g2.st.finished);
 });
 

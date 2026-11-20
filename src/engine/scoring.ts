@@ -2,17 +2,24 @@
 // case 3 three), attempt multiplier, evidence bonus, hint cost. The hint cost is only passed in
 // senior mode (`?senior=1`); otherwise hints are a record ("힌트 N회"), see src/engine/record.ts.
 
+import { citeState, type CiteState, type PinLike } from './evidence.ts';
 import type { CaseFile, SlotDef, SlotId } from './types.ts';
 
 export interface Submission {
   cause: string | null;
   sequence: string | null;
   responsibility: string[];
+  /** Pin ids cited as the evidence for each slot (slots with `evidence` kinds need one). */
+  cites?: Partial<Record<SlotId, string[]>>;
 }
 
 export interface SlotScore {
   correct: boolean;
   points: number;
+  /** The picked option(s) alone were right (before the citation check). */
+  optionCorrect?: boolean;
+  /** Citation check, for slots with evidence kinds: a correct slot needs 'ok'. */
+  cite?: CiteState;
 }
 
 export interface ScoreResult {
@@ -63,10 +70,15 @@ export function complete(cs: CaseFile, sub: Submission): boolean {
   });
 }
 
+/** Slots with evidence kinds that have no cited pin yet (the report asks before submitting). */
+export function missingCites(cs: CaseFile, sub: Submission, pins: PinLike[]): SlotId[] {
+  return cs.accusation.slots.filter((s) => s.evidence?.length && citeState(s, sub.cites?.[s.id], pins) === 'missing').map((s) => s.id);
+}
+
 export function scoreSubmission(
   cs: CaseFile,
   sub: Submission,
-  ctx: { attempt: number; pinnedKeyClues: number; hintCost: number },
+  ctx: { attempt: number; pinnedKeyClues: number; hintCost: number; pins?: PinLike[] },
 ): ScoreResult {
   const slots: Partial<Record<SlotId, SlotScore>> = {};
   const blamed: string[] = [];
@@ -74,9 +86,14 @@ export function scoreSubmission(
   let allCorrect = true;
   for (const def of cs.accusation.slots) {
     const r = scoreSlot(def, picked(sub, def.id));
-    slots[def.id] = { correct: r.correct, points: r.points };
-    base += r.points;
-    allCorrect &&= r.correct;
+    // a slot with evidence kinds counts only when a cited pin supports it
+    const cite = def.evidence?.length ? citeState(def, sub.cites?.[def.id], ctx.pins ?? []) : undefined;
+    const backed = cite === undefined || cite === 'ok';
+    const s: SlotScore = { correct: r.correct && backed, points: backed ? r.points : 0, optionCorrect: r.correct };
+    if (cite) s.cite = cite;
+    slots[def.id] = s;
+    base += s.points;
+    allCorrect &&= s.correct;
     blamed.push(...r.blamed);
   }
   const multiplier = ATTEMPT_MULTIPLIER[Math.min(ctx.attempt, ATTEMPT_MULTIPLIER.length) - 1] ?? ATTEMPT_MULTIPLIER[ATTEMPT_MULTIPLIER.length - 1];
@@ -99,7 +116,23 @@ export function scoreSubmission(
 export const REPLY_DEFAULTS = {
   partial: '{total}칸 중 {n}칸이 사실과 맞지 않습니다. 다시 확인해 주십시오.',
   bundled: '보고서 어딘가가 사실과 맞지 않습니다. 어느 부분인지는 직접 다시 확인해 주십시오.',
+  cite: '근거가 그 칸을 뒷받침하지 않습니다: {slots}. 증거 보드의 "보고서 근거"에서 어떤 증거가 인정되는지 확인해 주십시오.',
 };
+
+/** Short slot name for replies and the debrief: '원인 (기술)' -> '원인'. */
+export function slotName(def: SlotDef): string {
+  return def.title.replace(/\s*\(.*\)$/, '');
+}
+
+/**
+ * The citation line of a reply: which slots' cited pins do not support them. Citations are about
+ * evidence, not answers, so even the bundled reply names the slot (it never says whether the
+ * picked option was right).
+ */
+export function citeReply(cs: CaseFile, score: ScoreResult, template: string = REPLY_DEFAULTS.cite): string | null {
+  const bad = cs.accusation.slots.filter((s) => score.slots[s.id]?.cite && score.slots[s.id]!.cite !== 'ok');
+  return bad.length ? template.replace('{slots}', bad.map(slotName).join(', ')) : null;
+}
 
 /** How a wrong report is answered: 'bundled' (default) never says which slot or how many. */
 export function feedbackMode(cs: CaseFile): 'bundled' | 'per-slot' {
@@ -107,12 +140,17 @@ export function feedbackMode(cs: CaseFile): 'bundled' | 'per-slot' {
 }
 
 /** The reply body after a wrong (not finished) report. */
-export function wrongReply(cs: CaseFile, score: ScoreResult, defaults: { partial: string; bundled: string } = REPLY_DEFAULTS): string {
+export function wrongReply(cs: CaseFile, score: ScoreResult, defaults: { partial: string; bundled: string; cite?: string } = REPLY_DEFAULTS): string {
   const rp = cs.accusation.reply;
-  if (feedbackMode(cs) === 'bundled') return rp?.bundled ?? defaults.bundled;
-  const total = cs.accusation.slots.length;
-  const wrong = cs.accusation.slots.filter((x) => !score.slots[x.id]?.correct).length;
-  return (rp?.partial ?? defaults.partial).replace('{n}', String(wrong)).replace('{total}', String(total));
+  const cite = citeReply(cs, score, defaults.cite ?? REPLY_DEFAULTS.cite);
+  let body: string;
+  if (feedbackMode(cs) === 'bundled') body = rp?.bundled ?? defaults.bundled;
+  else {
+    const total = cs.accusation.slots.length;
+    const wrong = cs.accusation.slots.filter((x) => !score.slots[x.id]?.correct).length;
+    body = (rp?.partial ?? defaults.partial).replace('{n}', String(wrong)).replace('{total}', String(total));
+  }
+  return cite ? `${body}\n${cite}` : body;
 }
 
 export function grade(total: number, max: number): string {

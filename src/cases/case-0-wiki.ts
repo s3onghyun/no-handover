@@ -508,6 +508,7 @@ export const caseZeroWiki: CaseFile = {
     feedback: 'per-slot',
     intro: '서진님께 보낼 원인 보고. 두 칸만 채우면 된다. 제출은 몇 번이든 할 수 있다 — 틀리면 서진님이 짧게 답해 준다.',
     reply: { from: '강서진', partial: '{total}칸 중 {n}칸이 로그랑 안 맞아요. 다시요.', sign: '강서진' },
+    // options are hypotheses of the same length and grain; the pinned evidence decides
     slots: [
       {
         id: 'cause',
@@ -515,11 +516,15 @@ export const caseZeroWiki: CaseFile = {
         prompt: '위키는 왜 화요일 08:47부터 응답하지 않았나?',
         type: 'single',
         options: [
-          { id: 'disk', correct: true, text: '/var 디스크가 100% 찼다. 위키 로그(/var/log/wiki/wiki.log) 하나가 11G까지 불어나 공간을 다 썼고, 위키가 로그·세션을 쓰지 못해 멈췄다' },
-          { id: 'pdf', blames: 'jihoon', text: '지훈님이 올린 회의록 PDF가 위키 서버를 망가뜨렸다 (그 파일이 원인이다)' },
-          { id: 'memory', text: '메모리가 부족해서(OOM) 위키 프로세스가 죽었다' },
-          { id: 'network', text: '네트워크(DNS) 문제로 위키 주소에 접속이 안 됐다' },
-          { id: 'stopped', text: '누군가 systemctl stop 으로 위키를 꺼 두었다' },
+          { id: 'disk', correct: true, text: '디스크 한 곳이 가득 차서, 위키가 로그와 세션 파일을 더 쓰지 못하고 스스로 종료했다' },
+          { id: 'pdf', blames: 'jihoon', text: '전날 밤 지훈님이 올린 회의록 파일 하나가 위키 프로세스를 망가뜨려, 그 뒤로 위키가 뜨지 못했다' },
+          { id: 'memory', text: '메모리가 모자라 커널이 위키 프로세스를 강제로 종료했고(OOM), 재시작도 계속 실패했다' },
+          { id: 'network', text: '위키 서버는 멀쩡한데 앞단 프록시의 DNS 설정이 꼬여, 요청이 위키까지 가지 못했다' },
+          { id: 'stopped', text: '누군가 점검하려고 systemctl stop 으로 위키를 내려 두고, 다시 켜는 것을 잊어버렸다' },
+        ],
+        evidence: [
+          { id: 'usage', label: '디스크 사용량 (df · du 의 수치)', clues: ['c0_df', 'c0_du', 'c0_root_ok'] },
+          { id: 'state', label: '위키가 남긴 오류 · 서비스 상태', clues: ['c0_loop', 'c0_status', 'c0_full'] },
         ],
       },
       {
@@ -528,10 +533,15 @@ export const caseZeroWiki: CaseFile = {
         prompt: '언제부터, 무슨 순서로 일어났나?',
         type: 'single',
         options: [
-          { id: 'true', correct: true, text: '월 21:14 미리보기(썸네일) 작업이 깨진 PDF에서 실패하고, 쉬지 않고 재시도하며 매번 오류를 wiki.log에 썼다 → 회전 규칙이 없는 로그가 밤새 약 11G 불어남 → 화 08:47 /var가 꽉 차 위키가 쓰기에 실패하고 종료 → 재시작 5번 실패 후 멈춤' },
-          { id: 'slow', text: '3년 동안 로그가 조금씩 쌓이다가 화요일 아침 우연히 넘쳤다 (월요일 밤에는 특별한 일이 없었다)' },
-          { id: 'restart', text: '화 아침 누군가 위키를 재시작하다 설정이 꼬였고, 그 뒤로 오류 로그가 쌓였다' },
-          { id: 'hardware', text: '디스크 하드웨어가 고장 나 /var가 읽기 전용이 됐다' },
+          { id: 'true', correct: true, text: '월요일 밤 시작된 작업 하나가 같은 오류로 쉬지 않고 재시도하며 로그를 밤새 불렸고, 화요일 아침 공간이 바닥나자 위키가 멈췄다' },
+          { id: 'slow', text: '로그가 몇 년 동안 조금씩 쌓여 오다가, 화요일 아침 마지막 남은 공간을 다 쓰는 순간 위키가 멈췄다 (전날 밤엔 별일 없었다)' },
+          { id: 'restart', text: '화요일 아침 누군가 위키를 재시작하다 설정이 꼬였고, 그 뒤로 위키가 같은 오류를 내며 죽고 살아나기를 반복했다' },
+          { id: 'hardware', text: '월요일 밤부터 디스크에 읽기 · 쓰기 오류가 늘다가, 화요일 아침 커널이 그 디스크를 읽기 전용으로 바꿔 위키가 멈췄다' },
+        ],
+        evidence: [
+          { id: 'start', label: '처음 시작된 시각의 기록', clues: ['c0_start', 'c0_upload'] },
+          { id: 'night', label: '밤사이 쌓인 기록', clues: ['c0_loop', 'c0_suppressed', 'c0_norotate'] },
+          { id: 'stop', label: '위키가 멈춘 시각의 기록', clues: ['c0_full', 'c0_status'] },
         ],
       },
     ],
@@ -549,6 +559,11 @@ export const caseZeroWiki: CaseFile = {
     wrong: {
       jihoon: { id: 'wrong-jihoon', from: 'jihoon', channel: 'me-dm-jihoon', text: '헉 제 회의록 PDF요?? 😂 근데… PDF 하나로 위키가 통째로 죽어요?? 그 PDF가 서버에서 뭘 했는지 로그 한번 봐 주세요 🙏' },
       default: { id: 'wrong-default', from: 'seojin', channel: 'me-dm-seojin', text: '음. 그 답이면 df -h 의 100%가 설명 안 돼요. 다시요.' },
+    },
+    // 💡 정답: the specifics behind the correct option (the options themselves stay hypotheses)
+    answers: {
+      cause: '/var 디스크가 100% 찼다. 위키 로그(/var/log/wiki/wiki.log) 하나가 11G까지 불어나 공간을 다 썼고, 위키가 로그·세션을 쓰지 못해 멈췄다',
+      sequence: '월 21:14 미리보기(썸네일) 작업이 깨진 PDF에서 실패하고, 쉬지 않고 재시도하며 매번 오류를 wiki.log에 썼다 → 회전 규칙이 없는 로그가 밤새 약 11G 불어남 → 화 08:47 /var가 꽉 차 위키가 쓰기에 실패하고 종료 → 재시작 5번 실패 후 멈춤',
     },
     // 💡 panel "방향" lines (요약 is generated from found clues; 정답 defaults to the correct option)
     explicit: [

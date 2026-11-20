@@ -7,6 +7,9 @@ import { clear, h } from './dom.ts';
 import { t } from '../i18n.ts';
 import type { AudioManager } from '../audio/audio.ts';
 import type { UiCtx } from './wm.ts';
+import type { ObjectiveDef } from '../engine/types.ts';
+import { hasEvidence, kindsFor } from '../engine/evidence.ts';
+import { slotName } from '../engine/scoring.ts';
 
 export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioManager): { refresh(): void; show(): void } {
   const g = ctx.game;
@@ -26,6 +29,24 @@ export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioMa
     const win = desktop.querySelector(`.window[data-app="${target}"]:not(.min)`);
     if (win) win.classList.add('pulse');
     else desktop.querySelector(`.icon[data-app="${target}"]`)?.classList.add('pulse');
+  };
+
+  /** The "증거 N개" item: how many pins count, and (while current) which kinds count, met or missing. */
+  const pinsGoal = (it: ObjectiveDef) => it.any.reduce((n, c) => ('pins' in c ? Math.max(n, c.pins) : n), 0);
+  const evidenceLines = () => {
+    const slots = g.cs.accusation.slots.filter((sl) => sl.evidence?.length).map((sl) => ({ sl, kinds: kindsFor(sl, g.st.pins) }));
+    const full = slots.map(({ sl, kinds }) => `${slotName(sl)}: ${kinds.map(({ kind, pins }) => `${pins.length ? '✓' : '○'} ${kind.label}`).join(' · ')}`).join('\n');
+    // one compact line (the sticky must not grow over windows); the board shows each kind
+    return h(
+      'button.todo-ev',
+      { type: 'button', title: full, 'aria-label': `${t('obj.evidence')} — ${full}`, onclick: () => ctx.wm.open('board') },
+      `${t('obj.evidence')}: `,
+      ...slots.map(({ sl, kinds }, i) => {
+        const met = kinds.filter((k) => k.pins.length).length;
+        return h(`span.${met ? 'met' : 'miss'}`, null, `${i ? ' · ' : ''}${slotName(sl)} ${met}/${kinds.length}`);
+      }),
+      ' 📌',
+    );
   };
 
   const render = () => {
@@ -54,13 +75,16 @@ export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioMa
     const ol = h('ol');
     def.items.forEach((it, i) => {
       const done = g.objectives.isDone(it.id);
+      const goal = pinsGoal(it);
+      const counted = goal && !done ? h('span.todo-count', null, ` (${Math.min(goal, g.evidencePins().length)}/${goal})`) : null;
       ol.appendChild(
         h(
           `li${done ? '.done' : ''}${fresh.has(it.id) ? '.just' : ''}${cur === it ? '.cur' : ''}`,
           { dataset: { id: it.id } },
           h('span.box', { 'aria-hidden': 'true' }, done ? '✓' : ''),
-          h('span.tx', null, h('span.num', null, `${i + 1}. `), it.text),
+          h('span.tx', null, h('span.num', null, `${i + 1}. `), it.text, counted),
           cur === it && it.hint && !folding ? h('small.hint', null, it.hint) : null,
+          goal && !done && cur === it && !folding && hasEvidence(g.cs) ? evidenceLines() : null,
         ),
       );
     });
