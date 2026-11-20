@@ -429,6 +429,35 @@ export const caseZeroWiki: CaseFile = {
     '디스크: (패널 없음 — wiki-01은 디스크 사용량을 수집하지 않습니다)',
   ],
 
+  // the same snapshot as structured panels (drawn by the dashboard app; pins appear as annotations)
+  panels: {
+    title: '사내 위키 · wiki-01',
+    from: '2026-11-09T18:00',
+    to: '2026-11-10T09:30',
+    stepMin: 5,
+    marks: ['2026-11-09T21:14', '2026-11-10T08:47'],
+    stats: [
+      { title: '응답 시간 p50', value: '응답 없음', state: 'crit', note: '08:47 전까지 120ms' },
+      { title: 'HTTP 502', value: '08:47부터', state: 'crit', note: 'nginx 앞단만 살아 있음' },
+      { title: '디스크', value: null, note: 'wiki-01은 디스크 사용량을 수집하지 않습니다' },
+    ],
+    timeseries: [
+      {
+        id: 'req', title: '응답 (요청/분)', unit: '/분', min: 0, max: 45,
+        series: [
+          { name: '2xx', color: 'green', jitter: 0.06, interp: 'linear', points: [['2026-11-09T18:00', 36], ['2026-11-09T19:30', 22], ['2026-11-10T08:10', 22], ['2026-11-10T08:46', 30], ['2026-11-10T08:47', null]] },
+          { name: '502', color: 'red', jitter: 0.06, interp: 'linear', points: [['2026-11-09T18:00', 0], ['2026-11-10T08:46', 0], ['2026-11-10T08:47', 18], ['2026-11-10T09:30', 34]] },
+        ],
+      },
+      {
+        id: 'p50', title: '응답 시간 p50', unit: 'ms', min: 0, max: 200, width: 'half',
+        description: '08:47 이후에는 응답이 없어 값이 없습니다 (502는 nginx가 대신 답한 것).',
+        series: [{ name: 'p50', color: 'blue', jitter: 0.08, points: [['2026-11-09T18:00', 120], ['2026-11-10T08:47', null]] }],
+      },
+      { id: 'disk', title: '디스크 사용량', unit: '%', min: 0, max: 100, width: 'half', description: 'wiki-01은 디스크 사용량을 수집하지 않습니다.', series: [{ name: '/var', color: 'yellow', points: [] }] },
+    ],
+  },
+
   // ------------------------------------------------------------------ clues
   clues: [
     { id: 'c0_df', label: 'df -h: /var 100% (/ 는 28%)', slot: 'cause', key: true, match: [{ output: '^/dev/sdb1\\s+20G\\s+19G\\s+0\\s+100%\\s+/var$', host: W }] },

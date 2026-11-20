@@ -1,18 +1,89 @@
 import { clear, download, h } from '../dom.ts';
 import { t } from '../../i18n.ts';
 import type { AppDef } from '../wm.ts';
+import { parseLocal } from '../../engine/time.ts';
+import { caseAnnotations, logRows, pinAnnotations, pinLevel, rangeOptions, type Level, type RangeId } from '../dashboard/derive.ts';
+import { logsBody, logTools, panel, statPanel, timeSeriesPanel, toolbar } from '../dashboard/panels.ts';
 
 export const dashboardApp: AppDef = {
   id: 'dashboard',
   title: () => t('app.dashboard'),
   icon: '📈',
-  w: 760,
-  h: 470,
+  w: 1000,
+  h: 640,
   mount(body, ctx) {
-    const pre = h('pre.dash', null, ctx.game.cs.dashboard.join('\n'));
-    body.appendChild(pre);
-    ctx.game.open('dashboard');
-    return {};
+    const g = ctx.game;
+    const cp = g.cs.panels;
+    const root = h('div.obs.obs-dash');
+    body.appendChild(root);
+    const keyIds = new Set(g.cs.clues.filter((c) => c.key).map((c) => c.id));
+    const marks = (cp?.marks ?? []).map(parseLocal);
+    let rangeId: RangeId = cp ? 'panel' : 'fit';
+    let refreshedAt = g.now();
+    let showPins = true;
+    let query = '';
+    const levels = new Set<Level>(['error', 'warn', 'info']);
+
+    const render = () => {
+      clear(root);
+      const pins = g.st.pins;
+      const opts = rangeOptions({ now: g.now(), pins, panels: cp, rel: ['1h', '3h', '12h', '24h', '3d'], panelLabel: '스냅샷 전체' });
+      const opt = opts.find((o) => o.id === rangeId) ?? opts[0];
+      const range = opt.range;
+      const anns = [...(showPins ? pinAnnotations(pins, range).anns : []), ...caseAnnotations(cp)];
+      const pinToggle = h('label.obs-check', null, h('input', { type: 'checkbox', checked: showPins, onchange: (e: Event) => ((showPins = (e.target as HTMLInputElement).checked), render()) }), ' 핀 주석');
+      root.appendChild(
+        toolbar({
+          crumbs: [t('app.dashboard'), cp?.title ?? g.cs.title],
+          badge: '보관본',
+          options: opts,
+          value: opt.id,
+          onRange: (id) => ((rangeId = id), render()),
+          onRefresh: () => ((refreshedAt = g.now()), render()),
+          refreshedAt,
+          extra: [pinToggle],
+        }),
+      );
+      const grid = h('div.obs-grid');
+      root.appendChild(grid);
+      if (cp) {
+        const stats = cp.stats ?? [];
+        const span = stats.length <= 2 ? 'half' : stats.length === 3 ? 'third' : stats.length === 4 ? 'quarter' : 'sixth';
+        for (const st of stats) grid.appendChild(statPanel({ ...st, span }));
+        for (const def of cp.timeseries) grid.appendChild(timeSeriesPanel({ def, range, stepMin: cp.stepMin, anns, marks, now: refreshedAt }));
+      } else {
+        grid.appendChild(panel({ title: g.cs.dashboard[0] ?? t('app.dashboard'), cls: 'obs-text' }, h('pre.dash', null, g.cs.dashboard.slice(1).join('\n'))));
+      }
+      const counts: Record<Level, number> = { error: 0, warn: 0, info: 0 };
+      for (const p of logRows(pins, range, { query: '', levels: new Set(['error', 'warn', 'info']) })) counts[pinLevel(p)]++;
+      const host = h('div.obs-logshost', { 'aria-live': 'polite' });
+      const fill = () => {
+        clear(host);
+        const rows = logRows(pins, range, { query, levels });
+        const outside = pins.filter((p) => p.onTimeline && p.ts !== null).length - logRows(pins, range, { query: '', levels: new Set(['error', 'warn', 'info']) }).length;
+        host.appendChild(logsBody({ rows, query, levels, counts, onQuery: () => {}, onLevel: () => {}, keyIds, empty: pins.length ? '이 구간에 핀한 증거가 없어요.' : t('board.empty'), hiddenOutside: outside, onShowAll: () => ((rangeId = 'fit'), render()) }));
+      };
+      fill();
+      const tools = logTools(
+        {
+          query,
+          levels,
+          counts,
+          onQuery: (q) => ((query = q), fill()),
+          onLevel: (l) => {
+            if (levels.has(l)) levels.delete(l);
+            else levels.add(l);
+            for (const b of root.querySelectorAll<HTMLButtonElement>('.obs-lvbtn')) b.setAttribute('aria-pressed', String(levels.has(b.className.match(/lv-(\w+)/)![1] as Level)));
+            fill();
+          },
+        },
+        '핀한 증거 검색',
+      );
+      grid.appendChild(panel({ title: '핀한 증거 — 증거 보드와 연결', cls: 'obs-logp', tools, menu: [{ label: `${t('app.board')} 열기`, run: () => ctx.wm.open('board') }] }, host));
+    };
+    render();
+    g.open('dashboard');
+    return { refresh: (type?: string) => (type === 'pins' ? render() : undefined) };
   },
 };
 
