@@ -400,6 +400,21 @@ export const caseZeroWiki: CaseFile = {
     ],
   },
 
+  // a coach mark per tool, shown once at the moment its icon unlocks (owner feedback 2026-11-20:
+  // the tour belongs in the tutorial). Step ids are shared across cases, so a seen mark never repeats.
+  tour: {
+    steps: [
+      { id: 'terminal', app: 'terminal', title: '터미널', text: '서버에 명령을 치는 곳. 증거는 대부분 여기서 나와요. help 로 쓸 수 있는 명령을 봐요.' },
+      { id: 'messenger', app: 'messenger', title: '메신저', text: '동료들의 말. 막히면 입력창 위 "뭐부터 봐요?" 로 물어볼 수 있어요.' },
+      { id: 'mail', app: 'mail', title: '메일', text: '브리핑 메일과 지난 기록. 은재님이 남긴 메일도 여기 있어요.' },
+      { id: 'hint', app: 'hint', title: '💡 힌트', text: '막힐 때 보는 곳. 요약 → 방향 → 정답 순서로 열려요. 점수는 그대로, 기록만 남아요.', after: 'history' },
+      { id: 'notes', app: 'notes', title: '메모장', text: '단서 정리. 도윤의 메모와 배운 것. 단서를 찾으면 저절로 넘어가기도 해요.', after: 'df' },
+      { id: 'board', app: 'board', title: '증거 보드', text: '📌 한 줄이 시간순으로 모이는 곳. 보고서는 여기서 시작해요.', after: 'tail' },
+      { id: 'dashboard', app: 'dashboard', title: '대시보드', text: '지표와 타임라인. "언제부터였나"를 한눈에 봐요.', after: 'service' },
+      { id: 'report', app: 'report', title: '📝 보고서', text: '마지막 단계. 칸을 고르고 제출하면 서진님이 답해요.', after: 'pins' },
+    ],
+  },
+
   notifications: [
     { id: 'n-alert', at: '2026-11-10T08:49', app: '메신저', title: '알림봇 · #인프라', text: '[P3] wiki.nuricloud.example 응답 없음 (HTTP 502)' },
     { id: 'n-upload', at: '2026-11-09T21:14', app: '메일', title: '위키 알림', text: '[위키] 새 첨부: 주간회의_1109.pdf (박지훈)' },
