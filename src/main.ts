@@ -683,7 +683,8 @@ window.addEventListener('beforeunload', () => !resetting && storage.set(SAVE_KEY
 function revealDesktop(first: boolean) {
   renderIcons();
   renderClock();
-  objectivesUi = mountObjectives(desktop, ctx, audio, { steps: () => rules().steps });
+  // 익숙해요 folds the steps of the guided checklists (the cases 숙련자 모드 has an overlay for, 0–2); Case 3's short list stays for everyone
+  objectivesUi = mountObjectives(desktop, ctx, audio, { steps: () => rules().steps || !CASE.expert });
   objectivesUi.refresh(); // the sticky is on the desktop before the first windows size themselves around it
   if (first && !game.cs.opening) wm.open('mail', 'brief');
   // "터미널이 익숙해요" promises no window opens by itself: in the tutorial the terminal waits behind its (pulsing) icon
