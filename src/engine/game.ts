@@ -624,7 +624,7 @@ export class Game {
     this.railNext();
   }
 
-  /** Rail: the guide names the next command when an item becomes current (and once at the end). */
+  /** Rail: the guide says its line (`say`) when an item becomes current (and once at the end). */
   private railNext(): void {
     const rail = this.cs.rail;
     if (!rail) return;

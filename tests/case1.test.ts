@@ -108,3 +108,22 @@ test('case 1 dashboard panels agree with df and the alert: /var crosses 80% at t
   assert.equal(at(pts, '2026-11-11T09:30'), 92);
   assert.equal(cs.panels!.stats![0].value, '92%');
 });
+
+test('case 1 nudges: the crontab comments and the memo keep the clue but not the conclusion', () => {
+  const g = new Game(cs);
+  const crontab = out(g, 'crontab -l');
+  const comments = crontab.filter((l) => l.startsWith('# ') && !l.startsWith('# m h'));
+  assert.ok(comments.length >= 2);
+  for (const l of comments) assert.doesNotMatch(l, /로그인 셸|PATH|\/usr\/bin:\/bin/, l);
+  assert.ok(comments.some((l) => /절대 경로/.test(l)), 'the clue: absolute paths');
+  assert.ok(comments.some((l) => l.includes('~/log/cron-env.txt')), 'the clue: where the evidence is');
+  assert.ok('c1_comment' in g.st.clues, 'the comment is still a trace clue');
+  const memo = cs.notes.find((n) => n.id === 'today')!;
+  assert.doesNotMatch(memo.reveal!, /cron ≠|PATH|로그인 셸/);
+  assert.doesNotMatch(cs.clues.find((c) => c.id === 'c1_notfound')!.aha!, /cron 은 wikictl 을 몰랐다|PATH/);
+  for (const l of cs.opening!.objectives.after) assert.doesNotMatch(l, /which|echo \$PATH|cron-env/, l);
+  // the history keeps the 2024-03 trail without spelling out the answer
+  const hist = out(g, 'history');
+  assert.ok(hist.some((l) => l.includes('cat ~/log/cron-env.txt')));
+  assert.ok(!hist.some((l) => /# .*PATH가 \/usr\/bin:\/bin/.test(l)));
+});

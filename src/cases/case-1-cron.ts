@@ -89,15 +89,15 @@ echo "$(date '+%F %T') 정리 끝 ✓"`;
 
 const DISK_REPORT = `#!/bin/bash
 # 월요일 09:00 디스크 리포트 (은재, 2024-03)
-# cron에서 도니까 전부 절대 경로로. 내 터미널의 PATH를 믿지 말 것.
+# cron에서 도니까 전부 절대 경로로.
 /usr/bin/date '+%F %T'
 /usr/bin/df -h /var
 /usr/bin/du -sh /var/log/* 2>/dev/null
 /opt/wiki/bin/wikictl stats --short`;
 
 const CRONTAB = `# m h dom mon dow  command
-# cron은 로그인 셸이 아니에요. PATH가 /usr/bin:/bin 뿐이라 명령은 절대 경로로. (은재, 2024-03)
-# 출력은 어디로 가는지 꼭 정하기. 아무도 안 보는 곳에 쓰면 실패도 안 보여요.
+# 여기 거는 줄은 명령도 출력도 전부 절대 경로로. (은재, 2024-03)
+# 왜냐고요? 그날 떠 둔 ~/log/cron-env.txt 랑 내 터미널을 나란히 보면 알아요 🌱
 0 9 * * 1 /home/eunjae/bin/disk-report.sh > /home/eunjae/log/disk-report.txt 2>&1
 
 # 11/10 한도윤 — wiki.log 임시 정리 (매시 정각) 🙇
@@ -449,7 +449,7 @@ export const caseOneCron: CaseFile = {
     { at: '2024-03-12T10:19:05', emits: [hist('# 월요일 리포트가 cron에서만 "wikictl: command not found". 터미널에선 됨. 왜?')] },
     { at: '2024-03-12T10:20:02', emits: [hist('crontab -e')] },
     { at: '2024-03-12T10:21:30', emits: [hist('cat ~/log/cron-env.txt')] },
-    { at: '2024-03-12T10:22:10', emits: [hist('# cron 환경은 이게 전부. PATH가 /usr/bin:/bin 뿐. 내 터미널이랑 다름.')] },
+    { at: '2024-03-12T10:22:10', emits: [hist('# cron 환경은 이게 전부. 내 터미널이랑 한 줄씩 비교.')] },
     { at: '2024-03-12T10:24:44', emits: [hist("env -i HOME=/home/eunjae LOGNAME=eunjae PATH=/usr/bin:/bin SHELL=/bin/sh /bin/sh -c 'cd && ~/bin/disk-report.sh'")] },
     { at: '2024-03-12T10:25:01', emits: [hist('# 터미널에서 되는 건 증거가 아님. cron처럼 돌려 봐야 앎 🌱')] },
     { at: '2024-03-12T10:26:15', emits: [hist('crontab -e')] },
@@ -550,7 +550,7 @@ export const caseOneCron: CaseFile = {
     {
       id: 'today', title: '11/11 (수) 내 스크립트 (!!)',
       lines: ['서진님: 왜 안 지웠는지만. 12시까지.', '어제 테스트: ./wiki-log-clean.sh --force → 됨 ✓', '내 로그(~/bin/wiki-clean.log)에 밤 기록 없음 → cron 안 돈 듯 (?)', '1. 돌았나  2. 어디에 썼나  3. 왜'],
-      highlight: 2, reveal: '→ 돌았음. 매시간. 로그는 홈(~)에. cron ≠ 내 터미널.',
+      highlight: 2, reveal: '→ 돌았음. 매시간. 로그는 홈(~)에. 근데 터미널에선 왜 됐지? (?)',
     },
     { id: 'calc', title: '11/10 (화) 숙제 계산', lines: ['11G / 11.5시간 ≈ 1G/시간', '→ 매시간 정리하면 500M 넘자마자 잡힘 (?)', 'cron: 분 시 일 월 요일', '0 * * * * = 매시 정각 ✓', '0 9 * * 1 = 월요일 09:00 (은재님 리포트)'] },
     { id: 'tue', title: '11/10 (화) 위키 502 — 연습!!', lines: ['원인: /var 100%, wiki.log 11G', 'df → du → tail → systemctl status → journalctl ✓', '서진님: 임시 정리 스크립트 = 내 숙제. 오늘 밤 cron으로.'] },
@@ -640,7 +640,7 @@ export const caseOneCron: CaseFile = {
   // ------------------------------------------------------------------ clues (no yellow lines from here on: grep yourself)
   clues: [
     { id: 'c1_crontab', label: 'crontab -l: "0 * * * * ~/bin/wiki-log-clean.sh >> wiki-clean.log 2>&1" (도윤의 줄)', slot: 'cause', key: true, match: [{ output: '^0 \\* \\* \\* \\* ~/bin/wiki-log-clean\\.sh >> wiki-clean\\.log 2>&1$', host: W }] },
-    { id: 'c1_notfound', label: '~/wiki-clean.log (홈): "line 15: wikictl: command not found" — 그래도 "정리 끝 ✓"', slot: 'cause', key: true, aha: '돌긴 돌았다. 다만 cron 은 wikictl 을 몰랐다.', match: [{ output: 'wiki-log-clean\\.sh: line 15: wikictl: command not found', host: W }] },
+    { id: 'c1_notfound', label: '~/wiki-clean.log (홈): "line 15: wikictl: command not found" — 그래도 "정리 끝 ✓"', slot: 'cause', key: true, aha: '돌긴 돌았다. 그런데 터미널에선 되던 wikictl 을 못 찾았다.', match: [{ output: 'wiki-log-clean\\.sh: line 15: wikictl: command not found', host: W }] },
     {
       id: 'c1_where', label: '내 터미널의 PATH에는 /opt/wiki/bin (wikictl 이 있는 곳)', slot: 'cause', key: true,
       match: [{ output: '^/opt/wiki/bin/wikictl$', host: W }, { output: '^wikictl is /opt/wiki/bin/wikictl$', host: W }, { output: '^(PATH=)?/usr/local/sbin:.*:/opt/wiki/bin$', host: W }],
@@ -649,7 +649,7 @@ export const caseOneCron: CaseFile = {
       id: 'c1_cronpath', label: 'cron 이 주는 PATH 는 /usr/bin:/bin 뿐 (~/log/cron-env.txt, env -i 시험)', slot: 'cause', key: true,
       match: [{ output: '^PATH=/usr/bin:/bin$', host: W }, { output: '^\\s*env -i\\b.*PATH=/usr/bin:/bin.*\\b(which|type) wikictl', host: W }],
     },
-    { id: 'c1_comment', label: '은재 crontab 주석: "cron은 로그인 셸이 아니에요. PATH가 /usr/bin:/bin 뿐"', slot: 'cause', trace: true, match: [{ output: '# cron은 로그인 셸이 아니에요', host: W }] },
+    { id: 'c1_comment', label: '은재 crontab 주석: "명령도 출력도 전부 절대 경로로" — 왜인지는 ~/log/cron-env.txt', slot: 'cause', trace: true, match: [{ output: '# 여기 거는 줄은 명령도 출력도 전부 절대 경로로', host: W }] },
     { id: 'c1_envtest', label: '은재 history 2024-03: env -i … /bin/sh -c — "터미널에서 되는 건 증거가 아님"', slot: 'cause', trace: true, match: [{ output: '터미널에서 되는 건 증거가 아님', host: W }, { output: '월요일 리포트가 cron에서만', host: W }] },
     { id: 'c1_absolute', label: '은재 disk-report.sh: 전부 절대 경로 (/opt/wiki/bin/wikictl)', slot: 'cause', trace: true, match: [{ output: '^/opt/wiki/bin/wikictl stats --short$', host: W }] },
     { id: 'c1_testlog', label: '~/bin/wiki-clean.log: 화 18:36 터미널 테스트 한 번뿐 (--force)', slot: 'cause', match: [{ output: 'wikictl: /var/log/wiki/wiki\\.log is 2\\.1M', host: W }] },
@@ -831,7 +831,7 @@ export const caseOneCron: CaseFile = {
         { id: 'output', text: '그 출력은 어디로 갔나 — ls, cat', hint: 'crontab 줄의 >> 뒤를 보세요. cron 은 어느 디렉터리에서 시작할까요?', any: [{ clue: 'c1_notfound' }] },
         { id: 'pins', text: '증거 3개 보드에 올리기 📌', hint: '증거가 되는 줄에 마우스를 올리면 오른쪽에 📌.', any: [{ pins: 3 }] },
       ],
-      after: ['다음: 📝 보고서 — 원인, 경위 두 칸 (제출 5번)', '왜 터미널에선 됐을까: which, echo $PATH, ~/log/cron-env.txt', '막히면: crontab 맨 위 주석, history, 💡'],
+      after: ['다음: 📝 보고서 — 원인, 경위 두 칸 (제출 5번)', '왜 터미널에선 됐을까: 내 터미널과 cron, 뭐가 다를까', '막히면: crontab 맨 위 주석, history, 💡'],
     },
   },
 

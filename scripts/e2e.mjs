@@ -106,8 +106,10 @@ try {
   await page.locator('.tin input').press('Enter');
   await todoItem('history').and(page.locator('.done')).waitFor();
   await page.locator('.tline.clue', { hasText: '디스크 먼저' }).waitFor();
-  await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /df -h !!/.test(m.text)), null, { timeout: 5000 });
-  step('the pre-typed `history` succeeds on Enter, clue lines are yellow, 지훈 names the next command (df -h)');
+  await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /그 순서대로 가 봐요/.test(m.text)), null, { timeout: 5000 });
+  assert.ok(!(await page.evaluate(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /df -h/.test(m.text)))), '지훈 does not type the command for you');
+  assert.doesNotMatch(await todoItem('df').innerText(), /df -h/, 'the checklist names the step, not the command');
+  step('the pre-typed `history` succeeds on Enter, clue lines are yellow, 지훈 nudges toward the next step without the command');
   await mark('hint');
   step('tool tour: the 💡 mark once the first checklist item is ticked');
 
@@ -120,16 +122,16 @@ try {
   await msgr.locator('.msg .text', { hasText: '뭐부터 봐요?' }).waitFor();
   await msgr.locator('.typing-row.on .typing', { hasText: '박지훈님이 입력 중' }).waitFor({ timeout: 3000 });
   await shot('polish-02-messenger-typing-ask.png');
-  await msgr.locator('.msg .text', { hasText: '지금은 df -h 요!!' }).waitFor({ timeout: 4000 });
+  await msgr.locator('.msg .text', { hasText: '지금은 디스크 차례예요!!' }).waitFor({ timeout: 4000 });
   assert.equal(await msgr.locator('.typing-row.on').count(), 0, 'typing indicator gone once the line lands');
   const askLog = await page.evaluate(() => window.__game.st.log.filter((e) => e.type === 'ask'));
   assert.equal(askLog.length, 1);
   assert.equal(askLog[0].from, 'jihoon');
   await msgr.locator('.titlebar button.close').click();
-  step('messenger: the "뭐부터 봐요?" quick reply → "박지훈님이 입력 중…" → 지훈 names the current command (free, logged)');
+  step('messenger: the "뭐부터 봐요?" quick reply → "박지훈님이 입력 중…" → 지훈 names the current step and points at history / 💡 (free, logged)');
 
   await run('ls');
-  await page.waitForFunction(() => window.__game.st.live.some((m) => m.text === '그건 나중에요 ㅋㅋ df -h 부터!!'), null, { timeout: 5000 });
+  await page.waitForFunction(() => window.__game.st.live.some((m) => m.text === '그건 나중에요 ㅋㅋ 디스크부터 봐요!!'), null, { timeout: 5000 });
   step('an off-rail command gets one redirect in 지훈\'s voice');
 
   // ---- `hint` opens the 💡 panel: 요약 → 방향 → 정답 (asked twice) for the current checklist item

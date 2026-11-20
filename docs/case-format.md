@@ -158,9 +158,9 @@ ASCII 스냅샷과 같은 내용만 담을 것: 패널은 단서를 새로 알�
   - ① 요약은 자동: 그 칸(`slot`)에서 찾은 단서의 `label`(핵심 단서 먼저). 무료, `hint-summary`로 기록.
   - ② 방향 = `explicit[]`(`slot`, `text`, `cost`, 선택 `unlessClues`). 아직 다 못 찾은 `unlessClues`를 가진 줄이 먼저 나오고("다음에 볼 곳"), 하나씩 더 열 수 있다. 하나에 힌트 1회.
   - ③ 정답 = `answers[slot]`, 없으면 그 칸의 정답 보기 문장(다중 칸은 가중치가 양수인 보기 목록). UI가 한 번 더 묻는다. 힌트 1회.
-  - `objectivePanel: true`(Case 0): 체크리스트가 열려 있는 동안 지금 차례인 항목이 맨 위에 온다(요약 = 체크한 항목, 방향 = 항목의 `hint`, 정답 = 항목의 `answer`, 없으면 "터미널에 그대로 치세요: {next}"). 감점은 언제나 0.
+  - `objectivePanel: true`(Case 0): 체크리스트가 열려 있는 동안 지금 차례인 항목이 맨 위에 온다(요약 = 체크한 항목, 방향 = 항목의 `direction`, 없으면 `hint`, 정답 = 항목의 `answer`, 없으면 "터미널에 그대로 치세요: {next}"). 감점은 언제나 0. 체크리스트의 `text`·`hint`와 레일의 `say`·`next`는 단계마다 넛지 한 줄이고 명령을 그대로 적지 않는다. 정확한 명령은 은재의 기록(history, README)과 💡의 방향(도구 이름)·정답(명령)에만 둔다(`tests/case0.test.ts`가 검사).
   - 방향·정답은 `rung3` 이벤트(`key`, `rung`, `cost`)로 로그에 남고 기록의 "힌트 N회"가 된다.
-- `ask`: 메신저 입력창의 빠른 답장(2단을 요청형으로). `prompts`(예: `['뭐부터 봐요?', '막혔어요']`)를 누르면 다음 `idle` 넛지가 **기다림 없이** 그 넛지의 `from`/`channel`로 온다(`askText`가 있으면 그 문장: 묻지도 않았는데 하는 말투를 피할 때). 남은 넛지가 없으면 `none`. `rail` 템플릿이 있으면 체크리스트가 열려 있는 동안 레일 동료가 `{next}`로 지금 칠 명령을 답한다(Case 0). 무료, `ask`/`rung2`(`why: 'ask'`)로 기록하고, 대기 넛지 타이머는 그때부터 다시 잰다. 메신저는 답할 사람을 "→ 박지훈님이 답해요"로 미리 보여 준다.
+- `ask`: 메신저 입력창의 빠른 답장(2단을 요청형으로). `prompts`(예: `['뭐부터 봐요?', '막혔어요']`)를 누르면 다음 `idle` 넛지가 **기다림 없이** 그 넛지의 `from`/`channel`로 온다(`askText`가 있으면 그 문장: 묻지도 않았는데 하는 말투를 피할 때). 남은 넛지가 없으면 `none`. `rail` 템플릿이 있으면 체크리스트가 열려 있는 동안 레일 동료가 `{next}`로 지금 볼 단계를 답하고 history·💡를 가리킨다(Case 0). 무료, `ask`/`rung2`(`why: 'ask'`)로 기록하고, 대기 넛지 타이머는 그때부터 다시 잰다. 메신저는 답할 사람을 "→ 박지훈님이 답해요"로 미리 보여 준다.
 - **입력 중…**: 플레이어가 아닌 사람의 실시간 메시지(넛지, 레일, 트리거)는 도착 전 1–2초(1초 + 글자당 20ms, 최대 2초) 동안 "OO님이 입력 중"을 보인다. 지연(`delaySec`)이 없는 트리거 메시지도 그만큼 늦게 도착한다.
 - 넛지 대사는 `characters.md` §8-1 보이스 치트시트를 따른다. 은재는 넛지를 주지 않는다(은재의 넛지는 이미 기계 안에 있다).
 
@@ -234,9 +234,10 @@ shell: {
   refuse: "튜토리얼 세션: '{cmd}' 은(는) 오늘 연습 범위 밖이에요 …",   // 목록 밖의 진짜 명령(ps, sudo, vim…)
   help: ['…'],                                                        // help 출력 대체
 },
-rail: { from: 'jihoon', channel: 'me-dm-jihoon', offRail: '그건 나중에요 ㅋㅋ {next} 부터!!', quiet: ['help', 'man'], done: '…', highlightClues: true },
+rail: { from: 'jihoon', channel: 'me-dm-jihoon', offRail: '그건 나중에요 ㅋㅋ {next}부터 봐요!!', quiet: ['help', 'man'], done: '…', highlightClues: true },
 desktop: { icons: [{ app: 'terminal' }, { app: 'messenger' }, { app: 'mail' }, { app: 'notes', after: 'df' }, …] },
-// opening.objectives.items[] 에 say(그 항목 차례가 되면 레일 동료가 보내는 말), next(되돌림에 넣을 명령)
+// opening.objectives.items[] 에 say(그 항목 차례가 되면 레일 동료가 보내는 말), next(되돌림·답에 넣을 단계 이름, 명령 아님),
+// direction(💡 방향: 도구 이름), answer(💡 정답: 명령)
 ```
 
 - `shell.allow`: 이 명령만 돈다. 목록 밖의 **진짜** 명령은 `refuse` 문장으로 답하고(`blocked` 마찰로 기록), 없는 명령은 예전처럼 `command not found` + 목록 안에서 고른 "혹시 …인가요?". Tab 자동완성도 목록만.

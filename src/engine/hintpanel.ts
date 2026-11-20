@@ -75,7 +75,7 @@ function objectiveSection(input: PanelInput, o: ObjectiveDef): PanelSection {
   const uses = input.ladder.panelUses(key);
   const summaryOpen = uses.some((u) => u.rung === 'summary');
   const dirOpen = uses.some((u) => u.rung === 'direction');
-  const direction = o.hint ?? o.text;
+  const direction = o.direction ?? o.hint ?? o.text;
   return {
     key,
     kind: 'objective',
@@ -137,7 +137,7 @@ export function openStep(input: PanelInput, key: string, rung: PanelRung, now: n
       index = nextDirection(cs, key, found, opened)!;
       cost = cs.hints.explicit[index].cost;
       text = cs.hints.explicit[index].text;
-    } else text = input.objective?.hint ?? input.objective?.text ?? '';
+    } else text = input.objective?.direction ?? input.objective?.hint ?? input.objective?.text ?? '';
   } else {
     if (!sec.answerReady || sec.answer !== null) return null;
     if (sec.kind === 'slot') {
