@@ -42,13 +42,19 @@ export interface PanelInput {
   doneObjectives: ObjectiveDef[];
 }
 
-/** ③ for a slot: case text, else the correct option(s). */
+/**
+ * ③ for a slot: the correct option(s), then the case's specifics (`hints.answers`: the options
+ * stay hypotheses, the answer step carries the facts) and which evidence the slot accepts.
+ */
 export function slotAnswer(cs: CaseFile, slot: SlotDef): string {
+  const lines =
+    slot.type === 'single'
+      ? [slot.options.find((o) => o.correct)?.text ?? '']
+      : [...slot.options.filter((o) => (o.weight ?? 0) > 0).map((o) => `· ${o.text}`), '(사람을 범인으로 고르는 보기는 고르지 않는다)'];
   const own = cs.hints.answers?.[slot.id];
-  if (own) return own;
-  if (slot.type === 'single') return slot.options.find((o) => o.correct)?.text ?? '';
-  const good = slot.options.filter((o) => (o.weight ?? 0) > 0).map((o) => `· ${o.text}`);
-  return [...good, '(사람을 범인으로 고르는 보기는 고르지 않는다)'].join('\n');
+  if (own) lines.push(own);
+  if (slot.evidence?.length) lines.push(`📌 근거로 인정: ${slot.evidence.map((k) => k.label).join(' · ')}`);
+  return lines.join('\n');
 }
 
 /** ③ for a checklist item. */

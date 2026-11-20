@@ -1,6 +1,7 @@
 // Case integrity + a scripted solve through the Game API (no browser).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { cited } from './case-integrity.ts';
 import { Game } from '../src/engine/game.ts';
 import { caseFriday1802 as cs } from '../src/cases/friday-1802.ts';
 
@@ -98,7 +99,7 @@ test('scripted solve from the intended history line: rung 1 only, no hints, firs
   // pin the key evidence
   for (const t of [0, 2, 3, 4]) for (const l of g.tab(t).lines) if (g.cluesFor(l.text).some((c) => g.clue(c)?.key)) g.pin({ kind: 'line', text: l.text, source: `tab${t}` });
   assert.ok(g.pinnedKeyClues() >= 6);
-  const r = g.submit({ cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account', 'bottleneck', 'cover-seojin', 'cover-jihoon'] })!;
+  const r = g.submit(cited(g, { cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account', 'bottleneck', 'cover-seojin', 'cover-jihoon'] }))!;
   assert.equal(r.allCorrect, true);
   assert.equal(r.total, 330);
   assert.ok(g.st.finished);
@@ -111,15 +112,15 @@ test('scripted solve from the intended history line: rung 1 only, no hints, firs
 test('wrong accusation triggers rung 2 in the blamed person\'s voice and caps at 3 submissions', () => {
   const g = new Game(cs);
   const wrong = { cause: 'approve', sequence: 'sneaky', responsibility: ['blame-seojin'] };
-  g.submit(wrong);
+  g.submit(cited(g, wrong));
   assert.equal(g.typing()[0]?.from, 'seojin', 'the nudge is typed first (1–2 s)');
   g.tick(2000);
   assert.equal(g.st.live.at(-1)?.text, '음. 사람 말고 시간부터요. 03:15에 뭐가 시작됐는지.');
-  g.submit(wrong);
-  const last = g.submit(wrong);
+  g.submit(cited(g, wrong));
+  const last = g.submit(cited(g, wrong));
   assert.ok(last && !last.allCorrect);
   assert.ok(g.st.finished);
-  assert.equal(g.submit(wrong), null);
+  assert.equal(g.submit(cited(g, wrong)), null);
 });
 
 test('idle nudge after the configured time; save/load round trip keeps state and the player\'s sudo trace', () => {

@@ -2,6 +2,7 @@
 // scoring with two slots and unlimited submissions, and the campaign ladder rules.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { cited } from './case-integrity.ts';
 import { Game } from '../src/engine/game.ts';
 import { HOLD_MS } from '../src/engine/hints.ts';
 import { Campaign, parseProgress } from '../src/engine/campaign.ts';
@@ -173,15 +174,15 @@ test('case 0 hints: idle nudge after 2 minutes, held while a clue was just found
 
 test('case 0 scoring: two slots, max 230, unlimited submissions, wrong answers nudge in the blamed voice', () => {
   const g = new Game(cs);
-  const wrong = g.submit({ cause: 'pdf', sequence: 'slow', responsibility: [] })!;
+  const wrong = g.submit(cited(g, { cause: 'pdf', sequence: 'slow', responsibility: [] }))!;
   assert.equal(wrong.max, 230);
   assert.equal(wrong.allCorrect, false);
   g.tick(2000);
   assert.equal(g.st.live.at(-1)?.from, 'jihoon');
-  for (let i = 0; i < 4; i++) g.submit({ cause: 'memory', sequence: 'hardware', responsibility: [] });
+  for (let i = 0; i < 4; i++) g.submit(cited(g, { cause: 'memory', sequence: 'hardware', responsibility: [] }));
   assert.equal(g.st.finished, false, 'five wrong reports and still going');
   assert.equal(g.submissionsLeft(), Infinity);
-  const right = g.submit({ cause: 'disk', sequence: 'true', responsibility: [] })!;
+  const right = g.submit(cited(g, { cause: 'disk', sequence: 'true', responsibility: [] }))!;
   assert.equal(right.allCorrect, true);
   assert.equal(right.base, 200);
   assert.equal(right.multiplier, 0.7);
@@ -244,7 +245,7 @@ test('case 0 save/load keeps the rail state and the unlimited-submission counter
   const g = new Game(cs);
   g.runCommand(0, 'history');
   g.runCommand(0, 'ls');
-  g.submit({ cause: 'memory', sequence: 'slow', responsibility: [] });
+  g.submit(cited(g, { cause: 'memory', sequence: 'slow', responsibility: [] }));
   const g2 = new Game(cs, JSON.parse(g.serialize()));
   assert.deepEqual(g2.st.rail, g.st.rail);
   assert.equal(g2.st.submissions.length, 1);

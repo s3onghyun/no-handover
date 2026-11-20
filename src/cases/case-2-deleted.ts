@@ -575,6 +575,8 @@ export const caseTwoDeleted: CaseFile = {
     maxSubmissions: 4,
     intro: '서진님 검토 후 오미래 CTO 에게 갈 보고서. 세 칸. 제출은 4번까지 — 틀리면 어느 칸인지는 알려 주지 않는다.',
     reply: { from: '강서진', partial: '{total}칸 중 {n}칸이 로그랑 안 맞아요.', bundled: '어딘가 숫자가 안 맞아요. 다시요.', sign: '강서진' },
+    // options are hypotheses of the same length and grain; the pinned evidence decides.
+    // Seojin's two changes are in #로그-서버 (r2_noverify opens it): her red herrings wait for it.
     slots: [
       {
         id: 'cause',
@@ -582,11 +584,15 @@ export const caseTwoDeleted: CaseFile = {
         prompt: '지훈이 큰 로그를 지웠는데, /data 는 왜 비지 않았고 밤새 계속 찼나?',
         type: 'single',
         options: [
-          { id: 'perm', text: 'rm 이 권한 문제로 실패해서 파일이 그대로 남아 있다' },
-          { id: 'hidden', text: '/data 어딘가에 du 가 세지 못하는 숨김 파일(.으로 시작)이 있다' },
-          { id: 'rotate', blames: 'seojin', text: '서진님이 보관 주기를 8주→12주로 늘리고 새 로그 소스(wiki-01)를 붙여서 디스크가 찼다' },
-          { id: 'open', correct: true, text: '지운 pay-api-01.log 를 logshipd(PID 1187)가 아직 열어 두고 쓰고 있다. rm 은 이름만 지웠고, 공간은 그 파일을 연 프로세스가 닫을 때까지 돌아오지 않는다. 디버그 로그가 그 이름 없는 파일에 밤새 계속 쌓여 df(180G)와 du(95G)가 85G 다르다' },
-          { id: 'fs', text: '파일 시스템이 망가져서 df 숫자가 틀리게 나온다' },
+          { id: 'perm', text: 'rm 이 권한 문제로 실제로는 실패해서, 지웠다던 큰 로그가 그 자리에 그대로 남아 밤새 계속 커졌다' },
+          { id: 'hidden', text: 'du 가 세지 못하는 숨김 디렉터리에 다른 로그가 따로 쌓이고 있어서, 지운 만큼 다른 곳이 밤새 다시 찼다' },
+          { id: 'rotate', blames: 'seojin', needs: ['r2_noverify'], text: '서진님이 늘린 보관 주기와 새로 붙인 로그 소스 때문에, 밤사이 들어온 양이 지운 양보다 훨씬 많았다' },
+          { id: 'open', correct: true, text: '지운 로그를 어떤 프로세스가 아직 열어 둔 채 쓰고 있어서, 이름만 사라지고 공간은 돌아오지 않은 채 늘었다' },
+          { id: 'fs', text: '파일 시스템 메타데이터가 꼬여 df 가 실제보다 많이 쓴 것처럼 보고한다 — 실제 디스크에는 여유가 충분하다' },
+        ],
+        evidence: [
+          { id: 'usage', label: '디스크 사용량 (df · du 의 수치)', clues: ['c2_df', 'c2_du'] },
+          { id: 'proc', label: '프로세스 · 서비스 상태', clues: ['c2_deleted', 'c2_pid', 'c2_reopen'] },
         ],
       },
       {
@@ -595,10 +601,14 @@ export const caseTwoDeleted: CaseFile = {
         prompt: '수요일 오후부터 목요일 09:30 까지, 무슨 순서로 일어났나?',
         type: 'single',
         options: [
-          { id: 'freed-then', blames: 'seojin', text: '수 14:28 rm 직후 공간이 돌아왔다가, 밤사이 새 wiki-01 소스와 늘어난 보관 주기 때문에 다시 찼다' },
-          { id: 'sunday', text: '일요일 logrotate 뒤로 매일 조금씩 차다가 오늘 아침 우연히 97% 가 됐다 (수요일에는 특별한 일이 없었다)' },
-          { id: 'true', correct: true, text: '수 14:22 지훈이 pay-api-01 로그 레벨을 debug 로 (재시작 없이, 끌 때까지) → 14:28 공간을 미리 비우려고 logs-01 에서 sudo rm raw/pay-api-01.log, df 확인 없이 접속 종료 → logshipd 는 지워진 파일에 시간당 약 3.7G 씩 계속 씀 → 19:30 70% 경고 → 목 04:43 90% 호출 → 07:58 여유 6G 아래, logshipd 가 DEBUG/INFO 줄을 버리기 시작 (결제 로그 유실, 알림 없음) → 09:30 97%' },
-          { id: 'double', blames: 'jihoon', text: '수 14:28 지훈의 rm 이 파일 시스템을 망가뜨려, 그때부터 모든 로그가 두 번씩 쓰였다' },
+          { id: 'freed-then', blames: 'seojin', needs: ['r2_noverify'], text: '수요일 rm 직후 공간은 돌아왔지만, 서진님이 붙인 새 소스와 늘어난 보관 주기 때문에 밤사이 다시 차서 07:58 에 이르렀다' },
+          { id: 'sunday', text: '지난 일요일 로그 정리 뒤로 매일 조금씩 차오르다가, 오늘 새벽 우연히 한계를 넘어 07:58 부터 로그를 버렸다 (수요일엔 별일 없었다)' },
+          { id: 'true', correct: true, text: '지우기 직전 한 서버의 로그가 갑자기 늘기 시작했고, 그 로그가 지운 파일에 밤새 쌓이다가 여유가 바닥난 07:58 부터 로그를 버렸다' },
+          { id: 'double', blames: 'jihoon', text: '수요일 지훈님의 rm 이 파일 시스템을 망가뜨려, 그때부터 들어오는 로그가 모두 두 번씩 기록되며 공간을 두 배로 썼다' },
+        ],
+        evidence: [
+          { id: 'actions', label: '누가 언제 무엇을 했는지 (명령 · 변경 기록)', clues: ['c2_rm', 'c2_debug'] },
+          { id: 'volume', label: '들어온 양의 변화', clues: ['c2_growth', 'c2_drop'] },
         ],
       },
       {
@@ -608,14 +618,19 @@ export const caseTwoDeleted: CaseFile = {
         type: 'multi',
         pass: 70,
         options: [
-          { id: 'no-verify', weight: 25, text: '지운 뒤 df 로 확인하는 절차가 없었다 — "지웠으니 됐다"가 확인이었다' },
-          { id: 'open-rule', weight: 20, text: '열려 있는 로그는 rm 대신 비우거나(: > 파일) 프로세스가 다시 열게(HUP) 해야 한다는 절차가 런북에 없었다' },
-          { id: 'debug-expiry', weight: 20, text: '런타임 디버그 전환에 만료 시각도 알림도 없었다 — 켠 사람도 잊었다' },
-          { id: 'quota', weight: 20, text: '수집 서버에 서버별 용량 상한이 없어, 한 서버의 로그가 디스크 전체를 채울 수 있었다' },
-          { id: 'silent-drop', weight: 15, text: '로그를 버리기 시작했다는 사실이 저널에만 남고 사람에게 알리지 않았다' },
-          { id: 'bigger-disk', weight: -20, text: '디스크가 작았던 것이 문제다 — 더 큰 디스크로 바꾸면 끝난다' },
-          { id: 'blame-jihoon', weight: -40, blames: 'jihoon', text: '박지훈이 범인이다 (서버 권한 회수와 징계가 필요하다)' },
-          { id: 'blame-seojin', weight: -40, blames: 'seojin', text: '강서진이 범인이다 (보관 주기 변경을 리뷰 없이 했다)' },
+          { id: 'no-verify', weight: 25, text: '지운 뒤 df 로 공간이 실제로 돌아왔는지 확인하는 절차가 없었다 — "지웠으니 됐다"가 확인이었다' },
+          { id: 'open-rule', weight: 20, text: '열려 있는 로그는 rm 대신 비우거나 프로세스가 다시 열게 해야 한다는 절차가 런북에 없었다' },
+          { id: 'debug-expiry', weight: 20, text: '운영 중 로그 레벨을 바꿔도 만료 시각도 알림도 없어서, 켠 사람조차 끄는 것을 잊을 수 있었다' },
+          { id: 'quota', weight: 20, text: '수집 서버에 서버별 용량 상한이 없어서, 한 서버의 로그가 디스크 전체를 채울 수 있었다' },
+          { id: 'silent-drop', weight: 15, text: '수집 서버가 로그를 버리기 시작했다는 사실이 저널에만 남고, 사람에게는 알리지 않았다' },
+          { id: 'bigger-disk', weight: -20, text: '수집 서버 디스크가 처음부터 너무 작았다 — 두 배 큰 디스크로 바꾸면 같은 일은 다시 생기지 않는다' },
+          { id: 'blame-jihoon', weight: -40, blames: 'jihoon', text: '박지훈이 확인 없이 운영 서버에서 rm 을 했다 — 그의 sudo 권한을 회수하고 징계하는 것이 재발 방지다' },
+          { id: 'blame-seojin', weight: -40, blames: 'seojin', needs: ['r2_noverify'], text: '강서진이 리뷰 없이 보관 주기와 수집 대상을 바꿨다 — 그의 변경 권한을 회수하는 것이 재발 방지다' },
+        ],
+        evidence: [
+          { id: 'config', label: '설정 파일', clues: ['r2_quota', 'r2_silent'] },
+          { id: 'people', label: '사람이 남긴 기록 (대화 · 접속)', clues: ['r2_noverify'] },
+          { id: 'service', label: '서비스가 남긴 기록', clues: ['r2_expiry', 'r2_silent', 'c2_drop'] },
         ],
       },
     ],
@@ -638,6 +653,12 @@ export const caseTwoDeleted: CaseFile = {
       jihoon: { id: 'wrong-jihoon', from: 'jihoon', channel: 'me-dm-jihoon', text: '헉 제가 범인이에요?? 😂 지운 건 맞는데… 지웠는데 왜 안 줄었는지가 진짜 궁금해요 🙏' },
       seojin: { id: 'wrong-seojin', from: 'seojin', channel: 'me-dm-seojin', text: '보관 주기는 일요일에 돌아요. 바꾼 뒤로 한 번도 안 돌았어요. 다시요.' },
       default: { id: 'wrong-default', from: 'seojin', channel: 'me-dm-seojin', text: '음. 그 답이면 df 와 du 의 85G 차이가 설명 안 돼요.' },
+    },
+    // 💡 정답: the specifics behind the correct option (the options themselves stay hypotheses)
+    answers: {
+      cause: '지운 pay-api-01.log 를 logshipd(PID 1187)가 아직 열어 두고 쓰고 있다. rm 은 이름만 지웠고, 공간은 그 파일을 연 프로세스가 닫을 때까지 돌아오지 않는다. 디버그 로그가 그 이름 없는 파일에 밤새 계속 쌓여 df(180G)와 du(95G)가 85G 다르다',
+      sequence: '수 14:22 지훈이 pay-api-01 로그 레벨을 debug 로 (재시작 없이, 끌 때까지) → 14:28 공간을 미리 비우려고 logs-01 에서 sudo rm raw/pay-api-01.log, df 확인 없이 접속 종료 → logshipd 는 지워진 파일에 시간당 약 3.7G 씩 계속 씀 → 19:30 70% 경고 → 목 04:43 90% 호출 → 07:58 여유 6G 아래, logshipd 가 DEBUG/INFO 줄을 버리기 시작 (결제 로그 유실, 알림 없음) → 09:30 97%',
+      responsibility: '지훈은 rm 1분 뒤 접속 종료, df 확인 없음 · 열린 로그는 rm 대신 : > 파일 로 비우거나 HUP 으로 다시 열게 · payment-api 의 debug 는 "끌 때까지" — 만료 없음 · logshipd.conf: max_source_bytes = 0 (서버별 상한 없음), on_low_disk_notify = none',
     },
     explicit: [
       { slot: 'cause', cost: 10, unlessClues: ['c2_df', 'c2_du'], text: 'df -h 의 /data Used 와 du -sh /data/collector/* 의 합을 비교해 보세요. 같아야 정상이에요.' },

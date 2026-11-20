@@ -3,6 +3,7 @@
 // active play, advanced by tick()) so reloads and backgrounded tabs do not skip ahead.
 
 import { buildWorld, type Message, type World } from './build.ts';
+import { evidencePins } from './evidence.ts';
 import { HintLadder, type LadderState, type PanelRung } from './hints.ts';
 import { buildPanel, openStep, type PanelInput, type PanelSection } from './hintpanel.ts';
 import { playRecord } from './record.ts';
@@ -10,7 +11,7 @@ import { emptyObjectiveState, Objectives, type Observation, type ObjectiveState 
 import { scoreSubmission, type ScoreResult, type Submission } from './scoring.ts';
 import { Shell, type OutLine, type RunResult, type Session, type ShellEvent } from './shell.ts';
 import { detectTime, parseLocal } from './time.ts';
-import type { CaseFile, ClueDef, MailDef, NudgeDef, SlotId, TriggerAction } from './types.ts';
+import type { CaseFile, ClueDef, MailDef, NudgeDef, OptionDef, SlotId, TriggerAction } from './types.ts';
 
 export const SAVE_VERSION = 1;
 
@@ -520,7 +521,7 @@ export class Game {
     this.log('pin', { kind: pin.kind, source: pin.source, clues: pin.clueIds, text: pin.text.slice(0, 160) });
     this.emit('pinned', pin);
     this.emit('pins');
-    this.observe({ type: 'pins', count: this.st.pins.length });
+    this.observe({ type: 'pins', count: this.evidencePins().length });
     this.emit('save');
     return pin;
   }
@@ -539,6 +540,11 @@ export class Game {
     this.log('unpin', { pin: id });
     this.emit('pins');
     this.emit('save');
+  }
+
+  /** Pins that count as evidence for the report (the checklist's "증거 N개" counts these). */
+  evidencePins(): Pin[] {
+    return evidencePins(this.cs, this.st.pins);
   }
 
   pinnedKeyClues(): number {
@@ -584,6 +590,11 @@ export class Game {
 
   // ---------------------------------------------------------------- accusation
 
+  /** A report option is shown once its `needs` (clues found / triggers fired) are met. */
+  optionShown(o: OptionDef): boolean {
+    return (o.needs ?? []).every((id) => id in this.st.clues || this.st.triggersFired.includes(id));
+  }
+
   /** Infinity when the case allows unlimited submissions (`maxSubmissions: 0`, the tutorial). */
   submissionsLeft(): number {
     const max = this.cs.accusation.maxSubmissions;
@@ -594,11 +605,12 @@ export class Game {
     if (this.st.finished || this.submissionsLeft() <= 0) return null;
     const attempt = this.st.submissions.length + 1;
     // hints are a record; only senior mode takes their cost off the score
-    const score = scoreSubmission(this.cs, sub, { attempt, pinnedKeyClues: this.pinnedKeyClues(), hintCost: this.st.settings.senior ? this.ladder.totalCost() : 0 });
+    const score = scoreSubmission(this.cs, sub, { attempt, pinnedKeyClues: this.pinnedKeyClues(), hintCost: this.st.settings.senior ? this.ladder.totalCost() : 0, pins: this.st.pins });
     score.hints = this.ladder.hintCount();
     this.st.submissions.push({ at: this.st.playMs, sub, score });
     const correct = Object.fromEntries(Object.entries(score.slots).map(([k, v]) => [k, v!.correct]));
-    this.log('accuse', { attempt, sub, correct, total: score.total, blamed: score.blamed });
+    const cite = Object.fromEntries(Object.entries(score.slots).filter(([, v]) => v!.cite).map(([k, v]) => [k, v!.cite]));
+    this.log('accuse', { attempt, sub, correct, cite, total: score.total, blamed: score.blamed });
     if (score.allCorrect || this.submissionsLeft() <= 0) {
       this.st.finished = true;
       this.deliverMail(this.cs.debrief.closingMail);

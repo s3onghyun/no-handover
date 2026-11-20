@@ -3,6 +3,7 @@
 // the written-then-deleted line, bundled report feedback, the spoiler-free result card.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { cited } from './case-integrity.ts';
 import { ASK_BEAT_MS, Game, typingMs } from '../src/engine/game.ts';
 import { DEFAULT_ANSWER_COST, slotAnswer } from '../src/engine/hintpanel.ts';
 import { feedbackMode, wrongReply } from '../src/engine/scoring.ts';
@@ -38,7 +39,10 @@ test('hint panel: 요약 → 방향 → 정답 in order, per slot; summary lists
   assert.equal(g.hintCount(), 1);
   assert.equal(cause().answerReady, true);
   const a = g.openHint('cause', 'answer')!;
-  assert.equal(a.text, c3.accusation.slots[0].options.find((o) => o.correct)!.text, 'default 정답 = the correct option');
+  const [pick, ...rest] = a.text.split('\n');
+  assert.equal(pick, c3.accusation.slots[0].options.find((o) => o.correct)!.text, '정답 names the correct option first');
+  assert.ok(rest.includes(c3.hints.answers!.cause!), 'then the specifics the option leaves out');
+  assert.match(rest.at(-1)!, /^📌 근거로 인정: .*자원 한도/, 'and the evidence the slot accepts');
   assert.equal(a.cost, DEFAULT_ANSWER_COST);
   assert.equal(g.openHint('cause', 'answer'), null, 'once');
   assert.equal(g.hintCount(), 2);
@@ -91,7 +95,7 @@ test('hint record: no score penalty by default; senior mode (?senior=1) takes th
   };
   const g = new Game(c3);
   open(g);
-  const r = g.submit(sub)!;
+  const r = g.submit(cited(g, sub))!;
   assert.equal(r.hintCost, 0);
   assert.equal(r.hints, 2);
   assert.equal(r.total, 300);
@@ -101,7 +105,7 @@ test('hint record: no score penalty by default; senior mode (?senior=1) takes th
   assert.equal(rec.senior, false);
   const s = new Game(c3, null, { senior: true });
   open(s);
-  const rs = s.submit(sub)!;
+  const rs = s.submit(cited(s, sub))!;
   assert.equal(rs.hintCost, 10 + DEFAULT_ANSWER_COST);
   assert.equal(rs.total, 300 - 40);
   assert.equal(playRecord(s).senior, true);
@@ -112,7 +116,7 @@ test('hint record: time and commands stop at the finish; "힌트 단계 N개 · 
   run(g, 'history');
   tickFor(g, 65_000, 1000);
   run(g, 'df -h');
-  g.submit({ cause: 'disk', sequence: 'true', responsibility: [] });
+  g.submit(cited(g, { cause: 'disk', sequence: 'true', responsibility: [] }));
   tickFor(g, 30_000, 1000);
   run(g, 'pwd'); // after the finish: not counted
   const r = playRecord(g);
@@ -129,7 +133,7 @@ test('hint record: time and commands stop at the finish; "힌트 단계 N개 · 
 test('result card: title, case, time, commands, hints, badge — and nothing from the solution', () => {
   const g = new Game(c3);
   run(g, 'crontab -l');
-  g.submit({ cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account'] });
+  g.submit(cited(g, { cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account'] }));
   const card = resultCard(g, 'Case 3');
   assert.equal(card.caseTitle, c3.title);
   assert.equal(card.headline, '인수인계 완료');
@@ -149,7 +153,7 @@ test('result card: title, case, time, commands, hints, badge — and nothing fro
   const h = new Game(c3);
   h.openHint('cause', 'summary');
   h.openHint('cause', 'direction');
-  h.submit({ cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account'] });
+  h.submit(cited(h, { cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account'] }));
   assert.equal(resultCard(h, 'Case 3').badge, null, 'the badge is only for zero hints');
 });
 
@@ -196,7 +200,7 @@ test('ask (Case 0): while the checklist is open, 지훈 names the current step a
   assert.deepEqual(w, { channel: 'me-dm-jihoon', from: 'jihoon' });
   tickFor(g, 3000);
   assert.equal(g.st.live.at(-1)?.text, '지금은 디스크 차례예요!! 명령은 은재 선배 history 에 있고, 그래도 모르겠으면 💡 ㅋㅋ 🙏');
-  g.submit({ cause: 'disk', sequence: 'true', responsibility: [] });
+  g.submit(cited(g, { cause: 'disk', sequence: 'true', responsibility: [] }));
   assert.equal(g.ask('뭐부터 봐요?'), null);
 });
 
@@ -260,15 +264,15 @@ test('bundled confirmation: Case 3 never says which slot or how many; Case 0 kee
   assert.equal(feedbackMode(c3), 'bundled');
   assert.equal(feedbackMode(c0), 'per-slot');
   const g = new Game(c3);
-  const oneWrong = g.submit({ cause: 'fd', sequence: 'sneaky', responsibility: ['git-admins', 'cron', 'oncall', 'account'] })!;
-  const allWrong = new Game(c3).submit({ cause: 'disk', sequence: 'sneaky', responsibility: ['blame-eunjae'] })!;
+  const oneWrong = g.submit(cited(g, { cause: 'fd', sequence: 'sneaky', responsibility: ['git-admins', 'cron', 'oncall', 'account'] }))!;
+  const allWrong = (() => { const x = new Game(c3); return x.submit(cited(x, { cause: 'disk', sequence: 'sneaky', responsibility: ['blame-eunjae'] }))!; })();
   const a = wrongReply(c3, oneWrong);
   const b = wrongReply(c3, allWrong);
   assert.equal(a, b, 'one wrong slot and three wrong slots read the same');
   assert.match(a, /어딘가/);
   for (const s of c3.accusation.slots) assert.ok(!a.includes(s.title.split(' ')[0]), `no slot name (${s.title})`);
   assert.doesNotMatch(a, /\d/, 'no count');
-  const z = new Game(c0).submit({ cause: 'disk', sequence: 'slow', responsibility: [] })!;
+  const z = (() => { const x = new Game(c0); return x.submit(cited(x, { cause: 'disk', sequence: 'slow', responsibility: [] }))!; })();
   assert.equal(wrongReply(c0, z), '2칸 중 1칸이 로그랑 안 맞아요. 다시요.');
 });
 
@@ -396,7 +400,7 @@ test('hint record: opening the 💡 panel is counted apart from hint steps and n
   assert.equal(r.hints, 0, 'opening the panel and reading the summary are not hint steps');
   assert.match(recordLine(r), /^힌트 단계 0개 · /);
   assert.ok(!recordLine(r).includes('3'), 'panel opens stay out of the record line');
-  g.submit({ cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account'] });
+  g.submit(cited(g, { cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account'] }));
   assert.equal(resultCard(g, 'Case 3').badge, '힌트 단계 0', 'panel opens do not cost the badge');
   tickFor(g, 2000, 1000);
   g.log('hint-panel', { focus: null }); // after the finish: not counted

@@ -59,6 +59,9 @@ async function pinLine(re) {
 }
 
 const todoItem = (id) => page.locator(`.todo li[data-id="${id}"]`);
+/** Report: pick an option by id; cite the pin whose line matches `re` for a slot. */
+const pick = (rep, slot, id) => rep.locator(`input[name="slot-${slot}"][value="${id}"]`).check();
+const cite = (rep, slot, re) => rep.locator(`label.citeopt:has(input[name="cite-${slot}"])`, { hasText: re }).first().locator('input').check();
 /** A coach mark: waits for it, checks it is the only one on screen, then "알겠어요". */
 async function mark(id, shotName) {
   const m = page.locator(`.tour[data-step="${id}"]`);
@@ -195,6 +198,11 @@ try {
   const notesWin = page.locator('.window[data-app="notes"] .titlebar button.close');
   await page.waitForTimeout(400);
   if (await notesWin.count()) await notesWin.click(); // the memo scene opened the notebook
+  // the "증거 2개" item counts only pins that meet a report slot's evidence kind, and shows the kinds
+  await todoItem('pins').locator('.todo-ev').waitFor();
+  assert.match(await todoItem('pins').locator('.todo-count').innerText(), /\(1\/2\)/);
+  assert.match(await todoItem('pins').locator('.todo-ev').innerText(), /세지는 증거: 원인 1\/2 · 경위 0\/3/);
+  assert.match(await todoItem('pins').locator('.todo-ev').getAttribute('title'), /원인: ✓ 디스크 사용량.*○ 위키가 남긴 오류/);
   await pinLine(/wiki-server\[51875\]: OSError: \[Errno 28\] No space left on device/);
   await todoItem('pins').and(page.locator('.done')).waitFor();
   await page.locator('.todo').waitFor({ state: 'detached', timeout: 6000 });
@@ -203,6 +211,7 @@ try {
   const tourLog0 = await page.evaluate(() => window.__game.st.log.filter((e) => e.type === 'tour-step').map((e) => e.step));
   assert.deepEqual(tourLog0, ['terminal', 'messenger', 'mail', 'hint', 'notes', 'board', 'dashboard', 'report'], 'each Case 0 mark once, at its unlock');
   assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('no-handover:tour'))).seen, tourLog0);
+  step('the pins item counts evidence pins (1/2) and lists the kinds that count, met or missing');
   step('du → tail → systemctl status → 2 pins: all five boxes tick, the sticky folds, every icon is unlocked, each with its mark (8 marks, each once)');
 
   await run('journalctl -u wiki --since "2026-11-09 21:00" --until "2026-11-09 21:20"');
@@ -214,6 +223,12 @@ try {
   // ---- evidence board as an observability dashboard: pins sit on the shared timeline
   await page.locator('.icon[data-app="board"]').dblclick();
   const board0 = page.locator('.window[data-app="board"]');
+  // "보고서 근거": per slot, which kinds of evidence count, met or missing; each pin row names its kinds
+  await board0.locator('.obs-criteria .crit-row[data-slot="cause"]').waitFor();
+  assert.equal(await board0.locator('.obs-criteria .crit-row[data-slot="cause"] .crit.met').count(), 2, 'df line + No space line');
+  await board0.locator('.obs-criteria .crit-row[data-slot="sequence"] .crit.met[data-kind="start"]').waitFor();
+  await board0.locator('.obs-criteria .crit-row[data-slot="sequence"] .crit.miss[data-kind="night"]').waitFor();
+  assert.ok((await board0.locator('.obs-ev:not(.none)').count()) >= 3, 'pin rows tagged with their kinds');
   await board0.locator('.obs-lanes .obs-mk[data-pin]').first().waitFor();
   const lanes0 = await board0.locator('.obs-lanes').getAttribute('aria-label');
   assert.match(lanes0, /^증거 타임라인, .*주석 2개: 오류·경고 2\./, lanes0);
@@ -253,12 +268,20 @@ try {
   const rep0 = page.locator('.window[data-app="report"]');
   assert.equal(await rep0.locator('section.slot').count(), 2, 'two report slots');
   assert.match(await rep0.locator('.submitbar .primary-btn').innerText(), /제출 무제한/);
-  await rep0.locator('input[name="slot-cause"]').nth(1).check(); // blames 지훈's PDF
-  await rep0.locator('input[name="slot-sequence"]').nth(0).check();
+  // options are hypotheses of similar length; every slot needs a cited pin
+  await pick(rep0, 'cause', 'pdf'); // blames 지훈's PDF
+  await pick(rep0, 'sequence', 'true');
+  await rep0.locator('.submitbar .primary-btn').click(); // no citation yet: an alert, nothing sent
+  assert.equal(await page.evaluate(() => window.__game.st.submissions.length), 0, 'no submission without a cited pin');
+  await cite(rep0, 'cause', /100%\s+\/var/);
+  await cite(rep0, 'sequence', /100%\s+\/var/); // disk usage does not back the timeline
   await rep0.locator('.submitbar .primary-btn').click();
   await rep0.locator('.reply', { hasText: '강서진의 회신' }).waitFor();
+  assert.match(await rep0.locator('.reply').innerText(), /근거가 그 칸을 뒷받침하지 않아요: 경위\./);
   await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /PDF 하나로/.test(m.text)), null, { timeout: 5000 });
-  await rep0.locator('input[name="slot-cause"]').nth(0).check();
+  await pick(rep0, 'cause', 'disk');
+  await rep0.locator('input[name="cite-sequence"]:checked').uncheck();
+  await cite(rep0, 'sequence', /21:14:03 .*thumbnail/);
   await rep0.locator('.submitbar .primary-btn').click();
   await rep0.locator('.debrief h2').waitFor();
   const total0 = await rep0.locator('.scorebox .s').nth(1).innerText();
@@ -281,9 +304,11 @@ try {
   assert.equal(png.subarray(1, 4).toString(), 'PNG');
   assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1200, 630]);
   rmSync(dlDir, { recursive: true, force: true });
+  assert.match(await rep0.locator('.cites').innerText(), /✓ 원인[\s\S]*디스크 사용량[\s\S]*✓ 경위[\s\S]*처음 시작된 시각/);
   step('debrief: record "힌트 단계 3개 · 소요 · 명령 수" with panel opens noted as not counted, no penalty; 결과 카드 downloads as a 1200×630 PNG');
   assert.match(await rep0.locator('.nextcase').innerText(), /다음 사건 → Case 1 「밤에만 실패하는 스크립트」/);
-  step(`a wrong report gets 서진's short reply and 지훈's nudge; the second solves Case 0 (${total0.replace(/\s+/g, ' ')})`);
+  step(`no citation → no submission; a wrong report (and a citation that does not back 경위) gets 서진's reply naming the slot and 지훈's nudge; the second solves Case 0, the debrief lists the evidence`);
+  step(`Case 0 solved (${total0.replace(/\s+/g, ' ')})`);
 
   await rep0.locator('.nextcase button').click();
   await page.locator('#boot .caselabel', { hasText: 'Case 1' }).waitFor();
@@ -359,20 +384,25 @@ try {
   await page.locator('.icon[data-app="report"]').dblclick();
   const rep1 = page.locator('.window[data-app="report"]');
   assert.equal(await rep1.locator('section.slot').count(), 2);
-  await rep1.locator('input[name="slot-cause"]').nth(3).check(); // blames 지훈's nginx change
-  await rep1.locator('input[name="slot-sequence"]').nth(1).check();
+  // 지훈's nginx red herring waits for his message (3 minutes in); until then the slot says more may come
+  assert.equal(await rep1.locator('input[name="slot-cause"][value="nginx"]').count(), await page.evaluate(() => (window.__game.st.triggersFired.includes('jihoon-nginx') ? 1 : 0)));
+  if (!(await page.evaluate(() => window.__game.st.triggersFired.includes('jihoon-nginx')))) await rep1.locator('.more-opts').first().waitFor();
+  await pick(rep1, 'cause', 'not-run');
+  await pick(rep1, 'sequence', 'true');
+  await cite(rep1, 'cause', /line 15: wikictl: command not found/);
+  await cite(rep1, 'sequence', /\(eunjae\) CMD \(~\/bin\/wiki-log-clean/);
   await rep1.locator('.submitbar .primary-btn').click();
   await rep1.locator('.reply', { hasText: '어딘가 로그랑 안 맞아요' }).waitFor();
-  assert.doesNotMatch(await rep1.locator('.reply').innerText(), /칸 중/, 'bundled: no slot count');
-  await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /제 nginx요/.test(m.text)), null, { timeout: 5000 });
-  await rep1.locator('input[name="slot-cause"]').nth(2).check();
+  assert.doesNotMatch(await rep1.locator('.reply').innerText(), /칸 중|근거가/, 'bundled: no slot count; the citations were fine');
+  await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'seojin' && /스크립트가 남긴 출력/.test(m.text)), null, { timeout: 5000 });
+  await pick(rep1, 'cause', 'cron-path');
   await rep1.locator('.submitbar .primary-btn').click();
   await page.locator('.moment.moment-result.good').waitFor({ timeout: 3000 });
   await rep1.locator('.debrief h2').waitFor();
   assert.match(await rep1.locator('.scorebox .s').nth(1).innerText(), /\/ 230/);
   await page.locator('.moment').waitFor({ state: 'detached', timeout: 4000 });
   assert.match(await rep1.locator('.nextcase').innerText(), /다음 사건 → Case 2 「지웠는데 안 비워지는 디스크」/);
-  step('Case 1 report: a wrong answer hears one bundled line and 지훈\'s nudge; the right one shows the result moment and the debrief');
+  step('Case 1 report: a wrong answer hears one bundled line and 서진\'s nudge; the right one shows the result moment and the debrief');
 
   await rep1.locator('.nextcase button').click();
   await page.locator('#boot .caselabel', { hasText: 'Case 2' }).waitFor();
@@ -416,6 +446,7 @@ try {
   await run('exit');
   await run('journalctl -u logshipd --since "2026-11-11 15:00" --until "2026-11-11 16:00"');
   await run('cat /etc/logshipd/logshipd.conf');
+  await pinLine(/^max_source_bytes = 0/);
   step('second host: ssh pay-api-01, the runtime debug switch at 14:22, back with exit; logshipd stats and config');
   await page.evaluate(() => {
     for (const w of document.querySelectorAll('.window')) w.classList.add('min');
@@ -427,9 +458,12 @@ try {
   await page.locator('.icon[data-app="report"]').dblclick();
   const rep2 = page.locator('.window[data-app="report"]');
   assert.equal(await rep2.locator('section.slot').count(), 3);
-  await rep2.locator('input[name="slot-cause"]').nth(3).check();
-  await rep2.locator('input[name="slot-sequence"]').nth(2).check();
-  for (const i of [0, 1, 2, 3, 4]) await rep2.locator('input[name="slot-responsibility"]').nth(i).check();
+  await pick(rep2, 'cause', 'open');
+  await pick(rep2, 'sequence', 'true');
+  for (const id of ['no-verify', 'open-rule', 'debug-expiry', 'quota', 'silent-drop']) await pick(rep2, 'responsibility', id);
+  await cite(rep2, 'cause', /\(deleted\)/);
+  await cite(rep2, 'sequence', /COMMAND=\/usr\/bin\/rm pay-api-01\.log/);
+  await cite(rep2, 'responsibility', /max_source_bytes = 0/);
   await rep2.locator('.submitbar .primary-btn').click();
   await page.locator('.moment.moment-result.good').waitFor({ timeout: 3000 });
   await rep2.locator('.debrief h2').waitFor();
@@ -617,9 +651,12 @@ try {
 
   await page.locator('.window[data-app="board"] .primary-btn').click();
   const report = page.locator('.window[data-app="report"]');
-  await report.locator('input[name="slot-cause"]').nth(2).check();
-  await report.locator('input[name="slot-sequence"]').nth(0).check();
-  for (const i of [0, 1, 2, 3, 4, 5, 6]) await report.locator('input[name="slot-responsibility"]').nth(i).check();
+  await pick(report, 'cause', 'fd');
+  await pick(report, 'sequence', 'true');
+  for (const id of ['git-admins', 'cron', 'oncall', 'account', 'bottleneck', 'cover-seojin', 'cover-jihoon']) await pick(report, 'responsibility', id);
+  await cite(report, 'cause', /too many open files/);
+  await cite(report, 'sequence', /AuthorDate: Fri Nov 13 18:02:11/);
+  await cite(report, 'responsibility', /git-admins:x:1050/);
   await report.locator('.submitbar .primary-btn').click();
   await report.locator('.debrief h2').waitFor();
   const total = await report.locator('.scorebox .s').nth(1).innerText();

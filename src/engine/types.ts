@@ -266,6 +266,25 @@ export interface OptionDef {
   weight?: number;
   /** Wrong option that blames a person: picks the colleague nudge. */
   blames?: string;
+  /**
+   * Shown in the report only once all these clues are found (or, for a trigger id, the trigger
+   * has fired): a red herring that names a fact the player has to come across first. Never on a correct option (its appearing would give it
+   * away); tests/report-options.test.ts checks both.
+   */
+  needs?: string[];
+}
+
+/**
+ * One kind of evidence a report slot accepts ("디스크 사용량 증거", "실행 기록"). A pin meets the
+ * kind when it proves one of `clues`. The board shows each kind as met / missing, the checklist's
+ * "증거 N개" counts only pins that meet some kind, and a slot's citation must be such a pin.
+ */
+export interface EvidenceKind {
+  id: string;
+  /** Neutral evidence type shown from the start — never the answer itself. */
+  label: string;
+  /** Clue ids whose pins count as this kind (red herrings stay out). */
+  clues: string[];
 }
 
 export interface SlotDef {
@@ -276,6 +295,12 @@ export interface SlotDef {
   options: OptionDef[];
   /** Multi: minimum weight sum that counts as correct (no negative picks allowed). */
   pass?: number;
+  /**
+   * Kinds of evidence this slot accepts. When present the report asks for at least one pinned
+   * item per slot as its citation, and the slot only counts as correct when a cited pin meets one
+   * of these kinds (src/engine/evidence.ts).
+   */
+  evidence?: EvidenceKind[];
 }
 
 export interface NudgeDef {
@@ -321,7 +346,11 @@ export interface HintsDef {
    * "요약" (found clues, generated) and "정답" (`answers`, default: the correct option text).
    */
   explicit: DirectionDef[];
-  /** "정답" rung per slot; default is generated from the slot's correct option(s). */
+  /**
+   * "정답" rung per slot: the specifics (times, files, numbers) shown under the correct option(s),
+   * which stay hypotheses without them. The step always names the correct option(s) and the
+   * evidence kinds the slot accepts.
+   */
   answers?: Partial<Record<SlotId, string>>;
   /** Senior mode only: points taken off for a revealed answer (default 30). */
   answerCost?: number;
@@ -493,7 +522,10 @@ export type ObjectiveCond =
   | { clue: string }
   /** The player opened something (same keys as clue `open` matches). */
   | { open: string }
-  /** At least this many pins are on the evidence board. */
+  /**
+   * At least this many pins on the evidence board that count as evidence: pins that meet some
+   * report slot's evidence kind (any pin when the case defines no kinds).
+   */
   | { pins: number };
 
 export interface ObjectiveDef {

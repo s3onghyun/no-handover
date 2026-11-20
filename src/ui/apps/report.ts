@@ -2,7 +2,10 @@ import { clear, h, storage } from '../dom.ts';
 import { t } from '../../i18n.ts';
 import type { AppDef, UiCtx } from '../wm.ts';
 import type { Submission } from '../../engine/scoring.ts';
-import { complete, grade, wrongReply } from '../../engine/scoring.ts';
+import { complete, grade, missingCites, slotName, wrongReply } from '../../engine/scoring.ts';
+import { kindsOf } from '../../engine/evidence.ts';
+import type { Game, Pin } from '../../engine/game.ts';
+import type { SlotId } from '../../engine/types.ts';
 import { playRecord, recordLine, resultCard } from '../../engine/record.ts';
 import { openedFor } from '../hintpanel.ts';
 import { drawResultCard, downloadResultCard } from '../resultcard.ts';
@@ -43,6 +46,7 @@ function debrief(root: HTMLElement, ctx: UiCtx): void {
         h('div.s', null, t('report.evidence'), h('b', null, `+${s.evidenceBonus}`)),
         senior ? h('div.s', null, t('debrief.steps'), h('b', null, `−${s.hintCost}`)) : h('div.s', null, t('debrief.steps'), h('b', null, `${rec.hints}개`)),
       ),
+      citeList(g, last.sub),
       h(
         'div.cardbox',
         null,
@@ -100,6 +104,43 @@ function debrief(root: HTMLElement, ctx: UiCtx): void {
   );
 }
 
+/** Short one-line form of a pin for the report and the debrief. */
+function pinLabel(p: Pin): string {
+  const text = p.text.replace(/\s+/g, ' ').trim();
+  return `${p.source} · ${text.length > 160 ? `${text.slice(0, 159)}…` : text}`;
+}
+
+/** Debrief: what each slot cited and whether it backed the slot. */
+function citeList(g: Game, sub: Submission): HTMLElement | null {
+  const slots = g.cs.accusation.slots.filter((s) => s.evidence?.length);
+  if (!slots.length) return null;
+  const last = g.st.submissions[g.st.submissions.length - 1].score;
+  return h(
+    'div.cites',
+    null,
+    h('h3', null, t('debrief.cites')),
+    h(
+      'ul',
+      null,
+      ...slots.map((slot) => {
+        const cited = g.st.pins.filter((p) => sub.cites?.[slot.id]?.includes(p.id));
+        const ok = last.slots[slot.id]?.cite === 'ok';
+        return h(
+          'li',
+          null,
+          h('b', null, `${ok ? '✓' : '✗'} ${slotName(slot)}`),
+          cited.length
+            ? h('ul', null, ...cited.map((p) => {
+                const kinds = kindsOf(slot, p).map((k) => k.label);
+                return h('li', null, pinLabel(p), h('span.muted', null, kinds.length ? ` — ${kinds.join(' · ')}` : ' — 이 칸의 근거 종류가 아님'));
+              }))
+            : h('span.muted', null, ' — 고른 근거 없음'),
+        );
+      }),
+    ),
+  );
+}
+
 /** "<who>의 회신" for the case (case 3: the CTO; the tutorial: Doyun's mentor). */
 function replyLabel(ctx: UiCtx): string {
   const r = ctx.game.cs.accusation.reply;
@@ -136,6 +177,39 @@ export const reportApp: AppDef = {
 
     const save = () => storage.set(key, JSON.stringify(sub));
 
+    // per slot: which pinned items back it (the engine checks them against the slot's kinds)
+    const citeBox = (slotId: SlotId, kinds: string[]) => {
+      const box = h(
+        'div.cite',
+        null,
+        h('div.cite-h', null, h('b', null, `📌 ${t('report.cite')}`), ` (${t('report.citeNeed')}) · ${t('report.citeKinds')}: ${kinds.join(' · ')}`),
+      );
+      if (!g.st.pins.length) {
+        box.appendChild(h('p.muted', null, t('report.noPins')));
+        return box;
+      }
+      const list = h('div.cite-list');
+      for (const p of g.st.pins) {
+        const on = sub.cites?.[slotId]?.includes(p.id) ?? false;
+        const inp = h('input', {
+          type: 'checkbox',
+          name: `cite-${slotId}`,
+          value: p.id,
+          checked: on,
+          onchange: (e: Event) => {
+            const cur = new Set(sub.cites?.[slotId] ?? []);
+            if ((e.target as HTMLInputElement).checked) cur.add(p.id);
+            else cur.delete(p.id);
+            sub.cites = { ...sub.cites, [slotId]: [...cur] };
+            save();
+          },
+        });
+        list.appendChild(h('label.citeopt', { title: p.text }, inp, h('span', null, pinLabel(p))));
+      }
+      box.appendChild(list);
+      return box;
+    };
+
     const render = () => {
       clear(root);
       if (g.st.finished) {
@@ -157,11 +231,13 @@ export const reportApp: AppDef = {
           ),
           h('div.prompt', null, slot.prompt),
         );
-        for (const o of slot.options) {
+        const shown = slot.options.filter((o) => g.optionShown(o));
+        for (const o of shown) {
           const checked = slot.type === 'single' ? sub[slot.id as 'cause' | 'sequence'] === o.id : sub.responsibility.includes(o.id);
           const inp = h('input', {
             type: slot.type === 'single' ? 'radio' : 'checkbox',
             name: `slot-${slot.id}`,
+            value: o.id,
             checked,
             onchange: (e: Event) => {
               const on = (e.target as HTMLInputElement).checked;
@@ -172,6 +248,8 @@ export const reportApp: AppDef = {
           });
           box.appendChild(h('label.opt', null, inp, h('span', null, o.text)));
         }
+        if (shown.length < slot.options.length) box.appendChild(h('p.muted.more-opts', null, t('report.moreOptions')));
+        if (slot.evidence?.length) box.appendChild(citeBox(slot.id, slot.evidence.map((k) => k.label)));
         for (const ht of hints) box.appendChild(h('div.hintbox', null, `💡 ${ht}`));
         root.appendChild(box);
       }
@@ -191,6 +269,14 @@ export const reportApp: AppDef = {
                   alert(t('report.need'));
                   return;
                 }
+                // cited pins that were taken off the board since do not count
+                const live = new Set(g.st.pins.map((p) => p.id));
+                sub.cites = Object.fromEntries(Object.entries(sub.cites ?? {}).map(([k, v]) => [k, (v ?? []).filter((id) => live.has(id))]));
+                const noCite = missingCites(g.cs, sub, g.st.pins);
+                if (noCite.length) {
+                  alert(t('report.needCite', { slots: g.cs.accusation.slots.filter((x) => noCite.includes(x.id)).map(slotName).join(', ') }));
+                  return;
+                }
                 if (!confirm(t('report.confirm'))) return;
                 const r = g.submit(sub);
                 if (!r) return;
@@ -198,7 +284,7 @@ export const reportApp: AppDef = {
                   const rp = g.cs.accusation.reply;
                   const count = max > 0 ? ` (${g.st.submissions.length}/${max})` : ` (${g.st.submissions.length})`;
                   // main cases: "어딘가 틀렸다" only (which slot stays hidden); the tutorial counts the wrong slots
-                  const body = wrongReply(g.cs, r, { partial: t('report.partial'), bundled: t('report.bundled') });
+                  const body = wrongReply(g.cs, r, { partial: t('report.partial'), bundled: t('report.bundled'), cite: t('report.citeWrong', { slots: '{slots}' }) });
                   lastReply = `${replyLabel(ctx)}${count}\n\n${body}\n\n${rp ? rp.sign : '오미래 드림 / CTO'}`;
                 }
                 render();
@@ -212,9 +298,14 @@ export const reportApp: AppDef = {
       if (lastReply) root.appendChild(h('div.reply', null, lastReply));
     };
     render();
+    // red herrings unlock as clues are found or triggers fire: re-render only when the set changes
+    const shownSig = () => g.cs.accusation.slots.map((s) => s.options.filter((o) => g.optionShown(o)).length).join(',');
+    let sig = shownSig();
     return {
       refresh: (type?: string) => {
         if (type === 'accuse' || type === 'pins' || type === 'hint') render();
+        else if ((type === 'clue' || type === 'message') && shownSig() !== sig) render();
+        sig = shownSig();
       },
     };
   },

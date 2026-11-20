@@ -13,6 +13,8 @@ import {
   type Annotation, type Level, type RangeId,
 } from '../dashboard/derive.ts';
 import { play, DUR } from '../motion.ts';
+import { hasEvidence, kindsFor, kindsOf } from '../../engine/evidence.ts';
+import { slotName } from '../../engine/scoring.ts';
 import { laneChart, logRow, logsBody, logTools, panel, statPanel, timeSeriesPanel, toolbar } from '../dashboard/panels.ts';
 
 /** 'MM-DD HH:MM' <-> local ms (year from the case clock). */
@@ -107,6 +109,36 @@ export const boardApp: AppDef = {
     };
     const onAnn = (a: Annotation) => a.pinId && flash(a.pinId);
 
+    // P3: per report slot, which kinds of evidence count and whether a pin meets each
+    const criteria = () => {
+      const rows = g.cs.accusation.slots.filter((sl) => sl.evidence?.length).map((sl) =>
+        h(
+          'div.crit-row',
+          { dataset: { slot: sl.id } },
+          h('b.crit-slot', null, slotName(sl)),
+          ...kindsFor(sl, g.st.pins).map(({ kind, pins }) =>
+            h(
+              `span.crit.${pins.length ? 'met' : 'miss'}`,
+              { dataset: { kind: kind.id }, 'aria-label': `${kind.label}: ${pins.length ? `${t('board.met')} (${pins.length})` : t('board.missing')}` },
+              h('span', { 'aria-hidden': 'true' }, pins.length ? '✓ ' : '○ '),
+              kind.label,
+              pins.length ? h('span.crit-n', { 'aria-hidden': 'true' }, ` ${pins.length}`) : null,
+            ),
+          ),
+        ),
+      );
+      return panel({ title: t('board.criteria'), cls: 'obs-criteria', description: t('board.criteriaNote') }, h('div.crit-list', null, ...rows), h('p.obs-hint', null, `ⓘ ${t('board.criteriaNote')}`));
+    };
+    /** Tag each pin row with the evidence kinds it meets (or that it meets none). */
+    const tagRows = (host: HTMLElement) => {
+      for (const row of host.querySelectorAll<HTMLElement>('.card[data-pin]')) {
+        const p = g.st.pins.find((x) => x.id === row.dataset.pin);
+        if (!p) continue;
+        const labels = [...new Set(g.cs.accusation.slots.flatMap((sl) => kindsOf(sl, p).map((k) => `${slotName(sl)}: ${k.label}`)))];
+        row.querySelector('.obs-msg')?.appendChild(h(`div.obs-ev${labels.length ? '' : '.none'}`, null, labels.length ? `📎 ${labels.join(' · ')}` : '근거 종류에 해당하지 않는 핀'));
+      }
+    };
+
     const render = () => {
       clear(root);
       const pins = g.st.pins;
@@ -141,6 +173,7 @@ export const boardApp: AppDef = {
         statPanel({ title: t('board.timeline'), value: String(onTl.length), state: 'none', note: '시각이 있는 증거' }),
         statPanel({ title: '시각 없음', value: String(inTray.length), state: inTray.length ? 'warn' : 'none', note: inTray.length ? '시각을 넣으면 타임라인에 올라가요' : undefined }),
       );
+      if (hasEvidence(g.cs)) grid.appendChild(criteria());
 
       const cronPins = pins.filter((p) => cronExpr(p.text));
       grid.appendChild(
@@ -194,6 +227,7 @@ export const boardApp: AppDef = {
         logsHost.appendChild(
           logsBody({ rows, query, levels, counts: counts(), onQuery: () => {}, onLevel: () => {}, actions, keyIds, draggable: true, empty: pins.length ? '조건에 맞는 줄이 없어요.' : t('board.empty'), hiddenOutside: outside, onShowAll: () => ((rangeId = 'fit'), render()) }),
         );
+        if (hasEvidence(g.cs)) tagRows(logsHost);
       };
       fillLogs();
       const logs = panel({ title: `${t('board.timeline')} — 증거 로그`, span: 'twothirds', cls: 'obs-logp', tools }, logsHost);
@@ -216,6 +250,7 @@ export const boardApp: AppDef = {
         }
         trayList.appendChild(row);
       }
+      if (hasEvidence(g.cs)) tagRows(trayList);
       if (!inTray.length) trayList.appendChild(h('p.obs-empty', null, pins.length ? '모든 증거가 타임라인에 있어요.' : t('board.empty')));
       const tray = panel({ title: t('board.tray'), span: 'third', cls: 'obs-trayp', description: '시각을 알 수 없는 증거. 시각을 넣거나 타임라인 패널로 끌어 놓으세요.' }, trayList);
       dropZone(tray, false);

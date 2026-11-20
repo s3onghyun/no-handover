@@ -1,6 +1,8 @@
 // Shared integrity checks for a case file (used by the per-case tests; not a test file itself).
 import assert from 'node:assert/strict';
-import type { CaseFile } from '../src/engine/types.ts';
+import type { CaseFile, SlotId } from '../src/engine/types.ts';
+import type { Game } from '../src/engine/game.ts';
+import type { Submission } from '../src/engine/scoring.ts';
 import { parseLocal } from '../src/engine/time.ts';
 
 /** Every reference resolves, the senior never speaks live, and nothing in the past is dated after the start. */
@@ -83,3 +85,28 @@ export function at(points: [string, number | null][], t: string): number {
   return points.at(-1)![1]!;
 }
 
+
+/**
+ * Evidence that backs every report slot (src/engine/evidence.ts): one pin per slot proving a clue
+ * of one of its kinds — a non-key clue when there is one, so the evidence bonus stays the same.
+ */
+export function backing(cs: CaseFile): { pins: { id: string; clueIds: string[] }[]; cites: Partial<Record<SlotId, string[]>> } {
+  const key = new Set(cs.clues.filter((c) => c.key).map((c) => c.id));
+  const pins: { id: string; clueIds: string[] }[] = [];
+  const cites: Partial<Record<SlotId, string[]>> = {};
+  for (const s of cs.accusation.slots) {
+    const all = (s.evidence ?? []).flatMap((k) => k.clues);
+    if (!all.length) continue;
+    const clue = all.find((c) => !key.has(c)) ?? all[0];
+    pins.push({ id: `test-${s.id}`, clueIds: [clue] });
+    cites[s.id] = [`test-${s.id}`];
+  }
+  return { pins, cites };
+}
+
+/** Puts `backing` pins on the game's board (once) and returns the submission citing them. */
+export function cited(g: Game, sub: Omit<Submission, 'cites'>): Submission {
+  const b = backing(g.cs);
+  for (const p of b.pins) if (!g.st.pins.some((x) => x.id === p.id)) g.st.pins.push({ ...p, kind: 'note', text: p.id, source: 'test', ts: null, onTimeline: false, at: 0 });
+  return { ...sub, cites: b.cites };
+}
