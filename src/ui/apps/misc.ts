@@ -231,7 +231,7 @@ export const playtestApp: AppDef = {
           'div.submitbar',
           { style: 'margin-top:14px' },
           h('button.primary-btn', { onclick: () => download(`no-handover-playtest-${new Date().toISOString().replace(/[:.]/g, '-')}.json`, JSON.stringify(g.playtestReport(), null, 2)) }, t('pt.save')),
-          h('button.ghost-btn', { onclick: () => confirm(t('pt.reset') + '?') && document.dispatchEvent(new CustomEvent('nh-reset')) }, t('pt.reset')),
+          h('button.ghost-btn', { onclick: () => document.dispatchEvent(new CustomEvent('nh-reset')) }, t('pt.reset')),
         ),
       );
     };

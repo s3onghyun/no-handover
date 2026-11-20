@@ -20,9 +20,9 @@ test('experience: asked once on a fresh profile, never over a case in progress',
 });
 
 test('experience: familiar folds the coach marks and holds automatic windows; new and unknown keep the tour', () => {
-  assert.deepEqual(experienceRules('familiar'), { coachMarks: false, autoWindows: false });
-  assert.deepEqual(experienceRules('new'), { coachMarks: true, autoWindows: true });
-  assert.deepEqual(experienceRules(null), { coachMarks: true, autoWindows: true });
+  assert.deepEqual(experienceRules('familiar'), { coachMarks: false, autoWindows: false, steps: false });
+  assert.deepEqual(experienceRules('new'), { coachMarks: true, autoWindows: true, steps: true });
+  assert.deepEqual(experienceRules(null), { coachMarks: true, autoWindows: true, steps: true });
 });
 
 test('experience: the playtest summary carries the last choice', () => {

@@ -11,11 +11,14 @@ import type { ObjectiveDef } from '../engine/types.ts';
 import { hasEvidence, kindsFor, uncoveredSlots } from '../engine/evidence.ts';
 import { slotName } from '../engine/scoring.ts';
 
-export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioManager): { refresh(): void; show(): void } {
+/** `steps: false` ("터미널이 익숙해요"): the goal line and the count only; the numbered steps open on "단계 보기". */
+export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioManager, opts: { steps?: () => boolean } = {}): { refresh(): void; show(): void } {
   const g = ctx.game;
   const def = g.cs.opening?.objectives;
   const el = h('section.todo', { 'aria-label': def?.title ?? '' });
   let collapsed = false;
+  /** Steps unfolded by hand on the goals-only sticky (this page only). */
+  let stepsShown = false;
   let folding = false;
   const fresh = new Set<string>();
 
@@ -70,8 +73,16 @@ export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioMa
       ),
     );
     if (collapsed) return;
-    // what the report asks, one click from the checklist (the goal card, no answers)
-    if (g.cs.goal) el.appendChild(h('button.todo-goal', { onclick: () => document.dispatchEvent(new CustomEvent('nh-goal')), title: t('goal.open') }, `🎯 ${t('goal.short')}: ${g.cs.accusation.slots.map((s) => s.title.replace(/\s*\(.*\)$/, '')).join(' · ')}`));
+    const goalsOnly = !(opts.steps?.() ?? true) && !stepsShown;
+    // what the report asks, one click from the checklist (the goal card, no answers); always there when the steps are folded away
+    if (g.cs.goal || goalsOnly) el.appendChild(h('button.todo-goal', { onclick: () => document.dispatchEvent(new CustomEvent('nh-goal')), title: t('goal.open') }, `🎯 ${t('goal.short')}: ${g.cs.accusation.slots.map((s) => s.title.replace(/\s*\(.*\)$/, '')).join(' · ')}`));
+    if (goalsOnly) {
+      el.classList.add('goals-only');
+      el.appendChild(h('button.todo-steps', { type: 'button', 'aria-expanded': 'false', onclick: () => ((stepsShown = true), render()) }, `${t('obj.showSteps')} ▾`));
+      fresh.clear();
+      return;
+    }
+    el.classList.remove('goals-only');
     const ol = h('ol');
     def.items.forEach((it, i) => {
       const done = g.objectives.isDone(it.id);

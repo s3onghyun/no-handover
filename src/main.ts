@@ -1,6 +1,6 @@
 import './ui/style.css';
 import { CAMPAIGN } from './cases/index.ts';
-import { Campaign, parseProgress, type CampaignEntry, type Progress } from './engine/campaign.ts';
+import { Campaign, parseGrades, parseProgress, saveInfo, type CampaignEntry, type CaseState, type Progress } from './engine/campaign.ts';
 import { Game, type Pin, type SaveState } from './engine/game.ts';
 import { evidencePins, hasEvidence, slotProgress, uncoveredSlots } from './engine/evidence.ts';
 import { fmtHM, fmtKoShort, parseLocal } from './engine/time.ts';
@@ -28,12 +28,14 @@ import { goalCard } from './ui/goal.ts';
 import { modal } from './ui/modal.ts';
 import type { ClueDef, TourStep } from './engine/types.ts';
 import type { Message } from './engine/build.ts';
-import type { ScoreResult } from './engine/scoring.ts';
+import { grade, type ScoreResult } from './engine/scoring.ts';
 
 // ------------------------------------------------------------------ campaign: which case runs (docs/campaign-ladder.md)
 const campaign = new Campaign(CAMPAIGN);
 const PROGRESS_KEY = 'no-handover:campaign';
 const CURRENT_KEY = 'no-handover:current';
+/** Last grade per finished case (src/engine/campaign.ts parseGrades): survives "이 사건 처음부터". */
+const GRADES_KEY = 'no-handover:grades';
 const params = new URLSearchParams(location.search);
 setLang((params.get('lang') as Lang) === 'en' ? 'en' : 'ko');
 document.documentElement.lang = getLang();
@@ -51,6 +53,7 @@ if (params.has('fresh')) {
   storage.remove(EXPERT_KEY);
   storage.remove(PROGRESS_KEY);
   storage.remove(CURRENT_KEY);
+  storage.remove(GRADES_KEY);
 }
 let progress: Progress = parseProgress(storage.get(PROGRESS_KEY));
 /** "터미널이 익숙해요 / 처음이에요" (src/engine/experience.ts): null until the player has chosen. */
@@ -65,6 +68,8 @@ storage.set(CURRENT_KEY, CASE.id);
 const SAVE_KEY = `no-handover:save:${CASE.id}`;
 const caseLabel = (e: CampaignEntry) => `${t('case.label', { n: e.slot })}${e.tutorial ? ` · ${t('case.tutorial')}` : ''}`;
 document.title = `${t('game.title')} — ${caseLabel(ENTRY)} ${CASE.title}`;
+/** Set while this case's save is being thrown away: nothing may write it back before the reload. */
+let resetting = false;
 /** Open another case (full reload: one Game per page). */
 function goCase(id: string): void {
   storage.set(CURRENT_KEY, id);
@@ -113,7 +118,16 @@ const markSolved = () => {
   progress = campaign.solve(CASE.id, progress);
   saveProgress();
 };
-if (game.st.finished) markSolved(); // saves from before the campaign existed
+let grades = parseGrades(storage.get(GRADES_KEY));
+const recordGrade = (g: string | null | undefined) => {
+  if (!g) return;
+  grades = { ...grades, [CASE.id]: g };
+  storage.set(GRADES_KEY, JSON.stringify(grades));
+};
+if (game.st.finished) {
+  markSolved(); // saves from before the campaign existed
+  if (!grades[CASE.id]) recordGrade(saveInfo(game.serialize())?.grade);
+}
 // music is one-shot stings by default; `?music=loop` lets a music.* cue loop (ambience always loops)
 const audio = new AudioManager(MANIFEST, { storage, musicLoops: params.get('music') === 'loop' });
 (window as unknown as { __game: Game; __audio: AudioManager }).__game = game; // e2e and facilitator console access
@@ -126,7 +140,7 @@ let briefingActive = false;
 let saveTimer = 0;
 const save = () => {
   clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(() => storage.set(SAVE_KEY, game.serialize()), 250);
+  if (!resetting) saveTimer = window.setTimeout(() => !resetting && storage.set(SAVE_KEY, game.serialize()), 250);
 };
 
 // ------------------------------------------------------------------ DOM skeleton
@@ -180,7 +194,15 @@ const skipBtn =
   nextAfterTutorial && !progress.solved.includes(CASE.id)
     ? h('button.tray-btn.skiptut', { title: `${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」`, onclick: () => void skipTutorial() }, `⏭ ${t('case.skipShort')}`)
     : null;
-const taskbar = h('div#taskbar', null, h('div.brand', null, t('game.title'), h('small', null, t('game.titleKo'))), tasks, skipBtn, guideBtn, goalBtn, hintBtn, notifBtn, helpBtn, h('div.soundctl', null, soundBtn, volume), ptBtn, clock);
+// a finished case: the way on to the next one stays in the taskbar (the debrief has the same button)
+const nextEntry = campaign.next(CASE.id);
+const nextBtn = h('button.tray-btn.nextcase-btn', { type: 'button', hidden: true, onclick: () => nextEntry && goCase(nextEntry.id) }, nextEntry ? `${t('case.next')} → ${caseLabel(nextEntry)}` : '');
+if (nextEntry) nextBtn.title = `${caseLabel(nextEntry)} 「${nextEntry.title}」`;
+function syncNextBtn(): void {
+  nextBtn.hidden = !(nextEntry && game.st.finished);
+}
+syncNextBtn();
+const taskbar = h('div#taskbar', null, h('div.brand', null, t('game.title'), h('small', null, t('game.titleKo'))), tasks, skipBtn, nextBtn, guideBtn, goalBtn, hintBtn, notifBtn, helpBtn, h('div.soundctl', null, soundBtn, volume), ptBtn, clock);
 const toasts = h('div.toasts', { 'aria-live': 'polite' });
 document.body.append(desktop, taskbar, toasts);
 /**
@@ -478,6 +500,7 @@ helpBtn.onclick = () => {
     ),
   );
   if (guideSteps.length) pop.appendChild(h('div.help-acts', null, h('button.ghost-btn.guide-open', { type: 'button', onclick: openGuide }, `🧭 ${t('guide.open')}`)));
+  pop.appendChild(h('div.help-acts', null, h('button.ghost-btn.cases-open', { type: 'button', onclick: showCaseList }, `☰ ${t('case.list')}`)));
   document.body.appendChild(pop);
 };
 
@@ -517,6 +540,7 @@ function setExperience(e: Experience, via: 'boot' | 'help'): void {
   game.log('experience', { choice: e, via });
   syncGuideBtn();
   tourUi?.refresh();
+  objectivesUi?.refresh();
 }
 function setExpert(on: boolean, via: 'boot' | 'help'): void {
   expertPref = on;
@@ -612,16 +636,15 @@ game.on('accuse', (sc) => {
     const r = sc as ScoreResult;
     showMoment({ kind: 'result', title: r.allCorrect ? t('moment.solved') : t('moment.closed'), sub: `${r.total} / ${r.max}`, tone: r.allCorrect ? 'good' : 'plain', holdMs: 2200 });
     markSolved();
+    recordGrade(grade(r.total, r.max));
     skipBtn?.remove(); // solved: no tutorial left to skip
+    syncNextBtn();
     audio.stopLoop('music.tension', 1500);
     void audio.play('music.reveal', { gain: (sc as ScoreResult).allCorrect ? 1 : 0.8 });
   } else audio.loop('music.tension'); // a wrong report raises the stakes
 });
-document.addEventListener('nh-reset', () => {
-  storage.remove(SAVE_KEY);
-  storage.remove(`no-handover:report:${CASE.id}`);
-  goCase(CASE.id);
-});
+// "처음부터" (lock screen, debrief, playtest panel): always asks first; the case list asks for any case
+document.addEventListener('nh-reset', () => void confirmRestart(ENTRY));
 
 // ------------------------------------------------------------------ clock + loop
 let clockSig = '';
@@ -646,24 +669,27 @@ function loop() {
   renderClock();
   if (game.st.unlocked && !briefingActive && !game.st.finished && game.now() >= TENSION_AT) audio.loop('music.tension');
   if (game.st.unlocked && !briefingActive) tourUi?.refresh(); // time-based steps (💡 after a few minutes)
-  if (n - lastSave > 5000 && game.st.unlocked) {
+  if (n - lastSave > 5000 && game.st.unlocked && !resetting) {
     lastSave = n;
     storage.set(SAVE_KEY, game.serialize());
   }
 }
 setInterval(loop, 1000);
 document.addEventListener('visibilitychange', () => (last = performance.now()));
-window.addEventListener('beforeunload', () => storage.set(SAVE_KEY, game.serialize()));
+window.addEventListener('beforeunload', () => !resetting && storage.set(SAVE_KEY, game.serialize()));
 
 // ------------------------------------------------------------------ boot
 /** The desktop as the player first sees it: terminal open with the half-typed prompt pulsing. */
 function revealDesktop(first: boolean) {
   renderIcons();
   renderClock();
-  objectivesUi = mountObjectives(desktop, ctx, audio);
+  // 익숙해요 folds the steps of the guided checklists (the cases 숙련자 모드 has an overlay for, 0–2); Case 3's short list stays for everyone
+  objectivesUi = mountObjectives(desktop, ctx, audio, { steps: () => rules().steps || !CASE.expert });
   objectivesUi.refresh(); // the sticky is on the desktop before the first windows size themselves around it
   if (first && !game.cs.opening) wm.open('mail', 'brief');
-  wm.open('terminal');
+  // "터미널이 익숙해요" promises no window opens by itself: in the tutorial the terminal waits behind its (pulsing) icon
+  if (rules().autoWindows || !ENTRY.tutorial) wm.open('terminal');
+  else game.log('auto-window-held', { app: 'terminal' });
   objectivesUi.refresh();
   tourUi ??= mountTour(game, { blocked: () => briefingActive || !game.st.unlocked || game.st.finished || !!document.querySelector('.moment, #briefing'), collapsed: () => !rules().coachMarks });
   setTimeout(() => tourUi?.refresh(), 1200);
@@ -744,22 +770,58 @@ const expChoice = h(
 /** Tutorial only: experienced players jump to the next case (Case 0 is marked skipped). */
 const skipLink = skipBtn && nextAfterTutorial ? h('button.linkbtn.skip', { onclick: () => void skipTutorial() }, `${t('case.skip')} ${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」`) : null;
 
-/** Case list: the five rungs, locked until the previous playable case is solved. */
+/** "이 사건 처음부터": after a confirm, throw away that case's save and open it on its lock screen. Solved/grade records stay. */
+async function confirmRestart(e: CampaignEntry): Promise<void> {
+  const keeps = progress.solved.includes(e.id) ? ` ${t('case.restartKeeps')}` : '';
+  const yes = await modal({ kind: 'modal-restart', title: t('case.restartQ', { c: `${caseLabel(e)} 「${e.title}」` }), body: `${t('case.restartNote')}${keeps}`, ok: t('case.restartOk'), cancel: t('case.cancel'), focusCancel: true });
+  game.log('case-restart', { case: e.id, ok: yes });
+  if (!yes) return;
+  if (e.id === CASE.id) {
+    resetting = true; // the unload handler and the save timers must not write this case back
+    clearTimeout(saveTimer);
+  }
+  storage.remove(`no-handover:save:${e.id}`);
+  storage.remove(`no-handover:report:${e.id}`);
+  goCase(e.id);
+}
+
+/** Case list: every rung with its state (locked / new / in progress / solved with grade), the next case, and a restart per case. */
 function showCaseList(): void {
+  closePop();
   document.querySelector('#cases')?.remove();
-  const statusText: Record<string, string> = { solved: `✓ ${t('case.solved')}`, skipped: t('case.skipped'), open: '', locked: `🔒 ${t('case.locked')}`, soon: t('case.soon') };
+  const up = progress.solved.length || progress.skipped.length ? campaign.upNext(progress) : null;
   const list = h('ol.caselist');
   for (const e of campaign.entries) {
-    const st = campaign.status(e.id, progress);
     const current = e.id === CASE.id;
+    const save = !e.cs ? null : current ? saveInfo(game.serialize()) : saveInfo(storage.get(`no-handover:save:${e.id}`));
+    const st = campaign.state(e.id, progress, save);
+    const g = grades[e.id];
+    const label: Record<CaseState, string> = {
+      locked: `🔒 ${t('case.locked')}`,
+      soon: t('case.soon'),
+      new: t('case.new'),
+      playing: `▶ ${t('case.playing')}${g ? ` · ${t('case.prevGrade', { g })}` : ''}`,
+      done: `✓ ${t('case.solved')}${g ? ` · ${t('case.grade', { g })}` : ''}`,
+      skipped: t('case.skipped'),
+    };
+    const isNext = up?.id === e.id;
+    const playable = st !== 'locked' && st !== 'soon';
+    const openLabel = st === 'playing' ? t('case.resume') : isNext ? `${t('case.next')} →` : t('case.play');
     list.appendChild(
       h(
-        `li.case-${st}${current ? '.current' : ''}`,
-        { dataset: { id: e.id } },
-        h('div.cl-head', null, h('b', null, caseLabel(e)), h('span.cl-when', null, e.when), statusText[st] ? h('span.cl-st', null, statusText[st]) : null),
+        `li.case-${st}${current ? '.current' : ''}${isNext ? '.next' : ''}`,
+        { dataset: { id: e.id, state: st } },
+        h('div.cl-head', null, h('b', null, caseLabel(e)), h('span.cl-when', null, e.when), isNext ? h('span.cl-next', null, t('case.next')) : null, h('span.cl-st', null, label[st])),
         h('div.cl-title', null, e.title),
         h('div.cl-pr', null, e.principle),
-        e.cs && (st === 'open' || st === 'solved' || st === 'skipped') && !current ? h('button', { onclick: async () => (await confirmCase(e, 'list')) && goCase(e.id) }, t('case.play')) : null,
+        playable
+          ? h(
+              'div.cl-acts',
+              null,
+              current ? h('span.cl-here', null, t('case.here')) : h('button.cl-open', { type: 'button', onclick: async () => (await confirmCase(e, 'list')) && goCase(e.id) }, openLabel),
+              save?.started ? h('button.cl-restart', { type: 'button', onclick: () => void confirmRestart(e) }, `↺ ${t('case.restart')}`) : null,
+            )
+          : null,
       ),
     );
   }
@@ -767,8 +829,13 @@ function showCaseList(): void {
     dlg.remove();
     if (boot.isConnected) focusBoot();
   };
-  const dlg = h('div#cases', { role: 'dialog', 'aria-label': t('case.listTitle') }, h('div.cl-card', null, h('h3', null, t('case.listTitle')), list, h('button.primary', { onclick: close }, t('case.close'))));
+  const dlg = h(
+    'div#cases',
+    { role: 'dialog', 'aria-label': t('case.listTitle'), onkeydown: (ev: KeyboardEvent) => ev.key === 'Escape' && !document.querySelector('.modal-back') && close() },
+    h('div.cl-card', null, h('h3', null, t('case.listTitle')), list, h('button.primary', { onclick: close }, t('case.close'))),
+  );
   document.body.appendChild(dlg);
+  (dlg.querySelector('.cl-open, button.primary') as HTMLElement | null)?.focus();
 }
 
 const boot = h(
@@ -782,7 +849,14 @@ const boot = h(
     h('div.avatar', null, ctx.avatar(game.cs.owner, 84)),
     h('div.who', null, `${t('boot.owner')} — ${t('boot.locked')}`),
     h('div.status', null, game.cs.boot?.status ?? t('boot.status')),
-    resumable
+    resumable && game.st.finished && nextEntry
+      ? [
+          h('button.primary.boot-next', { onclick: () => goCase(nextEntry.id), autofocus: true }, `${t('case.next')} → ${caseLabel(nextEntry)} 「${nextEntry.title}」`),
+          h('br'),
+          h('button', { onclick: () => start(false) }, t('boot.review')),
+          h('button', { onclick: () => document.dispatchEvent(new CustomEvent('nh-reset')) }, t('boot.restart')),
+        ]
+      : resumable
       ? [h('button.primary', { onclick: () => start(false) }, t('boot.resume')), h('button', { onclick: () => document.dispatchEvent(new CustomEvent('nh-reset')) }, t('boot.restart'))]
       : askExperience
         ? expChoice
