@@ -435,6 +435,7 @@ export const caseZeroWiki: CaseFile = {
     from: '2026-11-09T18:00',
     to: '2026-11-10T09:30',
     stepMin: 5,
+    live: true,
     marks: ['2026-11-09T21:14', '2026-11-10T08:47'],
     stats: [
       { title: '응답 시간 p50', value: '응답 없음', state: 'crit', note: '08:47 전까지 120ms' },

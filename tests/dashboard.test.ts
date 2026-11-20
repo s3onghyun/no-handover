@@ -8,8 +8,10 @@ import type { CaseFile, SeriesDef } from '../src/engine/types.ts';
 import { caseFriday1802 } from '../src/cases/friday-1802.ts';
 import { caseZeroWiki } from '../src/cases/case-0-wiki.ts';
 import { CAMPAIGN } from '../src/cases/index.ts';
+import { DUR, LIVE_TICK_MS } from '../src/ui/motion.ts';
+import { readFileSync } from 'node:fs';
 import {
-  caseAnnotations, cronExpr, cronOccurrences, fitRange, fmtLogTs, logRows, nextCron, panelRange, parseCron, pinAnnotations, pinKind, pinLevel,
+  caseAnnotations, cronExpr, dataWindow, lastSample, cronOccurrences, fitRange, fmtLogTs, logRows, nextCron, panelRange, parseCron, pinAnnotations, pinKind, pinLevel,
   placeAnnotations, rangeOptions, sampleSeries, spansAbove, summarizePanel, timeTicks, valueAt, xOf, yExtent,
 } from '../src/ui/dashboard/derive.ts';
 
@@ -186,4 +188,36 @@ test('Case 3 through the Game: the pinned crontab line and the 03:15:40 error li
   const err5xx = caseFriday1802.panels!.timeseries[0];
   const spike = spansAbove(sampleSeries(err5xx.series[0], win, 1), 20)[0];
   assert.ok(anns.every((a) => a.ts <= spike.from && spike.from - a.ts <= 60_000), 'both markers sit right before the 5xx crossing');
+});
+
+test('live graphs: data stops at the snapshot end, or follows the in-game clock when live; points stay put as the range slides', () => {
+  const cp = caseFriday1802.panels!;
+  const now = L('2026-11-16T09:00');
+  assert.equal(cp.live, true);
+  assert.deepEqual(dataWindow(cp, now), { from: L('2026-11-14T02:00'), to: now });
+  assert.deepEqual(dataWindow({ ...cp, live: false }, now), { from: L('2026-11-14T02:00'), to: L('2026-11-14T07:00') });
+  // never past the in-game clock (Case 0 starts at the snapshot's last minute)
+  const c0 = caseZeroWiki.panels!;
+  assert.equal(dataWindow(c0, L('2026-11-10T09:00')).to, L('2026-11-10T09:00'));
+  const s5xx = cp.timeseries[0].series[0];
+  const hour = (end: number) => ({ from: end - 3_600_000, to: end });
+  const a = sampleSeries(s5xx, hour(now), 1, 'err:5xx', dataWindow(cp, now));
+  const later = now + 16 * 60_000; // ~1 s of play at rate 16
+  const b = sampleSeries(s5xx, hour(later), 1, 'err:5xx', dataWindow(cp, later));
+  assert.equal(lastSample(a)!.ts, now);
+  assert.equal(lastSample(b)!.ts, later, 'new points arrive with the clock');
+  const shared = a.filter((x) => b.some((y) => y.ts === x.ts));
+  assert.ok(shared.length > 40);
+  assert.ok(shared.every((x) => b.find((y) => y.ts === x.ts)!.v === x.v), 'existing points do not wiggle');
+  // an archive keeps the weekend only
+  const arch = sampleSeries(s5xx, hour(now), 1, 'err:5xx', dataWindow({ ...cp, live: false }, now));
+  assert.equal(lastSample(arch), null);
+});
+
+test('motion tokens: every investigation-time animation is under a second and the CSS uses the same numbers', () => {
+  for (const [k, v] of Object.entries(DUR)) assert.ok(v > 0 && v < 1000, `${k} ${v}`);
+  assert.ok(LIVE_TICK_MS >= 500);
+  const css = readFileSync(new URL('../src/ui/style.css', import.meta.url), 'utf8');
+  for (const [k, v] of Object.entries(DUR)) assert.match(css, new RegExp(`--motion-${k}: ${v}ms`), k);
+  assert.match(css, /prefers-reduced-motion: reduce\)\s*\{[^}]*\.obs-row\.flash[\s\S]*?\.obs-row\.snap, \.obs-mk\.snap, \.obs-thrg\.blink, \.obs-stat\.blink, \.obs-tail\.arrive \{ animation: none; \}/);
 });

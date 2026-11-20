@@ -113,16 +113,24 @@ export const inRange = (ts: number, r: Range): boolean => ts >= r.from && ts <= 
 
 // ------------------------------------------------------------------ series
 
-/** Small deterministic PRNG (mulberry32) seeded from a string. */
-function rng(seed: string): () => number {
+/** Deterministic noise in [0, 1) for a series at a timestamp (stable when the range slides). */
+function noise(seed: string, ts: number): number {
   let a = 2166136261;
-  for (const ch of seed) a = Math.imul(a ^ ch.charCodeAt(0), 16777619);
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+  for (const ch of `${seed}@${Math.round(ts / MIN)}`) a = Math.imul(a ^ ch.charCodeAt(0), 16777619);
+  a = (a + 0x6d2b79f5) | 0;
+  let t = Math.imul(a ^ (a >>> 15), 1 | a);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+/**
+ * Where the dashboard has data: from the snapshot start to its end, or to the in-game clock
+ * when the case marks it `live` (the last values keep coming). Never past the in-game clock.
+ */
+export function dataWindow(p: DashboardDef, now: number): Range {
+  const from = parseLocal(p.from);
+  const to = parseLocal(p.to);
+  return { from, to: Math.max(from, p.live ? now : Math.min(to, now)) };
 }
 
 /** Value of a series definition at `ts` (no jitter); null = no data. */
@@ -145,19 +153,26 @@ export interface Sample {
   v: number | null;
 }
 
-/** Sample a series every `stepMin` minutes across `win`, with seeded jitter. */
-export function sampleSeries(s: SeriesDef, win: Range, stepMin: number, seed = s.name): Sample[] {
+/**
+ * Sample a series on the `stepMin` grid across `win`, with seeded per-timestamp jitter.
+ * Samples outside `data` (the dashboard's data window) are null.
+ */
+export function sampleSeries(s: SeriesDef, win: Range, stepMin: number, seed = s.name, data?: Range): Sample[] {
   const step = Math.max(1, stepMin) * MIN;
-  const r = rng(seed);
   // noise never lifts a value above the series' highest defined point (a saturated gauge stays flat)
   const cap = Math.max(...s.points.map(([, v]) => v ?? -Infinity));
   const out: Sample[] = [];
-  for (let ts = win.from; ts <= win.to; ts += step) {
-    const base = valueAt(s, ts);
-    const n = r();
-    out.push({ ts, v: base === null ? null : s.jitter && base !== 0 ? Math.min(cap, Math.max(0, base * (1 + s.jitter * (n * 2 - 1)))) : base });
+  for (let ts = Math.ceil(win.from / step) * step; ts <= win.to; ts += step) {
+    const base = data && (ts < data.from || ts > data.to) ? null : valueAt(s, ts);
+    out.push({ ts, v: base === null ? null : s.jitter && base !== 0 ? Math.min(cap, Math.max(0, base * (1 + s.jitter * (noise(seed, ts) * 2 - 1)))) : base });
   }
   return out;
+}
+
+/** Latest non-null sample, if any. */
+export function lastSample(samples: Sample[]): Sample | null {
+  for (let i = samples.length - 1; i >= 0; i--) if (samples[i].v !== null) return samples[i];
+  return null;
 }
 
 /** Y-axis extent for a panel: [min, max] including thresholds, with a little headroom. */

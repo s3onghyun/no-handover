@@ -870,6 +870,7 @@ done`,
     from: '2026-11-14T02:00',
     to: '2026-11-14T07:00',
     stepMin: 1,
+    live: true,
     marks: ['2026-11-14T03:15', '2026-11-14T05:40'],
     stats: [
       { title: '디스크 /', value: '42%', state: 'ok' },

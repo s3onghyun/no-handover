@@ -566,6 +566,11 @@ export interface DashboardDef {
   from: LocalTime;
   to: LocalTime;
   stepMin: number;
+  /**
+   * Live dashboard: after `to` the series keep their last values up to the in-game clock and
+   * the graphs grow as the clock runs. Without it the panels stop at `to` (an archive).
+   */
+  live?: boolean;
   timeseries: TimeSeriesPanelDef[];
   stats?: StatPanelDef[];
   /** Annotations already on the archived dashboard (what the snapshot itself shows). */

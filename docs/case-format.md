@@ -32,7 +32,8 @@ clues: 플레이어가 본 출력/연 항목을 정규식으로 감지 → 진�
 | `generators` | 잡음 생성기 (5절) |
 | `channels`, `mails`, `notes`, `stickies`, `notifications` | 메신저 채널, 메일, 도윤 메모장, 바탕화면 포스트잇, 알림 센터 (6절) |
 | `terminalTabs` | 처음 열려 있는 터미널 탭: `host`, `cwd`, `prefill`(입력창에 남은 글. Case 3은 `crontab -`, Case 0은 **반드시 성공하는** `history`), `scrollback`(잠긴 화면에 남은 줄) |
-| `dashboard` | 대시보드 스냅샷(ASCII 줄 배열) |
+| `dashboard` | 대시보드 스냅샷(ASCII 줄 배열). `panels`가 없으면 대시보드 앱이 이 줄들을 텍스트 패널로 보여 준다 |
+| `panels` | 선택. 같은 스냅샷을 구조화한 패널(시계열·스탯·주석). 대시보드 앱과 증거 보드가 그린다 (6절 끝) |
 | `clues`, `accusation`, `hints`, `triggers`, `debrief` | 7~11절 |
 | `opening` | 첫 3분: 브리핑 장면과 "오늘 할 일" 체크리스트 (12절, 선택) |
 | `shell`, `rail`, `desktop` | 튜토리얼 장치: 허용 명령 목록, 레일(동료가 다음 명령을 알려 줌), 아이콘 해금 (13절, 선택) |
@@ -98,6 +99,24 @@ clues: 플레이어가 본 출력/연 항목을 정규식으로 감지 → 진�
 - `mails`: `account`, `folder: 'inbox' | 'drafts'`, `later: true`면 트리거로 나중에 도착, `locked`면 잠긴 초안(비밀번호 힌트 문구).
 - `notes`: 도윤 메모장 쪽. `highlight`(트리거로 강조될 줄 번호)와 `reveal`(그 아래 덧붙는 도윤의 한 줄).
 - `notifications`: OS 알림 센터 미리보기. Case 3은 02:12에 지워진 서진 메시지 원문이 여기 남는다.
+
+### 대시보드 패널 `panels` (선택)
+
+대시보드 앱(📈)과 증거 보드(📌)는 어두운 패널 격자로 그려진다. `panels`가 있으면 그 데이터로, 없으면 `dashboard` ASCII 줄을 텍스트 패널 하나로 보여 준다(옛 사건은 고칠 필요 없음). 사건마다 다른 UI 코드는 없다 — 화면은 전부 이 데이터와 플레이어의 핀에서 나온다.
+
+| 필드 | 뜻 |
+|---|---|
+| `title`, `from`, `to`, `stepMin` | 패널 제목(경로 표시), 스냅샷 구간, 샘플 간격(분) |
+| `live` | `true`면 `to` 뒤로도 마지막 값이 게임 시계까지 이어지고, 그래프가 시계를 따라 자란다(실시간 버튼으로 멈춤). 없으면 `to`에서 끊기는 보관본 |
+| `timeseries[]` | `id`, `title`, `unit`, `min`/`max`, `width: 'full' \| 'half'`, `description`(패널 메뉴 "설명"), `thresholds[]`(`value`, `label` — 점선과 글자로 그려지고 넘는 구간이 글로도 나온다), `series[]` |
+| `series[]` | `name`, `color`(green·yellow·red·blue·purple·grey), `points: [시각, 값 \| null][]`(값이 바뀌는 시점만; `null` = 그때부터 데이터 없음), `interp: 'step' \| 'linear'`(기본 step), `jitter`(시드 고정 잡음 비율, 최고점은 넘지 않음) |
+| `stats[]` | `title`, `value`(문자열, `null` = "데이터 없음"), `state: 'ok' \| 'warn' \| 'crit' \| 'none'`(색 + 정상/주의/위험 글자), `note` |
+| `annotations[]` | 스냅샷 자체에 있던 표시: `at`, `label`, `kind: 'deploy' \| 'cron' \| 'alert' \| 'error' \| 'event'` |
+| `marks[]` | 시간 축에 굵게 따로 적을 시각(ASCII 스냅샷의 03:15 · 05:40 같은 눈금) |
+
+ASCII 스냅샷과 같은 내용만 담을 것: 패널은 단서를 새로 알려 주지 않는다. 플레이어가 핀한 증거는 자동으로 주석이 된다 — 시각이 있는 핀은 그 시각에, 크론탭 줄(`15 3 * * 6 …`)은 구간 안의 실행 시각마다 ▲로. 종류(◆ 변경 · ▲ 크론 · ■ 알림 · ✖ 오류·경고 · ● 이벤트)와 로그 레벨(ERR · WARN · INFO)은 핀 글에서 정해진다(`src/ui/dashboard/derive.ts`).
+
+움직임은 조사 중에는 작게만: 새 핀이 보드에 붙는 스냅, 기준선을 넘은 그래프와 위험 스탯의 짧은 깜빡임, 실시간 그래프에 새 점이 들어오는 표시. 모두 1초 미만이고 입력을 막지 않으며, `prefers-reduced-motion`이면 움직임 없이 끝 상태만 보인다(길이는 `src/ui/motion.ts`의 `DUR`).
 
 ## 7. clues — 단서 감지
 
@@ -228,4 +247,5 @@ desktop: { icons: [{ app: 'terminal' }, { app: 'messenger' }, { app: 'mail' }, {
 5. 넛지·트리거 대사는 보이스 치트시트로 검토.
 6. `opening`: 브리핑 대사(30~60초), 오늘 할 일 3개, 새 음성 줄이 있으면 `src/audio/manifest.ts`와 큐 시트(`data/infra-mystery-game/audio-cues.md`)에 id 추가.
 7. `src/cases/index.ts`의 `CAMPAIGN`에서 자리(`slot`)의 `cs`를 채운다. 자리만 있던 "준비 중" 칸이 플레이 가능한 사건이 된다.
-8. `npm test` (무결성·도달 가능성 테스트), `npm run build && npm run e2e`.
+8. 대시보드가 있으면 `panels`를 ASCII 스냅샷과 같은 내용으로 채운다(선택).
+9. `npm test` (무결성·도달 가능성 테스트), `npm run build && npm run e2e`.

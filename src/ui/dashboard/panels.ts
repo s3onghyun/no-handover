@@ -5,11 +5,12 @@
 // Colour is never the only signal: thresholds carry labels, levels carry text, kinds carry shapes.
 
 import { clear, h } from '../dom.ts';
+import { DUR, reducedMotion } from '../motion.ts';
 import type { Pin } from '../../engine/game.ts';
 import type { AnnotationKind, StatPanelDef, TimeSeriesPanelDef } from '../../engine/types.ts';
 import {
   changePoints, fmtDayHM, fmtHM, fmtLogTs, fmtRange, fmtValue, KIND_GLYPH, KIND_LABEL, KIND_SHAPE, LEVEL_LABEL, pinKind, pinLevel,
-  placeAnnotations, sampleSeries, spansAbove, summarizePanel, timeTicks, xOf, yExtent,
+  lastSample, placeAnnotations, sampleSeries, spansAbove, summarizePanel, timeTicks, xOf, yExtent,
   type Annotation, type Level, type Range, type RangeId, type RangeOption, type Sample,
 } from './derive.ts';
 
@@ -139,11 +140,11 @@ export function toolbar(o: ToolbarOpts): HTMLElement {
 const STATE_WORD = { ok: '정상', warn: '주의', crit: '위험', none: '' } as const;
 
 /** `word` overrides the state word ('정상' / '주의' / '위험'); '' shows none. */
-export function statPanel(def: StatPanelDef & { span?: Span; word?: string }): HTMLElement {
+export function statPanel(def: StatPanelDef & { span?: Span; word?: string; blink?: boolean }): HTMLElement {
   const state = def.value === null ? 'none' : (def.state ?? 'none');
   const word = def.word ?? STATE_WORD[state];
   return panel(
-    { title: def.title, span: def.span ?? 'quarter', cls: `obs-stat.st-${state}` },
+    { title: def.title, span: def.span ?? 'quarter', cls: `obs-stat.st-${state}${def.blink && state === 'crit' && !reducedMotion() ? '.blink' : ''}` },
     h('div.obs-sv', null, def.value ?? '데이터 없음'),
     h('div.obs-ss', null, word ? h('span.obs-sw', null, word) : null, def.note ? h('span', null, def.note) : null),
   );
@@ -166,7 +167,8 @@ function shape(kind: AnnotationKind, x: number, y: number, r = 5): SVGElement {
 function sized(host: HTMLElement, draw: (w: number) => void): void {
   let last = -1;
   const run = () => {
-    const w = Math.max(240, Math.floor(host.clientWidth || 600));
+    if (!host.isConnected || !host.clientWidth) return; // not laid out yet: the observer calls again
+    const w = Math.max(240, Math.floor(host.clientWidth));
     if (w === last) return;
     last = w;
     draw(w);
@@ -230,37 +232,65 @@ export interface TimeSeriesOpts {
   anns: Annotation[];
   marks?: number[];
   now?: number;
+  /** Where the dashboard has data (see dataWindow); samples outside are gaps. */
+  data?: Range;
   span?: Span;
   onAnn?: (a: Annotation) => void;
   /** Note under the title ("대시보드에서 연결"). */
   linked?: string;
+  /** Blink the threshold once on the first draw when it is crossed in range. */
+  blinkOnMount?: boolean;
 }
+
+export interface LiveUpdate {
+  range: Range;
+  now: number;
+  data?: Range;
+}
+
+/** In-place updaters of time-series panels (live graphs): panel element -> update(range, now). */
+export const liveUpdaters = new WeakMap<HTMLElement, (u: LiveUpdate) => void>();
 
 const PALETTE = ['green', 'yellow', 'blue', 'purple', 'red', 'grey'] as const;
 
 /** Time-series panel: series lines + area, threshold lines with labels, annotations, hover readout. */
 export function timeSeriesPanel(o: TimeSeriesOpts): HTMLElement {
-  const { def, range } = o;
+  const { def } = o;
   const unit = def.unit ?? '';
-  // sample at the snapshot step, but never more than ~600 points across the range
-  const step = Math.max(o.stepMin, Math.ceil((range.to - range.from) / 60000 / 600));
-  const samples: Sample[][] = def.series.map((sr) => sampleSeries(sr, range, step, `${def.id}:${sr.name}`));
-  const summary = summarizePanel(def, range, samples, o.anns);
-  const host = h('div.obs-chart', { role: 'img', 'aria-label': summary });
+  const st = { range: o.range, now: o.now, data: o.data, step: 1, samples: [] as Sample[][], blinkUntil: o.blinkOnMount ? Infinity : 0, tail: false, width: 0 };
+  const compute = () => {
+    // sample at the snapshot step, but never more than ~600 points across the range
+    st.step = Math.max(o.stepMin, Math.ceil((st.range.to - st.range.from) / 60000 / 600));
+    st.samples = def.series.map((sr) => sampleSeries(sr, st.range, st.step, `${def.id}:${sr.name}`, st.data));
+  };
+  compute();
+  const host = h('div.obs-chart', { role: 'img' });
   const tip = h('div.obs-tip', { hidden: true, 'aria-hidden': 'true' });
-  const legend = h(
-    'ul.obs-legend',
-    { 'aria-label': `${def.title} 범례` },
-    ...def.series.map((sr, i) => {
-      const vals = samples[i].map((x) => x.v).filter((v): v is number => v !== null);
-      return h('li', null, h(`span.obs-sw.c-${sr.color ?? PALETTE[i % PALETTE.length]}`, { 'aria-hidden': 'true' }), sr.name, h('span.obs-lv', null, vals.length ? `최대 ${fmtValue(Math.max(...vals), unit)}` : '데이터 없음'));
-    }),
-    ...(def.thresholds ?? []).map((t) => h('li', null, h('span.obs-sw.thr', { 'aria-hidden': 'true' }), `┄ ${t.label}`)),
-  );
-  const hasData = samples.some((ss) => ss.some((x) => x.v !== null));
-  sized(host, (W) => {
+  const legend = h('ul.obs-legend', { 'aria-label': `${def.title} 범례` });
+  const overTxt = h('p.obs-over-txt', { hidden: true });
+  const crossed = () => (def.thresholds ?? []).some((t) => st.samples.some((x) => spansAbove(x, t.value).length));
+  const text = () => {
+    host.setAttribute('aria-label', summarizePanel(def, st.range, st.samples, o.anns));
+    const last = lastSample(st.samples[0] ?? []);
+    host.dataset.last = last ? String(last.ts) : '';
+    clear(legend);
+    def.series.forEach((sr, i) => {
+      const vals = st.samples[i].map((x) => x.v).filter((v): v is number => v !== null);
+      const cur = lastSample(st.samples[i]);
+      legend.appendChild(h('li', null, h(`span.obs-sw.c-${sr.color ?? PALETTE[i % PALETTE.length]}`, { 'aria-hidden': 'true' }), sr.name, h('span.obs-lv', null, vals.length ? `최대 ${fmtValue(Math.max(...vals), unit)} · 마지막 ${fmtValue(cur!.v!, unit)}` : '데이터 없음')));
+    });
+    for (const t of def.thresholds ?? []) legend.appendChild(h('li', null, h('span.obs-sw.thr', { 'aria-hidden': 'true' }), `┄ ${t.label}`));
+    const overs = (def.thresholds ?? []).flatMap((t) => st.samples.flatMap((x) => spansAbove(x, t.value)).map((sp) => `${t.label} 이상 ${fmtHM(sp.from)}–${fmtHM(sp.to)}`));
+    overTxt.hidden = !overs.length;
+    overTxt.textContent = overs.length ? `⚠ ${overs.join(' · ')}` : '';
+  };
+  text();
+
+  const draw = (W: number) => {
+    st.width = W;
     clear(host);
     host.appendChild(tip);
+    const { range, samples, step } = st;
     const H = 190;
     const left = 46;
     const right = 10;
@@ -282,6 +312,7 @@ export function timeSeriesPanel(o: TimeSeriesOpts): HTMLElement {
         s('rect', { class: 'obs-thr-zone', x: left, y: top, width: w, height: Math.max(0, ty - top) }),
       );
     }
+    const hasData = samples.some((ss) => ss.some((x) => x.v !== null));
     if (!hasData) svg.append(s('text', { class: 'obs-nodata', x: left + w / 2, y: (top + bottom) / 2, 'text-anchor': 'middle' }, '이 구간에는 데이터가 없어요'));
     def.series.forEach((sr, i) => {
       const color = sr.color ?? PALETTE[i % PALETTE.length];
@@ -303,28 +334,36 @@ export function timeSeriesPanel(o: TimeSeriesOpts): HTMLElement {
         svg.append(s('path', { class: `obs-area c-${color}`, d: `${line}L${last} ${bottom}L${first} ${bottom}Z` }), s('path', { class: `obs-line c-${color}`, d: line }));
         if (thr) svg.append(s('path', { class: 'obs-line obs-over', d: line, 'clip-path': `url(#${clipId})` }));
       }
+      // live: the newest point arrives with a short pulse
+      const lp = st.tail ? lastSample(samples[i]) : null;
+      if (lp && st.data && lp.ts >= st.data.to - step * 60000) svg.append(s('circle', { class: `obs-tail c-${color}${reducedMotion() ? '' : ' arrive'}`, cx: left + xOf(lp.ts, range, w)!, cy: y(Math.min(hi, lp.v!)), r: 3 }));
     });
+    // the blink runs from the first real draw for DUR.blink; redraws inside that window keep it
+    if (st.blinkUntil === Infinity) st.blinkUntil = performance.now() + DUR.blink;
+    const blink = performance.now() < st.blinkUntil && !reducedMotion() && crossed();
     for (const t of def.thresholds ?? []) {
       const ty = y(t.value);
-      svg.append(s('line', { class: 'obs-thr', x1: left, x2: left + w, y1: ty, y2: ty }), s('text', { class: 'obs-thrt', x: left + w - 4, y: ty - 4, 'text-anchor': 'end' }, `┄ ${t.label}`));
+      svg.append(s('g', { class: `obs-thrg${blink ? ' blink' : ''}` }, s('line', { class: 'obs-thr', x1: left, x2: left + w, y1: ty, y2: ty }), s('text', { class: 'obs-thrt', x: left + w - 4, y: ty - 4, 'text-anchor': 'end' }, `┄ ${t.label}`)));
     }
+    st.tail = false;
     annLines(svg, o.anns, range, left, w, 4, top, bottom, o.onAnn);
-    nowLine(svg, o.now, range, left, w, top, bottom);
+    nowLine(svg, st.now, range, left, w, top, bottom);
     // hover readout
     const cross = s('line', { class: 'obs-cross', x1: 0, x2: 0, y1: top, y2: bottom, visibility: 'hidden' });
     const hit = s('rect', { x: left, y: top, width: w, height: bottom - top, fill: 'transparent' });
     svg.append(cross, hit);
     hit.addEventListener('pointermove', (e) => {
       const bx = (e as PointerEvent).offsetX - left;
+      const first = st.samples[0]?.[0]?.ts ?? range.from;
       const ts = range.from + (bx / w) * (range.to - range.from);
-      const idx = Math.max(0, Math.min(samples[0].length - 1, Math.round((ts - range.from) / (step * 60000))));
-      const at = samples[0][idx]?.ts ?? ts;
+      const idx = Math.max(0, Math.min((st.samples[0]?.length ?? 1) - 1, Math.round((ts - first) / (st.step * 60000))));
+      const at = st.samples[0]?.[idx]?.ts ?? ts;
       const x = left + (xOf(at, range, w) ?? bx);
       cross.setAttribute('x1', String(x));
       cross.setAttribute('x2', String(x));
       cross.setAttribute('visibility', 'visible');
       clear(tip);
-      tip.append(h('b', null, fmtDayHM(at)), ...def.series.map((sr, i) => h('div', null, `${sr.name}: ${samples[i][idx]?.v == null ? '—' : fmtValue(samples[i][idx].v!, unit)}`)));
+      tip.append(h('b', null, fmtDayHM(at)), ...def.series.map((sr, i) => h('div', null, `${sr.name}: ${st.samples[i][idx]?.v == null ? '—' : fmtValue(st.samples[i][idx].v!, unit)}`)));
       tip.hidden = false;
       tip.style.left = `${Math.min(W - 170, x + 10)}px`;
     });
@@ -333,24 +372,40 @@ export function timeSeriesPanel(o: TimeSeriesOpts): HTMLElement {
       tip.hidden = true;
     });
     host.appendChild(svg);
-  });
+  };
+  sized(host, draw);
+
   const table = () =>
     h(
       'table.obs-table',
       null,
       h('caption', null, `${def.title} — 값이 바뀌는 시각`),
       h('tr', null, h('th', { scope: 'col' }, '시각'), h('th', { scope: 'col' }, '시리즈'), h('th', { scope: 'col' }, '값')),
-      ...def.series.flatMap((sr) => changePoints(sr, range).map((p) => h('tr', null, h('td', null, fmtDayHM(p.ts)), h('td', null, sr.name), h('td', null, p.v === null ? '데이터 없음' : fmtValue(p.v, unit))))),
-      ...o.anns.filter((a) => a.ts >= range.from && a.ts <= range.to).map((a) => h('tr', null, h('td', null, fmtDayHM(a.ts)), h('td', null, `${KIND_GLYPH[a.kind]} ${KIND_LABEL[a.kind]}`), h('td', null, a.label))),
+      ...def.series.flatMap((sr) => changePoints(sr, st.range).map((p) => h('tr', null, h('td', null, fmtDayHM(p.ts)), h('td', null, sr.name), h('td', null, p.v === null ? '데이터 없음' : fmtValue(p.v, unit))))),
+      ...o.anns.filter((a) => a.ts >= st.range.from && a.ts <= st.range.to).map((a) => h('tr', null, h('td', null, fmtDayHM(a.ts)), h('td', null, `${KIND_GLYPH[a.kind]} ${KIND_LABEL[a.kind]}`), h('td', null, a.label))),
     );
-  const overs = (def.thresholds ?? []).flatMap((t) => samples.flatMap((x) => spansAbove(x, t.value)).map((sp) => `${t.label} 이상 ${fmtHM(sp.from)}–${fmtHM(sp.to)}`));
-  return panel(
+  const el = panel(
     { title: def.title, span: o.span ?? def.width ?? 'full', cls: 'obs-tsp', description: def.description, table },
     o.linked ? h('p.obs-linked', null, o.linked) : null,
     host,
     legend,
-    overs.length ? h('p.obs-over-txt', null, `⚠ ${overs.join(' · ')}`) : null,
+    overTxt,
   );
+  liveUpdaters.set(el, (u) => {
+    const before = lastSample(st.samples[0] ?? [])?.ts ?? null;
+    const wasCrossed = crossed();
+    st.range = u.range;
+    st.now = u.now;
+    st.data = u.data;
+    compute();
+    const after = lastSample(st.samples[0] ?? [])?.ts ?? null;
+    st.tail = after !== null && after !== before;
+    // a threshold newly crossed while watching blinks once
+    if (!wasCrossed && crossed()) st.blinkUntil = Infinity;
+    text();
+    if (st.width) draw(st.width);
+  });
+  return el;
 }
 
 // ------------------------------------------------------------------ evidence lanes
@@ -364,6 +419,8 @@ export interface LaneOpts {
   marks?: number[];
   onAnn?: (a: Annotation) => void;
   tooMany?: number;
+  /** Pins that just arrived: their markers snap into place. */
+  snap?: Set<string>;
 }
 
 /** Evidence timeline: one lane per annotation kind; each pin is a focusable marker at its time. */
@@ -407,7 +464,7 @@ export function laneChart(o: LaneOpts): HTMLElement {
         const a = p.item;
         const name = `${fmtDayHM(a.ts)} ${KIND_LABEL[a.kind]}${a.recurring ? ' (반복)' : ''}: ${a.label}`;
         if (a.recurring) svg.append(s('line', { class: `obs-recline k-${a.kind}`, x1: x, x2: x, y1: top, y2: bottom }));
-        const g = s('g', { class: `obs-mk k-${a.kind}`, tabindex: a.pinId && o.onAnn ? 0 : undefined, role: a.pinId && o.onAnn ? 'button' : 'img', 'aria-label': name, 'data-pin': a.pinId }, s('title', {}, name), s('circle', { class: 'obs-halo', cx: x, cy, r: 9 }), shape(a.kind, x, cy, 5));
+        const g = s('g', { class: `obs-mk k-${a.kind}${a.pinId && o.snap?.has(a.pinId) && !reducedMotion() ? ' snap' : ''}`, tabindex: a.pinId && o.onAnn ? 0 : undefined, role: a.pinId && o.onAnn ? 'button' : 'img', 'aria-label': name, 'data-pin': a.pinId }, s('title', {}, name), s('circle', { class: 'obs-halo', cx: x, cy, r: 9 }), shape(a.kind, x, cy, 5));
         if (a.pinId && o.onAnn) {
           g.addEventListener('click', () => o.onAnn!(a));
           g.addEventListener('keydown', (e) => ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') && (e.preventDefault(), o.onAnn!(a)));

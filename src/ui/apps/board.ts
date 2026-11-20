@@ -9,9 +9,10 @@ import type { AppDef } from '../wm.ts';
 import type { Pin } from '../../engine/game.ts';
 import { parseLocal, pad } from '../../engine/time.ts';
 import {
-  caseAnnotations, cronExpr, cronOccurrences, fmtDayHM, logRows, nextCron, pinAnnotations, pinLevel, rangeOptions,
+  caseAnnotations, cronExpr, dataWindow, cronOccurrences, fmtDayHM, logRows, nextCron, pinAnnotations, pinLevel, rangeOptions,
   type Annotation, type Level, type RangeId,
 } from '../dashboard/derive.ts';
+import { play, DUR } from '../motion.ts';
 import { laneChart, logRow, logsBody, logTools, panel, statPanel, timeSeriesPanel, toolbar } from '../dashboard/panels.ts';
 
 /** 'MM-DD HH:MM' <-> local ms (year from the case clock). */
@@ -40,6 +41,8 @@ export const boardApp: AppDef = {
     const levels = new Set<Level>(['error', 'warn', 'info']);
     let refreshedAt = g.now();
     let linkedOpen = true;
+    // pins seen on the last render (id -> on the timeline): new or moved pins snap into place
+    let seen: Map<string, boolean> | null = null;
 
     const parseEdit = (v: string): number | null => {
       const m = /^(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})$/.exec(v.trim());
@@ -100,9 +103,7 @@ export const boardApp: AppDef = {
       el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       el.tabIndex = -1;
       el.focus({ preventScroll: true });
-      el.classList.remove('flash');
-      void el.offsetWidth;
-      el.classList.add('flash');
+      play(el, 'flash', DUR.flash);
     };
     const onAnn = (a: Annotation) => a.pinId && flash(a.pinId);
 
@@ -117,6 +118,8 @@ export const boardApp: AppDef = {
       const onTl = pins.filter((p) => p.onTimeline && p.ts !== null);
       const inTray = pins.filter((p) => !p.onTimeline || p.ts === null);
       const keys = g.pinnedKeyClues();
+      const snap = new Set(seen ? pins.filter((p) => seen!.get(p.id) !== (p.onTimeline && p.ts !== null)).map((p) => p.id) : []);
+      seen = new Map(pins.map((p) => [p.id, p.onTimeline && p.ts !== null]));
 
       root.appendChild(
         toolbar({
@@ -147,7 +150,7 @@ export const boardApp: AppDef = {
             cls: 'obs-tl',
             description: '핀한 증거가 종류별 줄에 시각대로 놓입니다. ◆ 변경(커밋·배포) ▲ 크론(크론탭 줄은 실행 시각마다 반복 표시) ■ 알림 ✖ 오류·경고 ● 그 밖의 이벤트. 표시를 누르면 아래 로그 줄로 이동합니다.',
           },
-          laneChart({ range, anns, now: refreshedAt, marks, onAnn, tooMany: tooMany.length }),
+          laneChart({ range, anns, now: refreshedAt, marks, onAnn, tooMany: tooMany.length, snap }),
           h('p.obs-hint', null, 'ⓘ 카드를 끌어 보관함 ↔ 타임라인으로 옮기거나, 시각을 고쳐 순서를 맞추세요.', cronPins.length ? ` 크론탭 줄 ${cronPins.length}개는 실행 시각마다 ▲ 로 표시돼요.` : ''),
         ),
       );
@@ -158,7 +161,7 @@ export const boardApp: AppDef = {
         grid.appendChild(h('div.obs-rowhdr', null, rowBtn));
         if (linkedOpen) {
           const all = [...anns, ...caseAnnotations(cp)];
-          for (const def of cp.timeseries) grid.appendChild(timeSeriesPanel({ def, range, stepMin: cp.stepMin, anns: all, marks, now: refreshedAt, span: 'half', onAnn, linked: `${cp.title}에서 연결` }));
+          for (const def of cp.timeseries) grid.appendChild(timeSeriesPanel({ def, range, stepMin: cp.stepMin, anns: all, marks, now: refreshedAt, data: dataWindow(cp, refreshedAt), span: 'half', onAnn, linked: `${cp.title}에서 연결` }));
         }
       }
 
@@ -217,6 +220,7 @@ export const boardApp: AppDef = {
       const tray = panel({ title: t('board.tray'), span: 'third', cls: 'obs-trayp', description: '시각을 알 수 없는 증거. 시각을 넣거나 타임라인 패널로 끌어 놓으세요.' }, trayList);
       dropZone(tray, false);
       grid.appendChild(tray);
+      for (const id of snap) play(root.querySelector(`.card[data-pin="${CSS.escape(id)}"]`), 'snap', DUR.snap);
     };
     render();
     return { refresh: (type?: string) => (type === 'pins' ? render() : undefined) };
