@@ -738,14 +738,19 @@ export class Shell {
       const hum = flags.has('h');
       const dirOnly = flags.has('d');
       const one = flags.has('1');
+      // -L: show what a link points at (for /proc/<pid>/fd: the open file itself, even a deleted one)
+      const deref = flags.has('L') || flags.has('dereference');
+      const shown = (n: VNode) => (deref && n.deref ? n.deref() : n);
       const targets = pos.length ? pos : ['.'];
       const out: string[] = [];
       const errs: string[] = [];
       const who = this.who(c.f, c.sudo);
-      const fmt = (n: VNode, label: string) => {
+      const fmt = (n0: VNode, label: string) => {
         if (!long) return label;
+        const n = shown(n0);
         const size = Vfs.size(n);
-        return `${Vfs.modeString(n)} ${n.type === 'dir' ? 2 : 1} ${n.owner.padEnd(7)} ${n.group.padEnd(7)} ${(hum ? human(size) : String(size)).padStart(hum ? 4 : 6)} ${fmtLs(n.mtime)} ${label}${n.link ? ' -> ' + n.link : ''}`;
+        const col = n.special?.rdev ?? (hum ? human(size) : String(size));
+        return `${Vfs.modeString(n)} ${n.nlink ?? (n.type === 'dir' ? 2 : 1)} ${n.owner.padEnd(7)} ${n.group.padEnd(7)} ${col.padStart(hum ? 4 : 6)} ${fmtLs(n.mtime)} ${label}${n.link ? ' -> ' + n.link : ''}`;
       };
       const files: string[] = [];
       const dirs: string[] = [];
@@ -778,7 +783,7 @@ export class Shell {
         const withDots: [VNode, string][] = all ? [[node, '.'], [c.hw.vfs.lookup(Vfs.dirname(abs)) ?? node, '..']] : [];
         const rows: [VNode, string][] = [...withDots, ...entries.map((n) => [n, n.name] as [VNode, string])];
         if (long) {
-          const total = rows.reduce((acc, [n]) => acc + (n.link ? 0 : Math.ceil(Vfs.size(n) / 4096) * 4), 0);
+          const total = rows.map(([n]) => shown(n)).reduce((acc, n) => acc + (n.link || n.special ? 0 : Math.ceil(Vfs.size(n) / 4096) * 4), 0);
           out.push(`total ${hum ? human(total * 1024) : total}`);
           out.push(...rows.map(([n, l]) => fmt(n, l)));
         } else if (one || c.stdin !== null || rows.length > 40) out.push(...rows.map(([, l]) => l));
@@ -1505,13 +1510,20 @@ export class Shell {
     const hum = flags.has('h') || flags.has('human-readable');
     const summarize = flags.has('s') || flags.has('summarize');
     const all = flags.has('a') || flags.has('all');
+    // -L follows links: /proc/<pid>/fd/<n> then counts the open file (a symlink itself takes no blocks)
+    const deref = flags.has('L') || flags.has('dereference');
     const dv = (flags.get('d') ?? flags.get('max-depth')) as string | undefined;
     const maxDepth = summarize ? 0 : dv !== undefined ? +dv : Infinity;
     if (Number.isNaN(maxDepth)) return fail(`du: invalid maximum depth '${dv}'`);
     const who = this.who(c.f, c.sudo);
     const out: string[] = [];
     const errs: string[] = [];
-    const blocks = (n: VNode) => (n.type === 'dir' ? 4096 : Math.ceil(Vfs.size(n) / 4096) * 4096);
+    const blocks = (n0: VNode): number => {
+      const n = deref && n0.deref ? n0.deref() : n0;
+      if (n.type === 'dir') return 4096;
+      if (n.link || n.special) return 0;
+      return Math.ceil(Vfs.size(n) / 4096) * 4096;
+    };
     const fmt = (bytes: number, label: string) => `${hum ? (bytes === 0 ? '0' : human(bytes)) : String(Math.ceil(bytes / 1024))}\t${label}`;
     const walk = (abs: string, label: string, depth: number): number => {
       const node = c.hw.vfs.lookup(abs)!;

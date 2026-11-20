@@ -136,3 +136,65 @@ test('case 2 nudges: the README asks "숫자 두 개가 다르면?" and no longe
   assert.ok(hist.some((l) => l.includes('/fd | grep deleted')));
   assert.ok(!hist.some((l) => l.includes('아직 열려 있는 파일')));
 });
+
+test('case 2 round 3: the deleted-but-open file\'s size is observable (ls -lL, du -L, fdinfo pos) and pins as usage evidence', () => {
+  const g = new Game(cs);
+  // the symlink itself is 64 bytes / 0 blocks; following it reaches the nameless inode (link count 0)
+  assert.match(out(g, 'ls -l /proc/1187/fd/7')[0], /^lrwx------ 1 logship logship\s+64 .* \/proc\/1187\/fd\/7 -> \/data\/collector\/raw\/pay-api-01\.log \(deleted\)$/);
+  assert.match(out(g, 'ls -lhL /proc/$(pgrep -f logshipd)/fd/7')[0], /^-rw-r----- 0 logship adm\s+85G Nov 12 09:30 \/proc\/1187\/fd\/7$/);
+  assert.match(out(g, 'ls -lL /proc/1187/fd/7')[0], new RegExp(`^-rw-r----- 0 logship adm\\s+${DELETED_BYTES} `));
+  assert.deepEqual(out(g, 'du -sh /proc/1187/fd/7'), ['0\t/proc/1187/fd/7'], 'a symlink takes no blocks');
+  assert.deepEqual(out(g, 'du -shL /proc/1187/fd/7'), ['85G\t/proc/1187/fd/7']);
+  // logshipd appends (O_WRONLY|O_APPEND|O_LARGEFILE = 0102001), so its offset is the file's size
+  assert.deepEqual(out(g, 'cat /proc/1187/fdinfo/7'), [`pos:\t${DELETED_BYTES}`, 'flags:\t0102001', 'mnt_id:\t27', 'ino:\t1310742']);
+  assert.equal(out(g, 'cat /proc/1187/fdinfo/8')[0], `pos:\t${Math.round(24.0 * 1024 ** 3)}`, 'a live raw file: pos = its ls -l size');
+  assert.match(out(g, 'ls -lL /proc/1187/fd/0')[0], /^crw-rw-rw- 1 root\s+root\s+1, 3 /);
+  assert.ok('c2_size' in g.st.clues);
+  const usage = cs.accusation.slots.find((s) => s.id === 'cause')!.evidence!.find((k) => k.id === 'usage')!;
+  assert.ok(usage.clues.includes('c2_size'));
+  assert.ok(cs.shell!.help!.some((l) => l.includes('ls -l[L] /proc/<PID>/fd') && l.includes('/proc/<PID>/fdinfo/<번호>')), 'help lists both');
+});
+
+test('case 2 round 3: Eunjae\'s README and history point at journalctl -t sudo, which shows the rm', () => {
+  const readme = cs.hosts[0].files.find((f) => f.path === '/home/eunjae/README.txt')!.content;
+  assert.match(readme, /sudo 로 한 일은 -t sudo 로/);
+  const g = new Game(cs);
+  const hist = out(g, 'history');
+  assert.ok(hist.some((l) => /journalctl -t sudo --since "2024-08-21 07:00"$/.test(l)), 'the 2024-08 history shows the command');
+  assert.ok(hist.some((l) => l.includes('ls -lhL /proc/$(pgrep -f logshipd)/fd/9')), 'and how she saw the size');
+  const sudo = out(g, 'journalctl -t sudo --since "2026-11-11 14:00" --until "2026-11-11 15:00"');
+  assert.ok(sudo.some((l) => l.includes('jhpark : TTY=pts/1 ; PWD=/data/collector/raw ; USER=root ; COMMAND=/usr/bin/rm pay-api-01.log')));
+  assert.ok('c2_rm' in g.st.clues);
+  assert.ok(cs.hints.explicit.some((d) => d.slot === 'sequence' && d.text.startsWith('journalctl -t sudo --since')));
+});
+
+test('case 2 round 3: every 경위 choice is a time-ordered chain; only the true one puts the volume rise before the rm', () => {
+  const seq = cs.accusation.slots.find((s) => s.id === 'sequence')!;
+  for (const o of seq.options) {
+    const steps = o.text.split(' → ');
+    assert.ok(steps.length >= 4, `${o.id}: ${steps.length} steps`);
+    assert.match(steps.at(-1)!, /^07:58 /, `${o.id} ends at the 07:58 drop`);
+  }
+  const t = seq.options.find((o) => o.correct)!;
+  const steps = t.text.split(' → ');
+  assert.match(steps[0], /로그가 갑자기 늘기 시작/);
+  assert.match(steps[1], /rm/);
+  // the evidence agrees: the debug switch (14:22) comes before the rm (14:28)
+  const time = (id: string) => /\d{2}:\d{2}(:\d{2})?/.exec(cs.clues.find((c) => c.id === id)!.label)![0];
+  assert.ok(time('c2_debug') < time('c2_rm'));
+  assert.ok(seq.options.some((o) => !o.correct && /rm .*→ 그 뒤에야 .*늘기 시작/.test(o.text)), 'the reversed order is a choice the evidence rules out');
+});
+
+test('round 3: when a clue opens gated report choices the game says so once (options-unlocked), not on later clues', () => {
+  const g = new Game(cs);
+  const said: string[][] = [];
+  g.on('options-unlocked', (keys) => said.push(keys as string[]));
+  out(g, 'df -h');
+  assert.equal(said.length, 0, 'an ordinary clue opens nothing');
+  g.open('channel:pc-logs'); // r2_noverify: Seojin's changes become choices
+  assert.deepEqual(said, [['cause/rotate', 'sequence/freed-then', 'responsibility/blame-seojin']]);
+  assert.ok(g.st.log.some((e) => e.type === 'options-unlocked'));
+  g.open('channel:pc-logs');
+  out(g, 'cat /etc/logshipd/logshipd.conf');
+  assert.equal(said.length, 1, 'said once');
+});

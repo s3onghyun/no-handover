@@ -602,6 +602,10 @@ game.on('mail', (id) => {
 });
 const memoNote = game.cs.notes.find((n) => n.highlight !== undefined)?.id;
 game.on('toast', (text) => ctx.toast(h('div', null, String(text)), () => wm.open('notes', memoNote)));
+// a found clue opened more report choices (gated options): say so, the toast opens the report
+game.on('options-unlocked', () => {
+  if (!game.st.finished) ctx.toast(h('div.toast-options', null, h('b', null, '📝 '), t('report.newOptions')), () => wm.open('report'));
+});
 game.on('note', (id) => {
   // "터미널이 익숙해요": no window opens by itself; the scene's toast still offers to open it
   if (rules().autoWindows) {
@@ -687,8 +691,8 @@ function revealDesktop(first: boolean) {
   objectivesUi = mountObjectives(desktop, ctx, audio, { steps: () => rules().steps || !CASE.expert });
   objectivesUi.refresh(); // the sticky is on the desktop before the first windows size themselves around it
   if (first && !game.cs.opening) wm.open('mail', 'brief');
-  // "터미널이 익숙해요" promises no window opens by itself: in the tutorial the terminal waits behind its (pulsing) icon
-  if (rules().autoWindows || !ENTRY.tutorial) wm.open('terminal');
+  // "터미널이 익숙해요" (and 숙련자 모드 on top of it) promises no window opens by itself: in every case the terminal waits behind its icon
+  if (rules().autoWindows) wm.open('terminal');
   else game.log('auto-window-held', { app: 'terminal' });
   objectivesUi.refresh();
   tourUi ??= mountTour(game, { blocked: () => briefingActive || !game.st.unlocked || game.st.finished || !!document.querySelector('.moment, #briefing'), collapsed: () => !rules().coachMarks });
@@ -796,8 +800,10 @@ function showCaseList(): void {
     const save = !e.cs ? null : current ? saveInfo(game.serialize()) : saveInfo(storage.get(`no-handover:save:${e.id}`));
     const st = campaign.state(e.id, progress, save);
     const g = grades[e.id];
+    // a locked case says which case opens it, and links there (or back to the case on screen)
+    const blocker = st === 'locked' ? campaign.blocker(e.id, progress) : null;
     const label: Record<CaseState, string> = {
-      locked: `🔒 ${t('case.locked')}`,
+      locked: `🔒 ${blocker ? t('case.lockedBy', { c: caseLabel(blocker) }) : t('case.locked')}`,
       soon: t('case.soon'),
       new: t('case.new'),
       playing: `▶ ${t('case.playing')}${g ? ` · ${t('case.prevGrade', { g })}` : ''}`,
@@ -821,7 +827,15 @@ function showCaseList(): void {
               current ? h('span.cl-here', null, t('case.here')) : h('button.cl-open', { type: 'button', onclick: async () => (await confirmCase(e, 'list')) && goCase(e.id) }, openLabel),
               save?.started ? h('button.cl-restart', { type: 'button', onclick: () => void confirmRestart(e) }, `↺ ${t('case.restart')}`) : null,
             )
-          : null,
+          : blocker
+            ? h(
+                'div.cl-acts',
+                null,
+                blocker.id === CASE.id
+                  ? h('button.cl-back', { type: 'button', onclick: () => close() }, t('case.backHere'))
+                  : h('button.cl-back', { type: 'button', onclick: async () => (await confirmCase(blocker, 'list')) && goCase(blocker.id) }, t('case.goBlocker', { c: caseLabel(blocker) })),
+              )
+            : null,
       ),
     );
   }

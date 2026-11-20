@@ -18,6 +18,12 @@ export interface VNode {
   link?: string;
   /** Apparent size in bytes (overrides the content length; see FileDef.size). */
   size?: number;
+  /** What a link points at (fd entries in /proc): `ls -L` and `du -L` show this node instead. */
+  deref?: () => VNode;
+  /** Hard link count shown by ls -l (0 = a deleted file still held open). Default 1 (2 for dirs). */
+  nlink?: number;
+  /** Socket or character device (fd targets): its type letter in ls -l, and "major, minor" for a device. */
+  special?: { kind: 's' | 'c'; rdev?: string };
 }
 
 export interface Who {
@@ -174,7 +180,7 @@ export class Vfs {
   }
 
   static modeString(n: VNode): string {
-    const t = n.link ? 'l' : n.type === 'dir' ? 'd' : '-';
+    const t = n.link ? 'l' : n.special?.kind ?? (n.type === 'dir' ? 'd' : '-');
     const bits = 'rwxrwxrwx';
     let s = '';
     for (let i = 0; i < 9; i++) s += n.mode & (1 << (8 - i)) ? bits[i] : '-';

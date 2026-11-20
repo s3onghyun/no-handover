@@ -51,7 +51,9 @@ clues: 플레이어가 본 출력/연 항목을 정규식으로 감지 → 진�
   files: [{ path: '/home/eunjae/bin/ledger-backup.sh', content: '…', mode: '755', mtime: '2022-03-04T17:20' }],
   crontabs: { eunjae: '15 3 * * 6 …' },              // crontab -l [-u 사용자]
   groups: { 'git-admins': { gid: 1050, members: ['eunjae', 'jhpark'] } },   // getent group, id
-  procs: [{ pid: 2817, user: 'payapi', cmd: '…', fdCount: 1947, limitNofile: 4096 }],  // /proc/<pid>/fd, limits, pgrep, ps
+  procs: [{ pid: 2817, user: 'payapi', cmd: '…', fdCount: 1947, limitNofile: 4096 }],  // /proc/<pid>/fd, fdinfo, limits, pgrep, ps
+  // fdSample: 앞쪽 fd 의 대상 경로. "… (deleted)" 로 끝나는 것은 deleted: [{ path, size, owner, group, mode, mtime, ino }] 로
+  // 크기를 준다 — ls -lL /proc/<pid>/fd/<n> (링크 수 0), du -L, /proc/<pid>/fdinfo/<n> 의 pos(.log 는 append 라 pos = 크기)
   units: [{ name: 'payment-api.service', unitFile: '…', props: { LimitNOFILE: '4096' }, statusLines: [] }],  // systemctl
   repos: [{ path: '/srv/git/pay-config.git', branch: 'main', refs: { main: '<sha>' }, commits: [...] }],     // git
   last: ['sjkang   pts/1        vpn-10.8.3.41    Sat Nov 14 02:05 - 02:14  (00:09)'],

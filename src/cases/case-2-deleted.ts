@@ -101,7 +101,7 @@ const README = `logs-01 — 로그 수집 서버 (남은재, 2023-09 처음 씀 
 디스크가 차면:
   - 숫자 두 개를 나란히 놓아 봐요. 디스크가 쓴 양, 파일을 다 더한 양.
   - 숫자 두 개가 다르면? 거기서부터예요. (이 서버엔 lsof 가 없어요)
-  - 언제 누가 무엇을 했는지는 저널에.
+  - 언제 누가 무엇을 했는지는 저널에. sudo 로 한 일은 -t sudo 로 골라 봐요.
 
 raw 파일은 rm 하지 마세요. (2024-08에 제가 그랬다가 반나절을 헤맸어요…)
 조사할 때는 아무것도 지우지 마세요. 고치는 건 원인을 적고 나서. :)`;
@@ -234,6 +234,8 @@ export const caseTwoDeleted: CaseFile = {
         {
           pid: 1187, user: 'logship', cmd: '/usr/local/bin/logshipd --config /etc/logshipd/logshipd.conf', fdCount: 27, limitNofile: 65536,
           fdSample: ['/dev/null', 'socket:[21877]', 'socket:[21877]', 'anon_inode:[eventpoll]', 'socket:[21890]', '/data/collector/state/offsets.db', '/data/collector/raw/bastion.log', '/data/collector/raw/pay-api-01.log (deleted)', '/data/collector/raw/pay-api-02.log', '/data/collector/raw/review-web.log', '/data/collector/raw/wiki-01.log'],
+          // the nameless file: ls -lL /proc/1187/fd/7 (link count 0), du -L, fdinfo pos (logshipd appends, so pos = size)
+          deleted: [{ path: '/data/collector/raw/pay-api-01.log', size: DELETED_BYTES, owner: 'logship', group: 'adm', mode: '640', mtime: '2026-11-12T09:30', ino: 1310742 }],
         },
       ],
       units: [
@@ -371,8 +373,12 @@ export const caseTwoDeleted: CaseFile = {
     { at: '2024-08-21T10:03:40', emits: [hist('du -sh /data/collector/*')] },
     { at: '2024-08-21T10:05:12', emits: [hist('# df 92% / du 51%. 숫자가 안 맞음. 숨은 게 있다.')] },
     { at: '2024-08-21T10:31:05', emits: [hist('ls -la /data/collector/raw')] },
+    { at: '2024-08-21T10:36:15', emits: [hist('journalctl -t sudo --since "2024-08-21 07:00"')] },
+    { at: '2024-08-21T10:36:50', emits: [hist('# 07:12 rm. 내가. 그 뒤로 df 가 안 줄었음.')] },
     { at: '2024-08-21T10:40:22', emits: [hist('ls -l /proc/$(pgrep -f logshipd)/fd | grep deleted')] },
     { at: '2024-08-21T10:41:30', emits: [hist('# 찾았다. 내가 아침에 지운 그 파일.')] },
+    { at: '2024-08-21T10:42:05', emits: [hist('ls -lhL /proc/$(pgrep -f logshipd)/fd/9')] },
+    { at: '2024-08-21T10:42:30', emits: [hist('# 링크 0개, 76G. 이름만 없다.')] },
     { at: '2024-08-21T10:44:02', emits: [hist('sudo systemctl kill -s HUP logshipd')] },
     { at: '2024-08-21T10:45:10', emits: [hist('df -h')] },
     { at: '2024-08-21T10:45:40', emits: [hist('# 92% → 51%. README 에 적어 둠. 지운 다음엔 꼭 df 🌱')] },
@@ -551,6 +557,10 @@ export const caseTwoDeleted: CaseFile = {
       id: 'c2_pid', label: 'logshipd 는 PID 1187, 11/02 부터 한 번도 재시작 안 함', slot: 'cause', key: true,
       match: [{ output: '^1187( |$)', host: L }, { output: '^MainPID=1187$', host: L }, { output: '^logship\\s+1187\\s', host: L }, { output: 'Main PID: 1187 \\(logshipd\\)', host: L }],
     },
+    {
+      id: 'c2_size', label: '지워진 파일(/proc/1187/fd/7)은 아직 85G — 링크 0개, logshipd 가 계속 쓰는 중', slot: 'cause',
+      match: [{ output: '^-rw-r-----\\s+0\\s+logship\\s+adm\\s+(85G|9132\\d{7})\\s', host: L }, { output: '^pos:\\s+9132\\d{7}$', host: L }, { output: '^8[56]G\\s+/proc/1187/fd/7/?$', host: L }],
+    },
     { id: 'c2_deleted', label: '/proc/1187/fd/7 -> /data/collector/raw/pay-api-01.log (deleted)', slot: 'cause', key: true, aha: '(deleted) — 이름만 지워졌다. 파일은 아직 열려 있다.', match: [{ output: '7 -> /data/collector/raw/pay-api-01\\.log \\(deleted\\)', host: L }] },
     { id: 'c2_reopen', label: '마지막으로 파일을 다시 연 것: 수 11:02 (rm 보다 앞) — 그 뒤로 HUP 없음', slot: 'cause', match: [{ output: 'SIGHUP: reopened 4 file\\(s\\)', host: L }, { output: 'ExecMainStartTimestamp=Mon 2026-11-02', host: L }] },
     { id: 'c2_readme', label: '은재 README: "숫자 두 개가 다르면? 거기서부터예요"', slot: 'cause', trace: true, match: [{ output: '숫자 두 개가 다르면\\? 거기서부터예요', host: L }] },
@@ -591,20 +601,21 @@ export const caseTwoDeleted: CaseFile = {
           { id: 'fs', text: '파일 시스템 메타데이터가 꼬여 df 가 실제보다 많이 쓴 것처럼 보고한다 — 실제 디스크에는 여유가 충분하다' },
         ],
         evidence: [
-          { id: 'usage', label: '디스크 사용량 (df · du 의 수치)', clues: ['c2_df', 'c2_du'] },
+          { id: 'usage', label: '디스크 사용량 (df · du 의 수치)', clues: ['c2_df', 'c2_du', 'c2_size'] },
           { id: 'proc', label: '프로세스 · 서비스 상태', clues: ['c2_deleted', 'c2_pid', 'c2_reopen'] },
         ],
       },
       {
         id: 'sequence',
         title: '경위 (타임라인)',
-        prompt: '수요일 오후부터 목요일 09:30 까지, 무슨 순서로 일어났나?',
+        prompt: '수요일 오후부터 목요일 09:30 까지, 무슨 순서로 일어났나? (왼쪽에서 오른쪽으로 시간순)',
         type: 'single',
         options: [
-          { id: 'freed-then', blames: 'seojin', needs: ['r2_noverify'], text: '수요일 rm 직후 공간은 돌아왔지만, 서진님이 붙인 새 소스와 늘어난 보관 주기 때문에 밤사이 다시 차서 07:58 에 이르렀다' },
-          { id: 'sunday', text: '지난 일요일 로그 정리 뒤로 매일 조금씩 차오르다가, 오늘 새벽 우연히 한계를 넘어 07:58 부터 로그를 버렸다 (수요일엔 별일 없었다)' },
-          { id: 'true', correct: true, text: '지우기 직전 한 서버의 로그가 갑자기 늘기 시작했고, 그 로그가 지운 파일에 밤새 쌓이다가 여유가 바닥난 07:58 부터 로그를 버렸다' },
-          { id: 'double', blames: 'jihoon', text: '수요일 지훈님의 rm 이 파일 시스템을 망가뜨려, 그때부터 들어오는 로그가 모두 두 번씩 기록되며 공간을 두 배로 썼다' },
+          { id: 'freed-then', blames: 'seojin', needs: ['r2_noverify'], text: '큰 로그 rm → 공간이 바로 돌아옴 → 서진님이 붙인 새 소스와 늘린 보관 주기로 밤새 다시 참 → 07:58 여유가 바닥나 로그를 버리기 시작' },
+          { id: 'sunday', text: '지난 일요일 로그 정리 → 그 뒤로 매일 조금씩 차오름 (수요일엔 별일 없음) → 오늘 새벽 우연히 한계를 넘음 → 07:58 로그를 버리기 시작' },
+          { id: 'true', correct: true, text: '한 서버의 로그가 갑자기 늘기 시작 → 몇 분 뒤 큰 로그 rm → 늘어난 로그가 지운 파일에 밤새 쌓임 → 07:58 여유가 바닥나 로그를 버리기 시작' },
+          { id: 'rm-first', text: '큰 로그를 rm 해 공간을 먼저 비움 → 그 뒤에야 한 서버의 로그가 늘기 시작 → 새로 생긴 파일에 밤새 쌓임 → 07:58 로그를 버리기 시작' },
+          { id: 'double', blames: 'jihoon', text: '큰 로그 rm 이 파일 시스템을 망가뜨림 → 그때부터 들어오는 로그가 모두 두 번씩 기록됨 → 공간을 두 배로 쓰며 밤새 참 → 07:58 로그를 버리기 시작' },
         ],
         evidence: [
           { id: 'actions', label: '누가 언제 무엇을 했는지 (명령 · 변경 기록)', clues: ['c2_rm', 'c2_debug'] },
@@ -663,7 +674,7 @@ export const caseTwoDeleted: CaseFile = {
     explicit: [
       { slot: 'cause', cost: 10, unlessClues: ['c2_df', 'c2_du'], text: 'df -h 의 /data Used 와 du -sh /data/collector/* 의 합을 비교해 보세요. 같아야 정상이에요.' },
       { slot: 'cause', cost: 10, unlessClues: ['c2_pid', 'c2_deleted'], text: '파일을 쓰는 프로세스를 찾고(pgrep -f logshipd), 그 프로세스가 연 파일 목록을 보세요: ls -l /proc/<PID>/fd | grep deleted' },
-      { slot: 'sequence', cost: 10, unlessClues: ['c2_rm'], text: 'journalctl --since "2026-11-11 14:00" --until "2026-11-11 15:00" — 누가 언제 무엇을 지웠는지 sudo 줄이 있어요. /var/log/auth.log 에도.' },
+      { slot: 'sequence', cost: 10, unlessClues: ['c2_rm'], text: 'journalctl -t sudo --since "2026-11-11 14:00" --until "2026-11-11 15:00" — 누가 언제 무엇을 지웠는지 sudo 줄만 골라 보여요. /var/log/auth.log 에도.' },
       { slot: 'sequence', cost: 10, unlessClues: ['c2_debug', 'c2_growth'], text: '수신량이 언제부터 늘었나: journalctl -u logshipd 의 stats 줄. 그 서버로 가서(ssh pay-api-01) journalctl -u payment-api --since "2026-11-11 14:00".' },
       { slot: 'sequence', cost: 10, text: '서진님의 두 변경(wiki-01, 보관 주기)은 언제 효과가 나나요? logrotate 는 언제 돌고, wiki-01 은 시간당 얼마나 보내나요?' },
       { slot: 'responsibility', cost: 10, unlessClues: ['r2_quota'], text: 'cat /etc/logshipd/logshipd.conf — 한 서버가 보낼 수 있는 양과, 디스크가 모자랄 때 누구에게 알리는지.' },
@@ -789,7 +800,7 @@ export const caseTwoDeleted: CaseFile = {
       '  디스크      df -h      du -sh <경로>',
       '  기록        history    journalctl [-u 서비스] [-t sudo] [--since …] [--until …]',
       '  서비스      systemctl status|show|cat <서비스>',
-      '  프로세스    ps aux  pgrep [-f] <이름>  ls -l /proc/<PID>/fd',
+      '  프로세스    ps aux  pgrep [-f] <이름>  ls -l[L] /proc/<PID>/fd[/<번호>]  cat /proc/<PID>/fdinfo/<번호>',
       '  이동        ssh pay-api-01   exit',
       '  그 밖에     crontab -l  id  echo  env  which  type',
       '  기타        man <명령>  help  hint (💡 힌트 패널)  clear',

@@ -291,7 +291,55 @@ export function buildWorld(cs: CaseFile): World {
     for (const u of def.units ?? []) vfs.writeFile(`/etc/systemd/system/${u.name}`, u.unitFile);
 
     // /proc
+    // mount points from df (longest prefix wins) give each file an mnt_id in fdinfo
+    const mounts = (def.df ?? []).slice(1).map((l) => l.trim().split(/\s+/).pop()!).filter((m) => m.startsWith('/'));
+    const mntId = (path: string) => {
+      let best = -1;
+      mounts.forEach((m, i) => {
+        if ((path === m || path.startsWith(m === '/' ? '/' : m + '/')) && (best < 0 || m.length > mounts[best].length)) best = i;
+      });
+      return 24 + Math.max(0, best);
+    };
+    const inoOf = (path: string) => 1_048_576 + ([...path].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7) % 3_000_000);
     for (const p of def.procs ?? []) {
+      const sample = p.fdSample ?? [];
+      const targetOf = (i: number) => (i < sample.length ? sample[i] : `socket:[${48211 + i * 7}]`);
+      const deletedOf = (t: string) => p.deleted?.find((d) => `${d.path} (deleted)` === t);
+      /** The open file behind fd link text `t` (what `ls -lL`, `du -L` and fdinfo see). */
+      const fdTarget = (t: string): VNode => {
+        const del = deletedOf(t);
+        const plain = (o: Partial<VNode>): VNode => ({ name: t, type: 'file', owner: 'root', group: 'root', mode: 0o600, mtime: start, size: 0, content: '', ...o });
+        if (del) return plain({ name: Vfs.basename(del.path), owner: del.owner, group: del.group, mode: octal(del.mode, 0o640), mtime: parseLocal(del.mtime), size: del.size, nlink: 0 });
+        if (t.startsWith('socket:')) return plain({ owner: p.user, group: p.user, mode: 0o777, special: { kind: 's' } });
+        if (t === '/dev/null') return plain({ name: 'null', mode: 0o666, special: { kind: 'c', rdev: '1, 3' } });
+        if (t.startsWith('/')) return vfs.lookup(t) ?? plain({ name: Vfs.basename(t), owner: p.user, group: p.user, mode: 0o640 });
+        return plain({}); // anon_inode:[eventpoll]
+      };
+      /** /proc/<pid>/fdinfo/<n>: an append-mode log writer's pos is the file's size. */
+      const fdInfo = (t: string): string => {
+        let pos = 0;
+        let flags = '0100002';
+        let mnt = 25;
+        let ino: number;
+        if (t.startsWith('socket:')) {
+          flags = '02004002';
+          mnt = 8;
+          ino = +(/\d+/.exec(t)?.[0] ?? 0);
+        } else if (t.startsWith('anon_inode:')) {
+          flags = '02000002';
+          mnt = 15;
+          ino = 1057;
+        } else if (t === '/dev/null') ino = 5;
+        else {
+          const path = t.replace(/ \(deleted\)$/, '');
+          const appending = /\.log$/.test(path);
+          pos = appending ? Vfs.size(fdTarget(t)) : 0;
+          flags = appending ? '0102001' : '0100002';
+          mnt = mntId(path);
+          ino = deletedOf(t)?.ino ?? inoOf(path);
+        }
+        return `pos:\t${pos}\nflags:\t${flags}\nmnt_id:\t${mnt}\nino:\t${ino}`;
+      };
       const fdDir: VNode = {
         name: 'fd',
         type: 'dir',
@@ -303,23 +351,23 @@ export function buildWorld(cs: CaseFile): World {
         mtime: start,
         list: () => {
           const out: VNode[] = [];
-          const sample = p.fdSample ?? [];
           for (let i = 0; i < p.fdCount; i++) {
-            out.push({
-              name: String(i),
-              type: 'file',
-              owner: p.user,
-              group: p.user,
-              mode: 0o700,
-              mtime: start,
-              link: i < sample.length ? sample[i] : `socket:[${48211 + i * 7}]`,
-              content: '',
-            });
+            const t = targetOf(i);
+            out.push({ name: String(i), type: 'file', owner: p.user, group: p.user, mode: 0o700, mtime: start, link: t, content: '', deref: () => fdTarget(t) });
           }
           return out.sort((a, b) => +a.name - +b.name);
         },
       };
       vfs.mount(`/proc/${p.pid}/fd`, fdDir);
+      vfs.mount(`/proc/${p.pid}/fdinfo`, {
+        name: 'fdinfo',
+        type: 'dir',
+        owner: p.user,
+        group: p.user,
+        mode: 0o555, // same simplification as fd above
+        mtime: start,
+        list: () => Array.from({ length: p.fdCount }, (_, i) => ({ name: String(i), type: 'file' as const, owner: p.user, group: p.user, mode: 0o444, mtime: start, size: 0, content: () => fdInfo(targetOf(i)) })),
+      });
       vfs.writeFile(`/proc/${p.pid}/cmdline`, p.cmd, { owner: p.user, group: p.user, mode: 0o444 });
       vfs.writeFile(
         `/proc/${p.pid}/limits`,
