@@ -6,6 +6,9 @@
 //
 // Runs twice on temporary copies of dist/: as built (Opus .ogg first) and with every .ogg removed
 // (forces the .mp3 fallback). Each pass watches the whole briefing (~35 s).
+// Then the Case 1 and Case 2 openings (서진's voice messages, not recorded yet): the sting plays from
+// the file, the missing voice falls back to subtitles with the typing loop, the mail slides in,
+// and the desktop loops amb.office from the file (~70 s more).
 //
 //   npm run build && node scripts/e2e-audio-files.mjs     (run after `npm run e2e`; not wired into it to keep package.json out of this change)
 
@@ -172,9 +175,55 @@ async function pass(format) {
   }
 }
 
+/** Case 1 and Case 2: same opening scene; their voice lines are listed for production, not shipped. */
+async function newOpenings() {
+  const server = await preview({ root, preview: { port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+  const url = server.resolvedUrls.local[0];
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const errors = [];
+  await page.addInitScript(AUTOPLAY_POLICY);
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => m.type() === 'error' && !/404 \(Not Found\)/.test(m.text()) && errors.push(m.text()));
+  try {
+    for (const [id, cue, mail] of [
+      ['case1-cron-env', 'voice.briefing-case1-seojin', '[연습 2] wiki-01 /var 92%'],
+      ['case2-deleted-open', 'voice.briefing-case2-seojin', '[중요] 로그 서버 디스크'],
+    ]) {
+      console.log(`\n[${id}] opening against ${url}`);
+      await page.goto(`${url}?fresh=1&case=${id}`);
+      await page.mouse.click(30, 30);
+      await page.waitForFunction(() => window.__audio.state() === 'running', null, { timeout: 5000 });
+      await page.locator('#boot button.primary').click();
+      const t0 = Date.now();
+      await page.locator('#briefing').waitFor();
+      await page.waitForFunction(() => window.__audio.history.some((h) => h.id === 'music.briefing'), null, { timeout: 3000 });
+      assert.deepEqual(await page.evaluate(() => window.__audio.history.find((h) => h.id === 'music.briefing')), { id: 'music.briefing', status: 'file' });
+      await page.locator('#briefing[data-step="voice"]').waitFor({ timeout: 8000 });
+      await page.waitForFunction(() => window.__audio.history.some((h) => h.id === 'sfx.typing'), null, { timeout: 4000 });
+      assert.equal(await page.evaluate((c) => window.__audio.history.some((h) => h.id === c && h.status === 'file'), cue), false, `${cue} is not shipped yet`);
+      assert.equal(await page.evaluate((c) => window.__audio.hasFile(c), cue), false);
+      assert.match(await page.locator('.brief-card').innerText(), /강서진/);
+      step(`${id}: music.briefing from the file; ${cue} missing → 서진's subtitles type with the sfx.typing loop`);
+      await page.locator('#briefing[data-step="mail"] .brief-mail', { hasText: mail }).waitFor({ timeout: 45000 });
+      await page.locator('#briefing').waitFor({ state: 'detached', timeout: 30000 });
+      const secs = (Date.now() - t0) / 1000;
+      assert.ok(secs >= 28 && secs <= 62, `${id} briefing ${secs}s`);
+      await page.waitForFunction(() => window.__audio.isLooping('amb.office'), null, { timeout: 5000 });
+      assert.deepEqual(await page.evaluate(() => window.__audio.history.find((h) => h.id === 'amb.office')), { id: 'amb.office', status: 'file' });
+      assert.equal(await page.evaluate(() => window.__audio.isLooping('sfx.typing')), false, 'typing loop stopped');
+      step(`${id}: mail notification, desktop after ${secs.toFixed(1)} s, amb.office loops from the file, typing loop stopped`);
+    }
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+    await server.close();
+  }
+}
+
 try {
   await pass('ogg');
   await pass('mp3');
+  await newOpenings();
   console.log('\n' + JSON.stringify(results, (k, v) => (typeof v === 'number' ? Math.round(v * 10000) / 10000 : v)));
   console.log('audio files e2e passed');
 } catch (e) {

@@ -17,7 +17,7 @@
   --mono: 'D2Coding', 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Noto Sans Mono CJK KR', monospace;
   --sans: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
   /* motion tokens (src/ui/motion.ts DUR): every investigation-time animation stays under 1 s */
-  --motion-snap: 380ms; --motion-blink: 800ms; --motion-tail: 600ms; --motion-flash: 900ms;
+  --motion-snap: 380ms; --motion-blink: 800ms; --motion-tail: 600ms; --motion-flash: 900ms; --motion-micro: 160ms; --motion-short: 280ms; --motion-base: 450ms;
   --shadow: 0 10px 30px rgba(20, 22, 26, 0.28), 0 2px 6px rgba(20, 22, 26, 0.18);
 }
 
@@ -424,7 +424,7 @@ input, textarea, select { font: inherit; }
 .cardbox .cardside { flex: 1; min-width: 180px; }
 .cardbox .cardside p { font-size: 12.5px; margin: 0 0 8px; }
 /* the 💡 panel and toasts share the bottom-right corner: toasts step aside while it is open */
-body:has(.popover.hints) .toasts { right: 452px; }
+body:has(.popover.hints) .toasts, body:has(.popover.goalpop) .toasts { right: 452px; }
 
 /* ---------- observability panels (evidence board + dashboard snapshot) ----------
    Original dark panel grid. Colour is backed by text and shape everywhere (level badges,
@@ -613,3 +613,51 @@ body:has(.popover.hints) .toasts { right: 452px; }
   .obs-row.flash { animation: none; outline: 2px solid var(--obs-focus); }
   .obs-row.snap, .obs-mk.snap, .obs-thrg.blink, .obs-stat.blink, .obs-tail.arrive { animation: none; }
 }
+/* ---------- goal card (이번 사건에서 밝혀낼 것) ---------- */
+.goal h3 { margin: 0 0 6px; font-size: 14px; }
+.goal-intro { margin: 0 0 8px; font-size: 13px; color: var(--ink-2, #4a4740); }
+.goal-list { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 13px; }
+.goal-list b { display: block; }
+.popover .goal { border-bottom: 1px solid rgba(0,0,0,0.08); padding-bottom: 10px; margin-bottom: 10px; }
+.goalpop .goal { border: 0; margin: 0; padding: 0; }
+.todo-goal { display: block; width: 100%; margin: 6px 0 2px; padding: 4px 6px; border: 1px dashed rgba(58,51,36,0.35); border-radius: 4px; background: rgba(255,255,255,0.35); color: inherit; font: 12.5px/1.4 var(--sans); text-align: left; cursor: pointer; }
+.todo-goal:hover, .todo-goal:focus-visible { background: rgba(255,255,255,0.7); }
+
+/* ---------- tool tour (coach marks): never blocks, one at a time ---------- */
+.tour {
+  position: fixed; z-index: 9500; width: 280px; padding: 10px 12px; border-radius: 10px; background: #2a2e33; color: #f1efe9;
+  box-shadow: var(--shadow); font-size: 13px; line-height: 1.5; animation: tour-in var(--motion-short) ease-out;
+}
+.tour p { margin: 4px 0 8px; }
+.tour-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tour-head b { color: #fff; }
+.tour-n { font-size: 11px; color: #a9a49b; }
+.tour-acts { display: flex; justify-content: flex-end; gap: 8px; }
+.tour-acts button { border-radius: 999px; padding: 3px 12px; font-size: 12.5px; border: 1px solid rgba(255,255,255,0.35); background: transparent; color: #f1efe9; cursor: pointer; }
+.tour-acts .tour-ok { background: #f2d94e; border-color: #f2d94e; color: #2a2e33; font-weight: 600; }
+.tour-acts button:focus-visible { outline: 2px solid #f2d94e; outline-offset: 2px; }
+.tour-target { outline: 3px solid rgba(242, 217, 78, 0.9); outline-offset: 2px; transition: outline-color var(--motion-base); }
+@keyframes tour-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ---------- big moments: aha clue, report result (pointer-events pass through) ---------- */
+.moment { position: fixed; inset: 0; z-index: 9800; display: grid; place-items: center; pointer-events: none; }
+.moment-card {
+  min-width: min(420px, 86vw); max-width: 86vw; padding: 18px 24px; border-radius: 16px; text-align: center; background: rgba(30, 33, 38, 0.94); color: #fff;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.45); animation: moment-in var(--motion-base) cubic-bezier(.2,.9,.3,1.2);
+}
+.moment-aha .moment-card { border: 2px solid #f2d94e; }
+.moment-result.good .moment-card { border: 2px solid #8fc47a; }
+.moment-tag { font-size: 28px; }
+.moment-title { font-size: 20px; font-weight: 700; margin: 4px 0; }
+.moment-sub { font-size: 13px; color: #cfcac0; }
+.moment.out .moment-card { opacity: 0; transform: scale(0.98); transition: opacity var(--motion-short), transform var(--motion-short); }
+.moment.still .moment-card { animation: none; }
+@keyframes moment-in { from { opacity: 0; transform: scale(0.86); } to { opacity: 1; transform: none; } }
+
+/* ---------- reduced motion: no movement, the same information ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+}
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+html.reduce-motion .window.pulse { box-shadow: var(--shadow), 0 0 0 4px rgba(242, 217, 78, 0.85); }
+html.reduce-motion .icon.pulse { background: rgba(242, 217, 78, 0.35); }

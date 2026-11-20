@@ -900,7 +900,7 @@ done`,
     { id: 'c_disk_ok', label: 'df -h: 디스크는 정상(42%)', slot: 'cause', match: [{ output: '/dev/sda1\\s+98G.*42%' }] },
     { id: 'c_cron_journal', label: 'journalctl -u cron: 매주 토 03:15 eunjae의 백업', slot: 'cause', match: [{ output: 'CRON\\[\\d+\\]: \\(eunjae\\) CMD' }] },
     { id: 'c_export', label: '저널: 03:15:02 export 시작, 2,314 파일 열림', slot: 'cause', match: [{ output: 'export: (started by eunjae|opened 2,314)' }] },
-    { id: 'c_cron', label: 'crontab -l: 15 3 * * 6 ledger-backup.sh (+ 은재의 주석)', slot: 'cause', key: true, trace: true, match: [{ output: '15 3 \\* \\* 6 /home/eunjae/bin/ledger-backup\\.sh' }] },
+    { id: 'c_cron', label: 'crontab -l: 15 3 * * 6 ledger-backup.sh (+ 은재의 주석)', slot: 'cause', key: true, trace: true, aha: '15 3 * * 6 — 밤에 도는 것. 토요일 03:15.', match: [{ output: '15 3 \\* \\* 6 /home/eunjae/bin/ledger-backup\\.sh' }] },
     { id: 'c_limit', label: 'LimitNOFILE=4096 (서비스의 열린 파일 한도)', slot: 'cause', key: true, match: [{ output: '^LimitNOFILE=4096|Max open files\\s+4096|process_max_fds 4096' }] },
     { id: 'c_fds', label: '지금 열린 fd 1,947개 (풀 상향 뒤)', slot: 'cause', key: true, match: [{ output: '^\\s*1947\\s*$|process_open_fds 1947|open_fds=1947/4096' }] },
     { id: 'c_backup_files', label: 'backup.log: 백업이 원장 파일 2,3xx개를 연다', slot: 'cause', key: true, match: [{ output: 'opened 2,3\\d\\d segment files|opened 2,2\\d\\d segment files' }] },
@@ -1109,6 +1109,8 @@ done`,
       { who: 'eunjae', text: '아무것도 숨기지 않았다. 말하려던 것을 끝내 보내지 못했을 뿐이다. 17:48의 초안은 아직 임시보관함에 있다.' },
     ],
   },
+
+  goal: { intro: '오미래 CTO 에게 오늘 21:00까지 보낼 원인 보고서. 세 칸을 채우면 사건이 끝나요. 제출은 3번까지, 틀리면 어느 칸인지는 알려 주지 않아요.' },
 
   // ------------------------------------------------------------------ opening (first 3 minutes)
   // Briefing = 지훈's Monday-morning voice message (voice: characters.md §4(d) / §8-1: short bursts,
