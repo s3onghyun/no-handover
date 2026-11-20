@@ -10,7 +10,7 @@ import { checkIntegrity, briefingSecs, at, cited } from './case-integrity.ts';
 const out = (g: Game, cmd: string) => g.runCommand(0, cmd).lines.filter((l) => l.cls !== 'dim').map((l) => l.text);
 const ALL = ['c2_rm', 'c2_debug', 'c2_growth', 'r2_quota', 'r2_noverify'];
 
-test('case 2 integrity: two hosts, three slots, four bundled submissions, nine key clues', () => {
+test('case 2 integrity: two hosts, three slots, four submissions, nine key clues', () => {
   checkIntegrity(cs);
   assert.deepEqual(cs.hosts.map((h) => h.name), ['logs-01', 'pay-api-01']);
   assert.deepEqual(cs.accusation.slots.map((s) => s.id), ['cause', 'sequence', 'responsibility']);

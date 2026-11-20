@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HintLadder } from '../src/engine/hints.ts';
-import { scoreSubmission, scoreSlot, grade, ATTEMPT_MULTIPLIER, citeReply, missingCites } from '../src/engine/scoring.ts';
+import { scoreSubmission, scoreSlot, grade, ATTEMPT_MULTIPLIER, missingCites } from '../src/engine/scoring.ts';
 import { backing } from './case-integrity.ts';
 import { caseFriday1802 as cs } from '../src/cases/friday-1802.ts';
 
@@ -120,8 +120,5 @@ test('scoring: a right option needs a cited pin that meets the slot\'s evidence 
   const off = scoreSubmission(cs, { ...correct, cites: { ...cites, cause: ['test-sequence'] } }, { attempt: 1, pinnedKeyClues: 0, hintCost: 0, pins });
   assert.equal(off.slots.cause?.cite, 'unsupported');
   assert.equal(off.slots.sequence?.cite, 'ok');
-  assert.match(citeReply(cs, off)!, /원인/);
-  assert.doesNotMatch(citeReply(cs, off)!, /경위/);
   assert.deepEqual(missingCites(cs, { ...correct, cites: { cause: ['test-cause'] } }, pins), ['sequence', 'responsibility']);
-  assert.equal(citeReply(cs, scoreSubmission(cs, correct, { attempt: 1, pinnedKeyClues: 0, hintCost: 0, pins })), null);
 });

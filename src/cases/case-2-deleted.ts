@@ -580,11 +580,12 @@ export const caseTwoDeleted: CaseFile = {
     { id: 'r2_silent', label: 'logshipd: 로그를 버리면서 "notify: none"', slot: 'responsibility', match: [{ output: 'notify: none', host: L }, { output: '^on_low_disk_notify = none', host: L }] },
   ],
 
-  // ------------------------------------------------------------------ report (three slots, four submissions, bundled)
+  // ------------------------------------------------------------------ report (three slots, four submissions, per-field reply)
   accusation: {
     maxSubmissions: 4,
-    intro: '서진님 검토 후 오미래 CTO 에게 갈 보고서. 세 칸. 제출은 4번까지 — 틀리면 어느 칸인지는 알려 주지 않는다.',
-    reply: { from: '강서진', partial: '{total}칸 중 {n}칸이 로그랑 안 맞아요.', bundled: '어딘가 숫자가 안 맞아요. 다시요.', sign: '강서진' },
+    intro: '서진님 검토 후 오미래 CTO 에게 갈 보고서. 세 칸. 제출은 4번까지 — 틀리면 칸마다 ✓/✗ 와 서진님의 짧은 한마디가 온다.',
+    feedback: 'hints',
+    reply: { from: '강서진', lines: ['✗ 칸 숫자가 로그랑 안 맞아요. 다시요.', '✗ 칸만 다시 봐요.', '아직 ✗ 칸이 있어요. 한 번 더요.'], sign: '강서진' },
     // options are hypotheses of the same length and grain; the pinned evidence decides.
     // Seojin's two changes are in #로그-서버 (r2_noverify opens it): her red herrings wait for it.
     slots: [
@@ -758,7 +759,7 @@ export const caseTwoDeleted: CaseFile = {
     ],
   },
 
-  goal: { intro: '서진님 검토 뒤 오미래 CTO 에게 갈 보고서. 세 칸을 채우면 사건이 끝나요. 제출은 4번까지 — 틀리면 어느 칸인지는 알려 주지 않아요.' },
+  goal: { intro: '서진님 검토 뒤 오미래 CTO 에게 갈 보고서. 세 칸을 채우면 사건이 끝나요. 제출은 4번까지 — 틀리면 칸마다 ✓/✗ 로 알려 줘요.' },
 
   // ------------------------------------------------------------------ first minutes
   opening: {
@@ -783,7 +784,7 @@ export const caseTwoDeleted: CaseFile = {
       items: [
         { id: 'gap', text: '디스크는 정말 찼나, 파일은 다 어디 있나', hint: '두 가지 숫자를 나란히 놓아 보세요.', any: [{ clue: 'c2_du' }], pulse: 'terminal' },
         { id: 'holder', text: '지운 파일은 어디로 갔나', any: [{ clue: 'c2_deleted' }] },
-        { id: 'pins', text: '증거 3개 보드에 올리기 (칸마다 하나 이상) 📌', any: [{ pins: 3 }] },
+        { id: 'pins', text: '증거 3개 핀 → 보고서 쓰기 (칸마다 하나 이상) 📌', any: [{ pins: 3 }] },
       ],
       after: ['다음: 📝 보고서 — 원인, 경위, 재발 방지 세 칸 (제출 4번)', '언제부터: 지운 시각, 그리고 로그를 보낸 쪽 서버', '막히면: ~/README.txt, history, 💡'],
     },
@@ -824,8 +825,8 @@ export const caseTwoDeleted: CaseFile = {
   expert: {
     maxSubmissions: 2,
     parMin: 16,
-    intro: '서진님 검토 후 오미래 CTO 에게 갈 보고서. 세 칸. 제출은 2번까지 — 틀리면 어느 칸인지는 알려 주지 않는다.',
-    goalIntro: '서진님 검토 뒤 오미래 CTO 에게 갈 보고서. 세 칸을 채우면 사건이 끝나요. 제출은 2번까지 — 틀리면 어느 칸인지는 알려 주지 않아요.',
+    intro: '서진님 검토 후 오미래 CTO 에게 갈 보고서. 세 칸. 제출은 2번까지 — 틀리면 칸마다 ✓/✗ 만 온다.',
+    goalIntro: '서진님 검토 뒤 오미래 CTO 에게 갈 보고서. 세 칸을 채우면 사건이 끝나요. 제출은 2번까지 — 틀리면 칸마다 ✓/✗ 만 알려 줘요.',
     after: ['다음: 📝 보고서 — 원인, 경위, 재발 방지 세 칸 (제출 2번)', '막히면: ~/README.txt, history, 💡 (숙련자 모드: 감점)'],
     df: [
       {

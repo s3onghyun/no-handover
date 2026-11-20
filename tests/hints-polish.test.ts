@@ -1,18 +1,21 @@
 // Web-escape polish (analysis §9 items 4, 5, 6, 8, 11, 12, 14): ask a colleague, the three-step
 // hint panel, hints as a record, the procedural room tone and key clicks, the typing indicator and
-// the written-then-deleted line, bundled report feedback, the spoiler-free result card.
+// the written-then-deleted line, per-field report feedback, the spoiler-free result card.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cited } from './case-integrity.ts';
 import { ASK_BEAT_MS, Game, typingMs } from '../src/engine/game.ts';
 import { DEFAULT_ANSWER_COST, slotAnswer } from '../src/engine/hintpanel.ts';
-import { feedbackMode, wrongReply } from '../src/engine/scoring.ts';
+import { feedbackMode, fieldMarks, wrongReply } from '../src/engine/scoring.ts';
+import { applyExpert } from '../src/engine/expert.ts';
 import { fmtDuration, playRecord, recordLine, resultCard } from '../src/engine/record.ts';
 import { renderRoomTone, rmsDb, ROOMTONE_DEFAULTS } from '../src/audio/roomtone.ts';
 import { peakDb, AudioManager, type CtxLike } from '../src/audio/audio.ts';
 import { MANIFEST, type CueDef } from '../src/audio/manifest.ts';
 import { caseFriday1802 as c3 } from '../src/cases/friday-1802.ts';
 import { caseZeroWiki as c0 } from '../src/cases/case-0-wiki.ts';
+import { caseOneCron as c1 } from '../src/cases/case-1-cron.ts';
+import { caseTwoDeleted as c2 } from '../src/cases/case-2-deleted.ts';
 
 const run = (g: Game, cmd: string, tab = 0) => g.runCommand(tab, cmd);
 const tickFor = (g: Game, ms: number, step = 100) => {
@@ -258,22 +261,58 @@ test("written, then deleted: 지훈's '설마' line in Case 3 appears and is del
   assert.ok(g2.st.live.find((x) => x.id === m.id)!.deletedAt !== undefined);
 });
 
-// ------------------------------------------------------------------ (f) bundled confirmation
+// ------------------------------------------------------------------ (f) per-field feedback
 
-test('bundled confirmation: Case 3 never says which slot or how many; Case 0 keeps per-slot feedback', () => {
-  assert.equal(feedbackMode(c3), 'bundled');
-  assert.equal(feedbackMode(c0), 'per-slot');
+test('wrong report: per-field ✓/✗ everywhere; Case 3 adds one CTO line, never an option', () => {
+  assert.equal(feedbackMode(c3), 'marks');
   const g = new Game(c3);
   const oneWrong = g.submit(cited(g, { cause: 'fd', sequence: 'sneaky', responsibility: ['git-admins', 'cron', 'oncall', 'account'] }))!;
-  const allWrong = (() => { const x = new Game(c3); return x.submit(cited(x, { cause: 'disk', sequence: 'sneaky', responsibility: ['blame-eunjae'] }))!; })();
-  const a = wrongReply(c3, oneWrong);
-  const b = wrongReply(c3, allWrong);
-  assert.equal(a, b, 'one wrong slot and three wrong slots read the same');
-  assert.match(a, /어딘가/);
-  for (const s of c3.accusation.slots) assert.ok(!a.includes(s.title.split(' ')[0]), `no slot name (${s.title})`);
-  assert.doesNotMatch(a, /\d/, 'no count');
-  const z = (() => { const x = new Game(c0); return x.submit(cited(x, { cause: 'disk', sequence: 'slow', responsibility: [] }))!; })();
-  assert.equal(wrongReply(c0, z), '2칸 중 1칸이 로그랑 안 맞아요. 다시요.');
+  assert.deepEqual(fieldMarks(c3, oneWrong).map((m) => `${m.ok ? '✓' : '✗'}${m.name}`), ['✓원인', '✗경위', '✓책임·은폐']);
+  const a = wrongReply(c3, oneWrong, g.st.submissions[0].sub, { attempt: 1 });
+  const b = wrongReply(c3, oneWrong, g.st.submissions[0].sub, { attempt: 2 });
+  assert.notEqual(a, b, 'the second wrong report hears another line');
+  for (const s of c3.accusation.slots) for (const o of s.options) assert.ok(!a.includes(o.text) && !b.includes(o.text), 'no option text');
+});
+
+test('wrong report, Cases 0–2: 서진 says per field what fits and what does not, varied, without the answer', () => {
+  for (const cs of [c0, c1, c2]) assert.equal(feedbackMode(cs), 'hints', cs.id);
+  const g = new Game(c0);
+  const sub = cited(g, { cause: 'disk', sequence: 'slow', responsibility: [] });
+  const z = g.submit(sub)!;
+  const r1 = wrongReply(c0, z, sub, { attempt: 1, pins: g.st.pins });
+  const r2 = wrongReply(c0, z, sub, { attempt: 2, pins: g.st.pins });
+  assert.match(r1, /^원인 칸은 맞아요\.\n경위 칸, 언제 시작됐는지부터 시각을 다시 맞춰 봐요\. '밤사이 쌓인 기록' 쪽도 한번 봐요\.\n다시요\.$/);
+  assert.match(r2, /^원인 칸은 됐어요\. 그대로 두세요\.\n경위 칸은 아직이에요\./);
+  assert.notEqual(r1, r2);
+  for (const s of c0.accusation.slots) for (const o of s.options) assert.ok(!r1.includes(o.text) && !r2.includes(o.text), 'no option text');
+  assert.doesNotMatch(r1, /어딘가/);
+  // a field with an evidence kind nobody pinned: the reply names the kind (a neutral type, already on the board)
+  const g2 = new Game(c0);
+  const p = g2.pin({ kind: 'line', text: '/dev/sdb1        20G   19G     0 100% /var', source: 'wiki-01' });
+  const s2 = { cause: 'memory', sequence: 'true', responsibility: [], cites: { cause: [p.id], sequence: [p.id] } };
+  const w = g2.submit(s2)!;
+  const r3 = wrongReply(c0, w, s2, { attempt: 1, pins: g2.st.pins });
+  assert.match(r3, /원인 칸이 기록이랑 안 맞아요.*'위키가 남긴 오류 · 서비스 상태' 쪽은 아직 안 봤죠\?/);
+  // multi-select (Case 2 재발 방지): a wrong item or a missing one, never which
+  const g3 = new Game(c2);
+  const s3 = cited(g3, { cause: 'open', sequence: 'true', responsibility: ['no-verify', 'bigger-disk'] });
+  const w3 = g3.submit(s3)!;
+  assert.match(wrongReply(c2, w3, s3, { attempt: 1, pins: g3.st.pins }), /재발 방지 칸에 기록으로 뒷받침 안 되는 항목이 섞여 있어요/);
+  const s4 = cited(g3, { cause: 'open', sequence: 'true', responsibility: ['no-verify'] });
+  const w4 = g3.submit(s4)!;
+  assert.match(wrongReply(c2, w4, s4, { attempt: 2, pins: g3.st.pins }), /재발 방지 칸, 기록에 남은 요인이 더 있어요/);
+});
+
+test('숙련자 모드: the per-field marks only, the case\'s own short line in turn', () => {
+  for (const cs of [c0, c1, c2]) {
+    const x = applyExpert(cs);
+    assert.equal(feedbackMode(x), 'marks', cs.id);
+    const g = new Game(x);
+    const sub = cited(g, { cause: x.accusation.slots[0].options.find((o) => !o.correct)!.id, sequence: 'true', responsibility: ['no-verify', 'open-rule', 'debug-expiry', 'quota', 'silent-drop'] });
+    const r = g.submit(sub)!;
+    assert.equal(wrongReply(x, r, sub, { attempt: 1 }), x.accusation.reply!.lines![0]);
+    assert.equal(wrongReply(x, r, sub, { attempt: 2 }), x.accusation.reply!.lines![1]);
+  }
 });
 
 // ------------------------------------------------------------------ (d) sound

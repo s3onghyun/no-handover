@@ -1,5 +1,5 @@
 // Case 1 「밤에만 실패하는 스크립트」: integrity, reachability with the case's own commands, the cron
-// facts the story rests on (PATH, working directory, journal), scoring with bundled feedback.
+// facts the story rests on (PATH, working directory, journal), scoring with per-field feedback.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../src/engine/game.ts';
@@ -8,12 +8,12 @@ import { checkIntegrity, briefingSecs, at, cited } from './case-integrity.ts';
 
 const out = (g: Game, cmd: string) => g.runCommand(0, cmd).lines.filter((l) => l.cls !== 'dim').map((l) => l.text);
 
-test('case 1 integrity: references resolve, one host, two slots, five bundled submissions', () => {
+test('case 1 integrity: references resolve, one host, two slots, five submissions with per-field feedback', () => {
   checkIntegrity(cs);
   assert.deepEqual(cs.hosts.map((h) => h.name), ['wiki-01']);
   assert.deepEqual(cs.accusation.slots.map((s) => s.id), ['cause', 'sequence']);
   assert.equal(cs.accusation.maxSubmissions, 5);
-  assert.equal(cs.accusation.feedback ?? 'bundled', 'bundled');
+  assert.equal(cs.accusation.feedback, 'hints');
   assert.equal(cs.clues.filter((c) => c.key).length, 7, 'seven key clues (ladder table)');
   assert.equal(cs.hints.idleMinutes, 6);
   assert.ok(cs.hints.explicit.every((d) => d.cost === 5), 'rung 3 costs 5 in senior mode');
@@ -69,7 +69,7 @@ test('case 1 shell: the login PATH has /opt/wiki/bin, cron\'s does not; the scri
   assert.match(out(g, 'man cron').join('\n'), /PATH=\/usr\/bin:\/bin/);
 });
 
-test('case 1: scripted solve, bundled feedback on a wrong report, Jihoon\'s red-herring nudge', () => {
+test('case 1: scripted solve, a wrong report, Jihoon\'s red-herring nudge', () => {
   const g = new Game(cs);
   g.briefingEnd(true, 1000, 'ring');
   for (const c of ['crontab -l', 'journalctl -u cron --since "2026-11-11 00:50" --until "2026-11-11 01:10"', 'cat ~/wiki-clean.log', 'which wikictl', 'cat ~/log/cron-env.txt', 'journalctl -u wiki --since "2026-11-11 00:00" --until "2026-11-11 00:10"', 'df -h']) {

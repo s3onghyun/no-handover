@@ -20,7 +20,14 @@ export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioMa
   /** Steps unfolded by hand on the goals-only sticky (this page only). */
   let stepsShown = false;
   let folding = false;
+  /** All ticked and the report not open yet: the sticky waits with "📝 보고서 쓰기" (fold timer). */
+  let waitTimer: number | null = null;
   const fresh = new Set<string>();
+  /** The last item is "증거 N개 핀 → 보고서 쓰기": once it ticks, the report is the next thing to do. */
+  const hasPinsItem = () => !!def?.items.some((it) => it.any.some((c) => 'pins' in c));
+  const reportOpen = () => !!desktop.querySelector('.window[data-app="report"]:not(.min)');
+  const toReport = () =>
+    h('button.todo-report', { type: 'button', onclick: () => { ctx.wm.open('report'); foldNow(); } }, t('obj.toReport'));
 
   const syncPulse = () => {
     const target = folding ? null : g.objectives.pulse();
@@ -79,6 +86,7 @@ export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioMa
     if (goalsOnly) {
       el.classList.add('goals-only');
       el.appendChild(h('button.todo-steps', { type: 'button', 'aria-expanded': 'false', onclick: () => ((stepsShown = true), render()) }, `${t('obj.showSteps')} ▾`));
+      if (waitTimer !== null) el.appendChild(toReport());
       fresh.clear();
       return;
     }
@@ -99,6 +107,7 @@ export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioMa
           h('span.tx', null, h('span.num', null, `${i + 1}. `), it.text, counted),
           cur === it && it.hint && !folding ? h('small.hint', null, it.hint) : null,
           goal && !done && cur === it && !folding && hasEvidence(g.cs) ? evidenceLines() : null,
+          goal && done && waitTimer !== null && !folding ? toReport() : null,
         ),
       );
     });
@@ -107,6 +116,9 @@ export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioMa
   };
 
   const fold = () => {
+    if (waitTimer !== null) window.clearTimeout(waitTimer);
+    waitTimer = null;
+    if (folding || g.objectives.folded()) return;
     folding = true;
     render();
     void audio.play('sfx.done');
@@ -130,20 +142,45 @@ export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioMa
     }, 900);
   };
 
+  /** Fold soon (the report just opened, or the CTA was used). */
+  function foldNow(): void {
+    if (waitTimer === null) return;
+    window.clearTimeout(waitTimer);
+    waitTimer = null;
+    window.setTimeout(fold, 400);
+  }
+  /**
+   * Every box ticked: with a pins item and the report not open yet, the sticky stays a little
+   * longer with "📝 보고서 쓰기" on that item (it folds when the report opens, or after WAIT_MS);
+   * otherwise it folds as before.
+   */
+  const WAIT_MS = 12000;
+  const allTicked = (delay: number) => {
+    if (!g.objectives.allDone() || g.objectives.folded() || folding || waitTimer !== null) return;
+    if (hasPinsItem() && !g.st.finished && !reportOpen()) {
+      waitTimer = window.setTimeout(fold, WAIT_MS);
+      render();
+    } else window.setTimeout(fold, delay);
+  };
+
   g.on('objective', (ids) => {
     for (const id of ids as string[]) {
       fresh.add(id);
       void audio.play('sfx.tick');
     }
     render();
-    if (g.objectives.allDone() && !g.objectives.folded()) window.setTimeout(fold, 1400);
+    allTicked(1400);
   });
 
   // reloaded between the last tick and the fold
-  if (g.objectives.allDone() && !g.objectives.folded()) window.setTimeout(fold, 600);
+  allTicked(600);
 
   return {
-    refresh: () => (folding ? syncPulse() : render()),
+    refresh: () => {
+      if (folding) return syncPulse();
+      if (waitTimer !== null && reportOpen()) foldNow();
+      render();
+    },
     show: () => {
       if (g.objectives.folded()) ctx.wm.open('notes', '__today');
       else {

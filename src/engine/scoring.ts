@@ -3,7 +3,7 @@
 // 숙련자 모드 (`?senior=1`, src/engine/expert.ts), which in Cases 0–2 also takes off play time over
 // par; otherwise hints are a record ("힌트 N회"), see src/engine/record.ts.
 
-import { citeState, type CiteState, type PinLike } from './evidence.ts';
+import { citeState, kindsFor, type CiteState, type PinLike } from './evidence.ts';
 import type { CaseFile, SlotDef, SlotId } from './types.ts';
 
 export interface Submission {
@@ -117,45 +117,82 @@ export function scoreSubmission(
   };
 }
 
-/** Default reply texts (the UI passes its own string table's). */
-export const REPLY_DEFAULTS = {
-  partial: '{total}칸 중 {n}칸이 사실과 맞지 않습니다. 다시 확인해 주십시오.',
-  bundled: '보고서 어딘가가 사실과 맞지 않습니다. 어느 부분인지는 직접 다시 확인해 주십시오.',
-  cite: '근거가 그 칸을 뒷받침하지 않습니다: {slots}. 증거 보드의 "보고서 근거"에서 어떤 증거가 인정되는지 확인해 주십시오.',
-};
-
 /** Short slot name for replies and the debrief: '원인 (기술)' -> '원인'. */
 export function slotName(def: SlotDef): string {
   return def.title.replace(/\s*\(.*\)$/, '');
 }
 
+/** How a wrong report is answered: per-field ✓/✗ always; 'hints' adds what does not fit, per field. */
+export function feedbackMode(cs: CaseFile): 'marks' | 'hints' {
+  return cs.accusation.feedback ?? 'marks';
+}
+
+export interface FieldMark {
+  slot: SlotId;
+  name: string;
+  ok: boolean;
+}
+
+/** Per report field: ✓ (option right and, where kinds exist, a cited pin backs it) or ✗. */
+export function fieldMarks(cs: CaseFile, score: ScoreResult): FieldMark[] {
+  return cs.accusation.slots.map((s) => ({ slot: s.id, name: slotName(s), ok: !!score.slots[s.id]?.correct }));
+}
+
+/** The line under the marks ('marks' mode) when the case gives none (the CTO's voice, Case 3). */
+export const MARK_LINES = [
+  '✗ 표시된 칸이 사실과 맞지 않습니다. 다시 확인해 주십시오.',
+  '✗ 칸을 다시 봐 주십시오. ✓ 칸은 그대로 두셔도 됩니다.',
+  '아직 ✗ 칸이 남았습니다. 근거를 다시 대조해 주십시오.',
+];
+
 /**
- * The citation line of a reply: which slots' cited pins do not support them. Citations are about
- * evidence, not answers, so even the bundled reply names the slot (it never says whether the
- * picked option was right).
+ * 'hints' mode: what the colleague says per field. `{f}` = the field's short name, `{k}` = an
+ * evidence kind of that field with no pin on the board yet. Variants go round per attempt (and
+ * per field), so the same wrong report never hears the same line twice in a row. They name the
+ * field and the kind of record, never an option.
  */
-export function citeReply(cs: CaseFile, score: ScoreResult, template: string = REPLY_DEFAULTS.cite): string | null {
-  const bad = cs.accusation.slots.filter((s) => score.slots[s.id]?.cite && score.slots[s.id]!.cite !== 'ok');
-  return bad.length ? template.replace('{slots}', bad.map(slotName).join(', ')) : null;
-}
+export const FIELD_LINES = {
+  ok: ['{f} 칸은 맞아요.', '{f} 칸은 됐어요. 그대로 두세요.', '{f} 칸은 괜찮아요.'],
+  cite: ['{f} 칸은 고른 핀이 그 칸 근거가 아니에요.', '{f} 칸, 근거로 고른 핀이 그 칸 얘기가 아니에요.'],
+  cause: ['{f} 칸이 기록이랑 안 맞아요. 그 설명으로는 설명 안 되는 줄이 남아요.', '{f} 칸은 아직이에요. 핀한 줄을 그 설명에 하나씩 대 봐요.', '{f} 칸, 그렇게 보기엔 기록이 다른 말을 해요.'],
+  sequence: ['{f} 칸은 순서나 시각이 기록이랑 안 맞아요.', '{f} 칸, 언제 시작됐는지부터 시각을 다시 맞춰 봐요.', '{f} 칸은 아직이에요. 기록에 찍힌 시각을 순서대로 놓아 봐요.'],
+  extra: ['{f} 칸에 기록으로 뒷받침 안 되는 항목이 섞여 있어요.', '{f} 칸, 사실과 다른 게 하나 들어가 있어요.'],
+  short: ['{f} 칸에 빠진 게 있어요.', '{f} 칸, 기록에 남은 요인이 더 있어요.'],
+  kind: ["'{k}' 쪽은 아직 안 봤죠?", "'{k}' 쪽도 한번 봐요.", "'{k}' 쪽에서 맞춰 볼 게 있을 거예요."],
+  close: ['다시요.', '고쳐서 다시 줘요.', '한 번 더요.'],
+};
 
-/** How a wrong report is answered: 'bundled' (default) never says which slot or how many. */
-export function feedbackMode(cs: CaseFile): 'bundled' | 'per-slot' {
-  return cs.accusation.feedback ?? 'bundled';
-}
+const pick = (xs: string[], i: number): string => xs[((i % xs.length) + xs.length) % xs.length];
 
-/** The reply body after a wrong (not finished) report. */
-export function wrongReply(cs: CaseFile, score: ScoreResult, defaults: { partial: string; bundled: string; cite?: string } = REPLY_DEFAULTS): string {
-  const rp = cs.accusation.reply;
-  const cite = citeReply(cs, score, defaults.cite ?? REPLY_DEFAULTS.cite);
-  let body: string;
-  if (feedbackMode(cs) === 'bundled') body = rp?.bundled ?? defaults.bundled;
-  else {
-    const total = cs.accusation.slots.length;
-    const wrong = cs.accusation.slots.filter((x) => !score.slots[x.id]?.correct).length;
-    body = (rp?.partial ?? defaults.partial).replace('{n}', String(wrong)).replace('{total}', String(total));
-  }
-  return cite ? `${body}\n${cite}` : body;
+/**
+ * The reply body after a wrong (not finished) report. `attempt` is the submission number (1 =
+ * first); `pins` the board, for the 'hints' pointer to an evidence kind nobody pinned yet.
+ */
+export function wrongReply(cs: CaseFile, score: ScoreResult, sub: Submission, opts: { attempt: number; pins?: PinLike[] }): string {
+  const turn = opts.attempt - 1;
+  if (feedbackMode(cs) === 'marks') return pick(cs.accusation.reply?.lines ?? MARK_LINES, turn);
+  const out: string[] = [];
+  cs.accusation.slots.forEach((def, i) => {
+    const s = score.slots[def.id];
+    const f = (xs: string[]) => pick(xs, turn + i).replace('{f}', slotName(def));
+    if (s?.correct) {
+      out.push(f(FIELD_LINES.ok));
+      return;
+    }
+    let line: string;
+    if (s?.optionCorrect) line = f(FIELD_LINES.cite);
+    else if (def.type === 'multi') {
+      const ids = sub.responsibility;
+      const chosen = def.options.filter((o) => ids.includes(o.id));
+      const extra = chosen.some((o) => (o.weight ?? 0) < 0);
+      line = f(extra ? FIELD_LINES.extra : FIELD_LINES.short);
+    } else line = f(def.id === 'sequence' ? FIELD_LINES.sequence : FIELD_LINES.cause);
+    const open = kindsFor(def, opts.pins ?? []).find((k) => !k.pins.length);
+    if (open && !s?.optionCorrect) line += ` ${pick(FIELD_LINES.kind, turn + i).replace('{k}', open.kind.label)}`;
+    out.push(line);
+  });
+  out.push(pick(FIELD_LINES.close, turn));
+  return out.join('\n');
 }
 
 export function grade(total: number, max: number): string {

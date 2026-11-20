@@ -2,7 +2,7 @@
 // with playwright-core: first launch opens Case 0 (tutorial) — its short briefing, the pre-typed
 // `history`, Jihoon's rail, the five checklist items and icon unlocks with one coach mark each, a wrong then a right
 // report — and the debrief's "다음 사건" button opens Case 1 「밤에만 실패하는 스크립트」 (full
-// briefing, only the 🎯 goal coach mark, the goal card, the aha moment, a bundled wrong reply,
+// briefing, only the 🎯 goal coach mark, the goal card, the aha moment, wrong replies with per-field ✓/✗,
 // the result moment), then Case 2 「지웠는데 안 비워지는 디스크」 (two hosts, the deleted open file,
 // three slots), then Case 3 「금요일 18:02」. There it watches
 // the whole opening briefing, ticks the three "오늘 할 일" boxes, solves the case from the
@@ -212,13 +212,20 @@ try {
   step('`hint` → 💡 panel: 요약 (free) → 방향 → 정답 behind a second confirm, for the checklist item and the cause slot; counters: panel opened 1번 (not counted) apart from 3 hint steps');
 
   await run('df -h');
+  // round 3: a line a report field accepts as evidence brings "보고서에는 이 줄을 핀하세요 (0/2)" with the line
+  const prompt0 = page.locator('.toast.pinprompt');
+  await prompt0.waitFor({ timeout: 2000 });
+  assert.match(await prompt0.locator('.pintoast-head').innerText(), /보고서에는 이 줄을 핀하세요 \(0\/2\)/);
+  assert.match(await prompt0.locator('.pintoast-line').innerText(), /100%\s+\/var/);
+  assert.equal(await prompt0.locator('.pinprompt-btn').count(), 1);
+  await shot('case0-r3-pin-prompt.png');
   await todoItem('df').and(page.locator('.done')).waitFor();
   await page.locator('.icon[data-app="notes"]').waitFor();
   await mark('notes', 'case0-tour-notes.png');
   await pinLine(/100%\s+\/var/);
   await page.waitForTimeout(300);
   await shot('case0-02-terminal-df.png');
-  step('df -h: /var 100% (highlighted, pinned); the notebook icon appears with its 메모장 mark');
+  step('df -h: /var 100% (highlighted, pinned); "보고서에는 이 줄을 핀하세요 (0/2)" toast with the line; the notebook icon appears with its 메모장 mark');
 
   await run('du -sh /var/log/*');
   await page.locator('.tline.clue', { hasText: /^11G\s+\/var\/log\/wiki(?!\/)/ }).waitFor();
@@ -234,19 +241,30 @@ try {
   if (await notesWin.count()) await notesWin.click(); // the memo scene opened the notebook
   // the "증거 2개" item counts only pins that meet a report slot's evidence kind, and shows the kinds
   await todoItem('pins').locator('.todo-ev').waitFor();
+  assert.match(await todoItem('pins').innerText(), /증거 2개 핀 → 보고서 쓰기/);
   assert.match(await todoItem('pins').locator('.todo-count').innerText(), /\(1\/2\)/);
   assert.match(await todoItem('pins').locator('.todo-ev').innerText(), /세지는 증거: 원인 1\/2 · 경위 0\/3/);
   assert.match(await todoItem('pins').locator('.todo-ev').getAttribute('title'), /원인: ✓ 디스크 사용량.*○ 위키가 남긴 오류/);
   await pinLine(/wiki-server\[51875\]: OSError: \[Errno 28\] No space left on device/);
   await todoItem('pins').and(page.locator('.done')).waitFor();
-  await page.locator('.todo').waitFor({ state: 'detached', timeout: 6000 });
+  // every box ticked: the sticky waits on the last item with "📝 보고서 쓰기" instead of folding away
   await page.locator('.icon[data-app="report"]').waitFor();
   await mark('report');
+  const cta0 = todoItem('pins').locator('.todo-report');
+  await cta0.waitFor();
+  assert.equal(await cta0.innerText(), '📝 보고서 쓰기');
+  await page.waitForTimeout(2000);
+  assert.equal(await page.locator('.todo').count(), 1, 'the sticky waits for the report');
+  await shot('case0-r3-report-cta.png');
+  await cta0.click();
+  await page.locator('.window[data-app="report"]:not(.min)').waitFor();
+  await page.locator('.todo').waitFor({ state: 'detached', timeout: 6000 });
+  await page.locator('.window[data-app="report"] .titlebar button.close').click();
   const tourLog0 = await page.evaluate(() => window.__game.st.log.filter((e) => e.type === 'tour-step').map((e) => e.step));
   assert.deepEqual(tourLog0, ['terminal', 'messenger', 'mail', 'hint', 'notes', 'board', 'dashboard', 'report'], 'each Case 0 mark once, at its unlock');
   assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('no-handover:tour'))).seen, tourLog0);
   step('the pins item counts evidence pins (1/2) and lists the kinds that count, met or missing');
-  step('du → tail → systemctl status → 2 pins: all five boxes tick, the sticky folds, every icon is unlocked, each with its mark (8 marks, each once)');
+  step('du → tail → systemctl status → 2 pins: all five boxes tick, "📝 보고서 쓰기" on the last item opens the report and the sticky folds; every icon is unlocked, each with its mark (8 marks, each once)');
 
   await run('journalctl -u wiki --since "2026-11-09 21:00" --until "2026-11-09 21:20"');
   await pinLine(/21:14:03 .*thumbnail/);
@@ -302,24 +320,55 @@ try {
   const rep0 = page.locator('.window[data-app="report"]');
   assert.equal(await rep0.locator('section.slot').count(), 2, 'two report slots');
   assert.match(await rep0.locator('.submitbar .primary-btn').innerText(), /제출 무제한/);
+  // round 3: each field says up front what it needs (an answer, one cited pin of an accepted kind);
+  // the submit button stays blocked, with the unmet fields listed beside it, until all are met
+  const btn0 = rep0.locator('.submitbar .primary-btn');
+  const need0 = rep0.locator('.submit-need');
+  assert.match(await rep0.locator('.slot-need[data-slot="cause"]').innerText(), /필요: ○? ?보기 하나 · ○? ?근거 핀 하나 — 디스크 사용량 \(df · du 의 수치\) \/ 위키가 남긴 오류 · 서비스 상태 중/);
+  assert.match(await rep0.locator('.slot-need[data-slot="sequence"] .need-cite').innerText(), /처음 시작된 시각의 기록 \/ 밤사이 쌓인 기록 \/ 위키가 멈춘 시각의 기록/);
+  assert.equal(await btn0.getAttribute('aria-disabled'), 'true');
+  assert.deepEqual(await need0.locator('li').allInnerTexts(), ['원인: 보기 고르기', '원인: 근거 핀 고르기', '경위: 보기 고르기', '경위: 근거 핀 고르기']);
   // options are hypotheses of similar length; every slot needs a cited pin
   await pick(rep0, 'cause', 'pdf'); // blames 지훈's PDF
   await pick(rep0, 'sequence', 'true');
-  await rep0.locator('.submitbar .primary-btn').click(); // no citation yet: an in-game notice, nothing sent
+  assert.deepEqual(await need0.locator('li').allInnerTexts(), ['원인: 근거 핀 고르기', '경위: 근거 핀 고르기']);
+  assert.equal(await rep0.locator('.slot-need[data-slot="cause"] .need-pick.met').count(), 1);
+  await btn0.click({ force: true }); // aria-disabled, yet a click still says why — blocked: an in-game notice that lists what is missing, nothing sent
   const notice0 = page.locator('.modal-back .modal-notice[role="alertdialog"]');
-  assert.match(await notice0.locator('.modal-body').innerText(), /근거 핀/);
+  assert.match(await notice0.locator('.modal-body').innerText(), /제출 횟수는 쓰지 않았어요[\s\S]*원인: 근거 핀 고르기[\s\S]*경위: 근거 핀 고르기/);
   await page.keyboard.press('Escape');
   await notice0.waitFor({ state: 'detached' });
   assert.equal(await page.evaluate(() => window.__game.st.submissions.length), 0, 'no submission without a cited pin');
   await cite(rep0, 'cause', /100%\s+\/var/);
-  await cite(rep0, 'sequence', /100%\s+\/var/); // disk usage does not back the timeline
-  await submit(rep0, /몇 번이든/); // Case 0: unlimited
-  await rep0.locator('.reply', { hasText: '강서진의 회신' }).waitFor();
-  assert.match(await rep0.locator('.reply').innerText(), /근거가 그 칸을 뒷받침하지 않아요: 경위\./);
-  await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /PDF 하나로/.test(m.text)), null, { timeout: 5000 });
-  await pick(rep0, 'cause', 'disk');
+  await cite(rep0, 'sequence', /100%\s+\/var/); // disk usage does not back the timeline: △
+  assert.deepEqual(await need0.locator('li').allInnerTexts(), ['경위: 고른 핀이 이 칸의 증거 종류가 아님 △']);
+  await need0.scrollIntoViewIfNeeded();
+  await shot('case0-r3-submit-blocked.png');
+  assert.equal(await rep0.locator('.slot-need[data-slot="sequence"] .need-cite.wrongkind').count(), 1);
+  await btn0.click({ force: true }); // a △ field blocks too, and does not use a submission
+  await notice0.waitFor();
+  assert.match(await notice0.locator('.modal-body').innerText(), /경위: 고른 핀이 이 칸의 증거 종류가 아님 △/);
+  await notice0.locator('.modal-ok').click();
+  await notice0.waitFor({ state: 'detached' });
+  assert.equal(await page.evaluate(() => window.__game.st.submissions.length), 0, 'a △ field uses no submission');
   await rep0.locator('input[name="cite-sequence"]:checked').uncheck();
   await cite(rep0, 'sequence', /21:14:03 .*thumbnail/);
+  assert.equal(await btn0.getAttribute('aria-disabled'), 'false');
+  assert.match(await need0.innerText(), /✓ 칸마다 보기와 근거가 있어요/);
+  await submit(rep0, /몇 번이든/); // Case 0: unlimited
+  // a wrong report: ✓/✗ per field, and 서진 says per field what does not fit (never the answer)
+  await rep0.locator('.reply', { hasText: '강서진의 회신' }).waitFor();
+  assert.deepEqual(await rep0.locator('.reply .reply-marks li').allInnerTexts(), ['✗ 원인', '✓ 경위']);
+  const reply0 = await rep0.locator('.reply .reply-body').innerText();
+  assert.match(reply0, /원인 칸이 기록이랑 안 맞아요/);
+  assert.match(reply0, /경위 칸은 됐어요/);
+  assert.doesNotMatch(reply0, /어딘가|디스크 한 곳/);
+  assert.equal(await rep0.locator('section.slot[data-slot="cause"] .slot-mark.bad').count(), 1);
+  assert.equal(await rep0.locator('section.slot[data-slot="sequence"] .slot-mark.ok').count(), 1);
+  await rep0.locator('.reply').scrollIntoViewIfNeeded();
+  await shot('case0-r3-reply.png');
+  await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /PDF 하나로/.test(m.text)), null, { timeout: 5000 });
+  await pick(rep0, 'cause', 'disk');
   await submit(rep0, /몇 번이든/);
   await rep0.locator('.debrief h2').waitFor();
   const total0 = await rep0.locator('.scorebox .s').nth(1).innerText();
@@ -348,7 +397,7 @@ try {
   // round 2: the way on stays in the taskbar after the debrief is closed
   assert.match(await page.locator('#taskbar .nextcase-btn').innerText(), /다음 사건 → Case 1/);
   assert.equal(await page.locator('#taskbar .nextcase-btn').isVisible(), true);
-  step(`no citation → no submission; a wrong report (and a citation that does not back 경위) gets 서진's reply naming the slot and 지훈's nudge; the second solves Case 0, the debrief lists the evidence`);
+  step(`report: each field's needs up front, submit blocked with the unmet fields beside it (no answer, no pin, a △ pin) and no submission used; a wrong report shows ✓/✗ per field, 서진's per-field lines and 지훈's nudge; the second solves Case 0, the debrief lists the evidence`);
   step(`Case 0 solved (${total0.replace(/\s+/g, ' ')})`);
 
   await rep0.locator('.nextcase button').click();
@@ -432,10 +481,13 @@ try {
   await pinLine(/line 15: wikictl: command not found/);
   await pinLine(/\(eunjae\) CMD \(~\/bin\/wiki-log-clean/);
   await todoItem('pins').and(page.locator('.done')).waitFor();
+  await todoItem('pins').locator('.todo-report').click();
+  await page.locator('.window[data-app="report"]:not(.min)').waitFor();
   await page.locator('.todo').waitFor({ state: 'detached', timeout: 6000 });
+  await page.locator('.window[data-app="report"] .titlebar button.close').click();
   for (const c of ['which wikictl', 'cat ~/log/cron-env.txt', 'journalctl -u wiki --since "2026-11-11 00:00" --until "2026-11-11 00:10"', 'df -h']) await run(c);
   assert.ok(await page.evaluate(() => window.__game.causeSolved()));
-  step('pins tick the fourth box; which / cron-env.txt / journalctl -u wiki / df complete the evidence');
+  step('pins tick the fourth box and its "📝 보고서 쓰기" opens the report; which / cron-env.txt / journalctl -u wiki / df complete the evidence');
 
   await page.evaluate(() => {
     for (const w of document.querySelectorAll('.window')) w.classList.add('min');
@@ -451,17 +503,26 @@ try {
   await cite(rep1, 'cause', /line 15: wikictl: command not found/);
   await cite(rep1, 'sequence', /\(eunjae\) CMD \(~\/bin\/wiki-log-clean/);
   await submit(rep1, /1번째 제출이에요 \(남은 제출 5\/5\)/);
-  await rep1.locator('.reply', { hasText: '어딘가 로그랑 안 맞아요' }).waitFor();
-  assert.doesNotMatch(await rep1.locator('.reply').innerText(), /칸 중|근거가/, 'bundled: no slot count; the citations were fine');
+  await rep1.locator('.reply', { hasText: '강서진의 회신 (1/5)' }).waitFor();
+  assert.deepEqual(await rep1.locator('.reply .reply-marks li').allInnerTexts(), ['✗ 원인', '✓ 경위']);
+  const reply1a = await rep1.locator('.reply .reply-body').innerText();
+  assert.match(reply1a, /^원인 칸이 기록이랑 안 맞아요\./);
+  assert.doesNotMatch(reply1a, /어딘가|cron 의 환경/, 'no bundled line, no answer');
   await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'seojin' && /스크립트가 남긴 출력/.test(m.text)), null, { timeout: 5000 });
-  await pick(rep1, 'cause', 'cron-path');
+  await pick(rep1, 'cause', 'perm');
   await submit(rep1, /2번째 제출이에요 \(남은 제출 4\/5\)/);
+  await rep1.locator('.reply', { hasText: '강서진의 회신 (2/5)' }).waitFor();
+  const reply1b = await rep1.locator('.reply .reply-body').innerText();
+  assert.match(reply1b, /^원인 칸은 아직이에요\./);
+  assert.notEqual(reply1b, reply1a, 'the second wrong report hears other words');
+  await pick(rep1, 'cause', 'cron-path');
+  await submit(rep1, /3번째 제출이에요 \(남은 제출 3\/5\)/);
   await page.locator('.moment.moment-result.good').waitFor({ timeout: 3000 });
   await rep1.locator('.debrief h2').waitFor();
   assert.match(await rep1.locator('.scorebox .s').nth(1).innerText(), /\/ 230/);
   await page.locator('.moment').waitFor({ state: 'detached', timeout: 4000 });
   assert.match(await rep1.locator('.nextcase').innerText(), /다음 사건 → Case 2 「지웠는데 안 비워지는 디스크」/);
-  step('Case 1 report: a wrong answer hears one bundled line and 서진\'s nudge; the right one shows the result moment and the debrief');
+  step('Case 1 report: two wrong answers show ✓/✗ per field and 서진\'s per-field lines, different each time, and her nudge; the right one shows the result moment and the debrief');
 
   await rep1.locator('.nextcase button').click();
   await page.locator('#boot .caselabel', { hasText: 'Case 2' }).waitFor();
@@ -602,7 +663,8 @@ try {
   await pinLine(/^1947/);
   await pinLine(/^LimitNOFILE=4096/);
   await todoItem('pins').and(page.locator('.done')).waitFor();
-  await page.locator('.todo').waitFor({ state: 'detached', timeout: 6000 });
+  await todoItem('pins').locator('.todo-report').waitFor();
+  await page.locator('.todo').waitFor({ state: 'detached', timeout: 16000 }); // left alone, it folds by itself
   await page.locator('.toast', { hasText: '오늘 할 일 끝' }).click();
   await page.locator('.window[data-app="notes"] .item.sel', { hasText: '오늘 할 일 ✓' }).waitFor();
   await page.waitForTimeout(400);
@@ -1204,7 +1266,8 @@ try {
   await rep7.locator('.submitbar .primary-btn').click();
   const sub7 = p7.locator('.modal-back .modal-submit');
   await sub7.waitFor();
-  assert.match(await sub7.locator('.modal-body').innerText(), /마지막 제출이에요 \(남은 제출 1\/5\)\. 틀려도 이걸로 사건이 끝나고/);
+  assert.match(await sub7.locator('.modal-body').innerText(), /^마지막 제출이에요\. 틀려도 이걸로 사건이 끝나고/);
+  assert.doesNotMatch(await sub7.locator('.modal-body').innerText(), /남은 제출/, 'one remaining-count message, not two');
   assert.equal(await sub7.locator('.modal-ok').innerText(), '마지막으로 제출하기');
   assert.equal(await p7.evaluate(() => document.activeElement?.classList.contains('modal-cancel')), true, 'the last one starts on 더 살펴볼게요');
   await p7.keyboard.press('Escape');
@@ -1416,13 +1479,24 @@ try {
   await shot9('expert-04-case0-report.png');
   assert.match(await rep90.locator('.submitbar .primary-btn').innerText(), /2\/2/);
   await rep90.locator('input[name="slot-cause"][value="disk"]').check();
-  await rep90.locator('input[name="slot-sequence"][value="true"]').check();
+  await rep90.locator('input[name="slot-sequence"][value="journal"]').check();
   await rep90.locator('label.citeopt:has(input[name="cite-cause"])', { hasText: /100%\s+\/var/ }).first().locator('input').check();
   await rep90.locator('label.citeopt:has(input[name="cite-sequence"])', { hasText: /21:14:03 .*thumbnail/ }).first().locator('input').check();
   await submit(rep90, /남은 제출 2\/2/, p9);
+  // round 3 (숙련자 too): a wrong report shows ✓/✗ per field for free, with one short line and no per-field hint
+  await rep90.locator('.reply .reply-marks').waitFor();
+  assert.deepEqual(await rep90.locator('.reply .reply-marks li').allInnerTexts(), ['✓ 원인', '✗ 경위']);
+  assert.equal(await rep90.locator('.reply .reply-body').innerText(), '✗ 칸이 로그랑 안 맞아요. 다시요.');
+  await rep90.locator('input[name="slot-sequence"][value="true"]').check();
+  await rep90.locator('.submitbar .primary-btn').click();
+  const last90 = p9.locator('.modal-back .modal-submit');
+  await last90.waitFor();
+  assert.match(await last90.locator('.modal-body').innerText(), /^마지막 제출이에요\. /);
+  assert.doesNotMatch(await last90.locator('.modal-body').innerText(), /남은 제출/, 'one remaining-count message');
+  await last90.locator('.modal-ok').click();
   await rep90.locator('.debrief h2').waitFor({ timeout: 5000 });
   await rep90.locator('.scorebox .s.time').waitFor();
-  await solvedFirst9();
+  assert.equal(await p9.evaluate(() => window.__game.st.submissions.length === 2 && window.__game.st.submissions[1].score.allCorrect), true, 'solved on the second (last) submission');
   await p9.locator('.moment').waitFor({ state: 'detached', timeout: 5000 });
   await shot9('expert-03-case0-debrief.png');
   assert.ok(await p9.evaluate(() => 'c0x_journal' in window.__game.st.clues));
@@ -1433,7 +1507,7 @@ try {
   await p9.locator('#briefing[data-step="ring"]').waitFor({ timeout: 10000 });
   await p9.keyboard.press('Escape');
   await p9.locator('#briefing').waitFor({ state: 'detached', timeout: 3000 });
-  step('Case 0 (숙련자): the journald herring is in the report, du and journald.conf rule it out; 2 submissions, a 시간 row in the debrief');
+  step('Case 0 (숙련자): the journald herring is in the report, du and journald.conf rule it out; a wrong report shows ✓/✗ per field only; the last dialog has one count message; a 시간 row in the debrief');
   // round 3: past the tutorial too, 숙련자 (익숙해요) opens no terminal by itself
   await p9.waitForTimeout(600);
   assert.equal(await p9.locator('.window[data-app="terminal"]').count(), 0, '숙련자: no terminal opens by itself in Case 1');

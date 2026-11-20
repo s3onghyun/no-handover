@@ -9,6 +9,7 @@
 //     icon on the desktop;
 //   - sends no colleague nudge unasked (asking still works, and costs ASK_COST);
 //   - charges the 💡 recap (요약) too (SUMMARY_COST), so no hint step is free;
+//   - answers a wrong report with the per-field ✓/✗ only (no hint line per field);
 //   - allows fewer submissions and takes TIME_STEP points off for every TIME_EVERY_MIN minutes of
 //     play over the case's par (at most TIME_CAP);
 //   - adds one red herring: a report option that a world detail makes plausible and one command
@@ -62,7 +63,8 @@ export function applyExpert(cs: CaseFile): CaseFile {
     hosts,
     timeline: [...cs.timeline, ...(x.timeline ?? [])],
     clues: [...cs.clues, ...(x.clues ?? [])],
-    accusation: { ...cs.accusation, slots, maxSubmissions: x.maxSubmissions, intro: x.intro ?? cs.accusation.intro },
+    // per-field ✓/✗ only: the colleague's per-field hint lines would be unasked help
+    accusation: { ...cs.accusation, slots, maxSubmissions: x.maxSubmissions, intro: x.intro ?? cs.accusation.intro, feedback: 'marks' },
     goal: x.goalIntro ? { ...cs.goal, intro: x.goalIntro } : cs.goal,
     opening,
     // no yellow clue lines: the player greps as in the main cases
