@@ -63,6 +63,8 @@ interface Ctx {
   sudo: boolean;
   events: ShellEvent[];
   sys: OutLine[];
+  /** Environment for this command when `env` / `VAR=x cmd` changed it (PATH lookups use it). */
+  env?: Record<string, string>;
 }
 
 type Cmd = (c: Ctx) => IO;
@@ -81,9 +83,13 @@ const BLOCKED: Record<string, string> = {
   strace: '', gdb: '', tcpdump: '', nc: '', telnet: '', wget: 'curl 은 쓸 수 있어요.', scp: '', rsync: '',
   docker: '이 서버에는 컨테이너가 없어요.', kubectl: '이 서버에는 쿠버네티스가 없어요.',
   su: 'sudo (읽기 전용) 만 허용돼요.', passwd: '', useradd: '', usermod: '', crontab_e: '',
+  bash: '스크립트는 cat 으로 읽어 보세요. 실행은 조사 모드에서 막혀 있어요.', sh: '스크립트는 cat 으로 읽어 보세요. 실행은 조사 모드에서 막혀 있어요.',
   python: '', python3: '', perl: '', node: '', awk: 'grep / head / tail / wc / sort / uniq 로 대신해 보세요.', sed: 'grep / head / tail / wc / sort / uniq 로 대신해 보세요.',
   mount: '', fdisk: '', ip: '', ifconfig: '', netstat: 'ss 를 쓰세요 (netstat의 후속 도구).', dig: '', nslookup: '', host: '', traceroute: '',
 };
+
+/** Tools absent from the hosts: the answer does not depend on the case's lesson. */
+const NOT_INSTALLED = new Set(['lsof', 'docker', 'kubectl']);
 
 /** Files bigger than this are not dumped by cat (the player is pointed at head/tail instead). */
 export const CAT_LIMIT = 50 * 1024 * 1024;
@@ -423,7 +429,39 @@ export class Shell {
       LANG: 'ko_KR.UTF-8',
       '?': String(s.lastCode),
       $: '31337',
+      // login-shell overrides for this host (e.g. a PATH extended in ~/.bashrc)
+      ...(this.host(f.host).def.env ?? {}),
     };
+  }
+
+  /** Bash builtins: `which` does not find them on disk, `type` calls them builtins. */
+  static readonly BUILTINS = new Set(['cd', 'history', 'ulimit', 'exit', 'logout', 'type', 'help', 'hint']);
+  /** What `type` reports as a shell builtin (echo, pwd, true, false also exist in /usr/bin). */
+  static readonly TYPE_BUILTINS = new Set([...Shell.BUILTINS, 'echo', 'pwd', 'true', 'false']);
+
+  /**
+   * Find a command the way bash does: a name with a slash is a path; otherwise each PATH entry in
+   * order. The simulated tools live in /usr/bin (merged /usr: /bin is the same directory); other
+   * executables are files in the host's VFS (e.g. /opt/wiki/bin/wikictl).
+   */
+  lookPath(f: Frame, name: string, env: Record<string, string>): string | null {
+    const hw = this.host(f.host);
+    const isExec = (p: string) => {
+      const n = hw.vfs.lookup(p);
+      return !!n && n.type === 'file' && (n.mode & 0o111) !== 0;
+    };
+    if (name.includes('/')) {
+      const abs = Vfs.normalize(name, f.cwd, `/home/${f.user}`);
+      const sys = /^\/(?:usr\/)?bin\/([^/]+)$/.exec(abs);
+      if (sys && sys[1] in this.commands && !Shell.BUILTINS.has(sys[1])) return abs;
+      return isExec(abs) ? abs : null;
+    }
+    // execvp with no PATH at all falls back to the libc default (/bin:/usr/bin)
+    for (const dir of (env.PATH ?? '/bin:/usr/bin').split(':').filter(Boolean)) {
+      if ((dir === '/usr/bin' || dir === '/bin') && name in this.commands && !Shell.BUILTINS.has(name)) return `${dir}/${name}`;
+      if (isExec(`${dir}/${name}`)) return `${dir}/${name}`;
+    }
+    return null;
   }
 
   historyOf(f: Frame): HistEntry[] {
@@ -432,15 +470,37 @@ export class Shell {
     return [...base, ...f.typed.map((t) => ({ ...t, n: n++ }))];
   }
 
-  exec(s: Session, argv: string[], stdin: string[] | null, sudo: boolean, events: ShellEvent[], sys: OutLine[]): IO {
+  exec(s: Session, argv: string[], stdin: string[] | null, sudo: boolean, events: ShellEvent[], sys: OutLine[], env?: Record<string, string>): IO {
     const f = this.frame(s);
+    // `VAR=value cmd …`: bash runs cmd with VAR set (same as env VAR=value cmd)
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(argv[0])) {
+      if (argv.every((a) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(a))) {
+        sys.push({ text: '(조사 모드: 셸 변수는 저장되지 않아요. 한 명령에만 주려면: VAR=값 명령, 또는 env VAR=값 명령)', cls: 'dim' });
+        return ok();
+      }
+      return this.commands.env({ s, f, hw: this.host(f.host), args: argv, stdin, sudo, events, sys, env });
+    }
+    // /usr/bin/df, /bin/sh …: the simulated tools live in /usr/bin (and /bin, merged /usr)
+    const sysBin = /^\/(?:usr\/)?bin\/([^/]+)$/.exec(argv[0]);
+    if (sysBin && (sysBin[1] in this.commands || sysBin[1] in BLOCKED) && !Shell.BUILTINS.has(sysBin[1])) argv = [sysBin[1], ...argv.slice(1)];
     const name = argv[0];
     const fn = this.commands[name];
     const tut = this.world.cs.shell;
+    // tools that are simply not installed answer the same in every case (lsof → /proc/<PID>/fd)
+    if (tut && !tut.allow.includes(name) && NOT_INSTALLED.has(name)) {
+      events.push({ type: 'blocked', cmd: name });
+      return fail([`조사 모드: '${name}' — ${BLOCKED[name]}`], 127);
+    }
     if (tut && !tut.allow.includes(name) && (name in this.commands || name in BLOCKED)) {
       // a real tool, just not part of today's lesson: answer in-world instead of "command not found"
       events.push({ type: 'blocked', cmd: name });
       return fail(tut.refuse.replace(/\{cmd\}/g, name).split('\n'), 126);
+    }
+    const curEnv = env ?? this.env(s);
+    // with a changed PATH (env -i PATH=…, VAR=x cmd) a simulated tool can be "not found" too
+    if (name in this.commands && env && !Shell.BUILTINS.has(name) && !this.lookPath(f, name, curEnv)) {
+      events.push({ type: 'notfound', name });
+      return fail(`${name}: command not found`, 127);
     }
     if (!fn) {
       if (name in BLOCKED) {
@@ -448,8 +508,15 @@ export class Shell {
         const tip = BLOCKED[name];
         return fail([`조사 모드: '${name}' 은(는) 이 세션에서 쓸 수 없어요 (읽기 전용).${tip ? ' ' + tip : ''}`], 126);
       }
-      if (name.includes('/') && !name.startsWith('/')) {
-        return fail(`bash: ${name}: Permission denied`, 126);
+      // an executable that exists on this host (found by path or through PATH): real, but not run here
+      const found = this.lookPath(f, name, curEnv);
+      if (found) {
+        events.push({ type: 'blocked', cmd: name });
+        return fail([`조사 모드: ${found} 은(는) 이 세션에서 실행하지 않아요 (읽기 전용). 무엇을 하는지는 cat 이나 man 으로.`], 126);
+      }
+      if (name.includes('/')) {
+        const n = this.host(f.host).vfs.lookup(Vfs.normalize(name, f.cwd, `/home/${f.user}`));
+        return fail(`bash: ${name}: ${n ? 'Permission denied' : 'No such file or directory'}`, n ? 126 : 127);
       }
       const sug = suggest(name, [...this.knownCommands(), ...(this.host(f.host).aliases.get(f.user)?.keys() ?? [])]);
       events.push({ type: 'notfound', name, suggestion: sug });
@@ -458,7 +525,7 @@ export class Shell {
       else err.push('  (설치된 명령 목록: help)');
       return fail(err, 127);
     }
-    return fn({ s, f, hw: this.host(f.host), args: argv.slice(1), stdin, sudo, events, sys });
+    return fn({ s, f, hw: this.host(f.host), args: argv.slice(1), stdin, sudo, events, sys, env });
   }
 
   // ---------------------------------------------------------------- helpers for commands
@@ -527,7 +594,7 @@ export class Shell {
         '  예약    crontab -l',
         '  코드    git log | show | branch | status',
         '  시스템  systemctl show|status|cat   ps  pgrep  df  free  ulimit  ss  curl  ping',
-        '          id  whoami  hostname  date  uptime  getent  echo',
+        '          id  whoami  hostname  date  uptime  getent  echo  env  which  type',
         '  이동    ssh <호스트>   exit',
         '  기타    man <명령>   help   clear   sudo <읽기 명령> (모든 사용이 auth.log에 남음)',
         '바꾸는 명령(rm, vim, kill, systemctl restart, crontab -e …)은 조사 모드에서 막혀 있어요.',
@@ -565,6 +632,77 @@ export class Shell {
       if (a[0] === '-e') a = a.slice(1);
       void nl;
       return ok(a.join(' ').split('\\n'));
+    };
+    // `env`: print the environment, or run a command with a changed one (-i = start empty)
+    cmds.env = (c) => {
+      const base = c.env ?? this.env(c.s);
+      let e: Record<string, string> = { ...base };
+      delete e['?'];
+      delete e.$;
+      let i = 0;
+      for (; i < c.args.length; i++) {
+        const a = c.args[i];
+        if (a === '-i' || a === '-' || a === '--ignore-environment') e = {};
+        else if (a === '-u' && i + 1 < c.args.length) delete e[c.args[++i]];
+        else if (a === '--') {
+          i++;
+          break;
+        } else if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(a)) e[a.slice(0, a.indexOf('='))] = a.slice(a.indexOf('=') + 1);
+        else break;
+      }
+      const rest = c.args.slice(i);
+      if (!rest.length) return ok(Object.entries(e).map(([k, v]) => `${k}=${v}`));
+      const name = rest[0];
+      const bare = /^\/(?:usr\/)?bin\/([^/]+)$/.exec(name)?.[1] ?? name;
+      if (Shell.BUILTINS.has(name) || !(this.lookPath(c.f, name, e) || bare in BLOCKED)) {
+        c.events.push({ type: 'notfound', name });
+        return fail(`env: '${name}': No such file or directory`, 127);
+      }
+      return this.exec(c.s, rest, c.stdin, c.sudo, c.events, c.sys, e);
+    };
+    cmds.printenv = (c) => {
+      const e = c.env ?? this.env(c.s);
+      const shown = Object.entries(e).filter(([k]) => k !== '?' && k !== '$');
+      if (!c.args.length) return ok(shown.map(([k, v]) => `${k}=${v}`));
+      const out = c.args.filter((k) => k in e && k !== '?' && k !== '$').map((k) => e[k]);
+      return out.length === c.args.length ? ok(out) : { out, err: [], code: 1 };
+    };
+    // `which`: where PATH finds each name (nothing and exit 1 when it does not, like Debian's which)
+    cmds.which = (c) => {
+      const { flags, pos } = getopt(c.args);
+      if (!pos.length) return fail([], 1);
+      const e = c.env ?? this.env(c.s);
+      const out: string[] = [];
+      let missing = false;
+      for (const n of pos) {
+        if (flags.has('a') && !n.includes('/')) {
+          const hits = (e.PATH ?? '').split(':').filter(Boolean).map((d) => this.lookPath(c.f, `${d}/${n}`, e) ?? ((d === '/usr/bin' || d === '/bin') && n in this.commands && !Shell.BUILTINS.has(n) ? `${d}/${n}` : null)).filter((x): x is string => !!x);
+          if (hits.length) out.push(...hits);
+          else missing = true;
+          continue;
+        }
+        const p = this.lookPath(c.f, n, e);
+        if (p) out.push(p);
+        else missing = true;
+      }
+      return { out, err: [], code: missing ? 1 : 0 };
+    };
+    // `type` (bash builtin): alias, builtin, or the file PATH finds
+    cmds.type = (c) => {
+      const e = c.env ?? this.env(c.s);
+      const aliases = c.hw.aliases.get(c.f.user) ?? new Map<string, string>();
+      const out: string[] = [];
+      const err: string[] = [];
+      for (const n of c.args.filter((a) => !a.startsWith('-'))) {
+        if (aliases.has(n)) out.push(`${n} is aliased to \`${aliases.get(n)}'`);
+        else if (Shell.TYPE_BUILTINS.has(n)) out.push(`${n} is a shell builtin`);
+        else {
+          const p = this.lookPath(c.f, n, e);
+          if (p) out.push(`${n} is ${p}`);
+          else err.push(`bash: type: ${n}: not found`);
+        }
+      }
+      return { out, err, code: err.length ? 1 : 0 };
     };
     cmds.true = () => ok();
     cmds.false = () => fail([], 1);

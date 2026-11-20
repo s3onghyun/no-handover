@@ -111,6 +111,12 @@ export interface HostDef {
   http?: Record<string, string>;
   /** Users whose home dirs require sudo to read. */
   sudoRead?: boolean;
+  /**
+   * Login-shell environment of the session user on this host, merged over the defaults
+   * (PATH=/usr/local/bin:/usr/bin:/bin …). E.g. a PATH that ~/.bashrc extends: `echo $PATH`,
+   * `which`, `env` and command lookup use it; cron does not (Case 1).
+   */
+  env?: Record<string, string>;
 }
 
 export type LogFormat = 'syslog' | 'nginx' | 'iso' | 'raw';
