@@ -995,7 +995,7 @@ try {
   await row6.locator('.cl-restart').click();
   await p6.locator('.modal-restart .modal-ok').waitFor();
   assert.match(await p6.locator('.modal-restart').innerText(), /Case 0 · 튜토리얼 「위키가 안 열려요」, 처음부터 다시 할까요\?[\s\S]*지워지고/);
-  if (shots) await p6.screenshot({ path: join(shots, 'case-list-02-restart.png') });
+  if (shots) await p6.waitForTimeout(400).then(() => p6.screenshot({ path: join(shots, 'case-list-02-restart.png') }));
   await p6.keyboard.press('Escape');
   await p6.locator('.modal-restart').waitFor({ state: 'detached' });
   assert.equal(await p6.locator('#cases').count(), 1, 'Esc only closes the question');
