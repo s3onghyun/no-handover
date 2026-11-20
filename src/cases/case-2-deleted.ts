@@ -503,6 +503,48 @@ export const caseTwoDeleted: CaseFile = {
     '버려진 줄 (07:58 부터): 시간당 약 130만 줄 · 알림: 없음',
   ],
 
+  // the same snapshot as structured panels (dashboard app; the player's pins become annotations)
+  panels: {
+    title: '로그 수집 · logs-01',
+    from: '2026-11-11T00:00',
+    to: '2026-11-12T09:30',
+    stepMin: 15,
+    live: true,
+    marks: ['2026-11-11T14:28', '2026-11-12T07:58'],
+    stats: [
+      { title: '/data', value: '97%', state: 'crit', note: '180G / 196G' },
+      { title: '버려진 줄', value: '시간당 약 130만', state: 'crit', note: '07:58부터 · 알림 없음' },
+      { title: 'logshipd 재시작', value: '0', state: 'ok', note: '11/02 08:02부터' },
+      { title: '수신 서버', value: '5대', state: 'none' },
+    ],
+    timeseries: [
+      {
+        id: 'data', title: '/data 사용량 (%)', unit: '%', min: 0, max: 100,
+        thresholds: [{ value: 70, label: '경고 70%' }, { value: 90, label: '호출 90%' }],
+        series: [{ name: '/data', color: 'yellow', interp: 'linear', points: [['2026-11-11T00:00', pctAt(11, 0)], ['2026-11-11T14:22', pctAt(11, 14, 22)], ['2026-11-12T07:58', pctAt(12, 7, 58)], ['2026-11-12T09:30', pctAt(12, 9, 30)]] }],
+      },
+      {
+        id: 'ingest', title: '수신량 (GB/시간, 서버별)', unit: 'G/h', min: 0, max: 4,
+        series: [
+          { name: 'pay-api-01', color: 'red', points: [['2026-11-11T00:00', 0.23], ['2026-11-11T14:22', 3.7], ['2026-11-12T07:58', 0.01]] },
+          { name: 'pay-api-02', color: 'blue', points: [['2026-11-11T00:00', 0.23], ['2026-11-12T07:58', 0]] },
+          { name: 'wiki-01', color: 'green', points: [['2026-11-11T00:00', null], ['2026-11-11T11:02', 0.01]] },
+        ],
+      },
+      {
+        id: 'dropped', title: '버려진 줄 (줄/시간)', min: 0, max: 1_500_000, width: 'half',
+        description: '여유 공간이 min_free(6G) 아래로 내려가면 logshipd 가 DEBUG/INFO 줄을 버린다.',
+        series: [{ name: 'dropped', color: 'purple', points: [['2026-11-11T00:00', 0], ['2026-11-12T07:58', 1_300_000]] }],
+      },
+    ],
+    annotations: [
+      { at: '2026-11-11T11:02', label: 'source added: wiki-01', kind: 'event' },
+      { at: '2026-11-11T19:30', label: '70% 경고', kind: 'alert' },
+      { at: '2026-11-12T04:43', label: '90% 호출', kind: 'alert' },
+      { at: '2026-11-12T07:58', label: 'low disk: dropping', kind: 'error' },
+    ],
+  },
+
   // ------------------------------------------------------------------ clues
   clues: [
     { id: 'c2_df', label: 'df -h: /data 97% (180G 사용)', slot: 'cause', key: true, match: [{ output: `^/dev/sdb1\\s+196G\\s+180G\\s+5\\.9G\\s+97%\\s+/data$`, host: L }] },

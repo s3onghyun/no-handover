@@ -4,7 +4,7 @@
 //     1 s and never blocking input;
 //  2. big moments only at the case start (briefing), the decisive "aha" clue and the report result;
 //  3. everything skippable; prefers-reduced-motion (or ?motion=0) shows the static end state.
-// The CSS uses the same numbers as custom properties on :root (--motion-*, --dur-*).
+// The CSS uses the same numbers as custom properties on :root (--motion-*).
 
 /** Durations in ms; each stays under 1 s. */
 export const DUR = {
@@ -50,7 +50,6 @@ export function applyMotionPref(params: URLSearchParams): void {
   } catch {
     /* old browsers: the class stays as first computed */
   }
-  for (const [k, v] of Object.entries(DUR)) document.documentElement.style.setProperty(`--dur-${k}`, `${v}ms`);
 }
 
 /** Restart a CSS animation class on an element (no-op under reduced motion). */

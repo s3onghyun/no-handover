@@ -2,7 +2,7 @@
 
 사건 하나는 TypeScript 파일 하나다: `src/cases/<id>.ts`가 `CaseFile` 객체 하나를 내보낸다. 타입 정의는 `src/engine/types.ts`에 있고, 편집기가 빠진 칸과 오타를 바로 알려 준다. YAML 대신 TS를 고른 이유는 의존성을 늘리지 않고, 긴 로그 줄이나 반복되는 37건 알림 같은 것을 짧은 함수로 만들 수 있어서다. 엔진 코드는 사건 이름을 하나도 모른다. 새 사건은 파일 하나를 추가하고 `src/cases/index.ts`의 사다리(`CAMPAIGN`, 5절 사다리는 [`campaign-ladder.md`](campaign-ladder.md))에 그 사건을 한 줄로 붙이면 된다. 잠금·건너뛰기·다음 사건 규칙은 `src/engine/campaign.ts`.
 
-> 읽는 순서 추천: ① `timeline` ② `clues` ③ `accusation` ④ `hints` ⑤ `triggers` ⑥ `debrief`. Case 3(예전 1화)의 실제 예시는 `src/cases/friday-1802.ts`, 튜토리얼은 `src/cases/case-0-wiki.ts`.
+> 읽는 순서 추천: ① `timeline` ② `clues` ③ `accusation` ④ `hints` ⑤ `triggers` ⑥ `debrief`. Case 3(예전 1화)의 실제 예시는 `src/cases/friday-1802.ts`, 튜토리얼은 `src/cases/case-0-wiki.ts`, 본편의 작은 사건은 `src/cases/case-1-cron.ts`(호스트 1대, 보고서 2칸, 툴 투어)와 `src/cases/case-2-deleted.ts`(호스트 2대, 3칸).
 
 ## 1. 큰 그림
 
@@ -39,6 +39,8 @@ clues: 플레이어가 본 출력/연 항목을 정규식으로 감지 → 진�
 | `shell`, `rail`, `desktop` | 튜토리얼 장치: 허용 명령 목록, 레일(동료가 다음 명령을 알려 줌), 아이콘 해금 (13절, 선택) |
 | `boot` | 잠금 화면 문구 `status`, `unlock`(버튼), `note`. 없으면 Case 3의 보안팀 문구 |
 | `deadTabs` | 끊긴 원격 세션으로 보이는 터미널 탭 이름들(분위기용) |
+| `goal` | 선택. "이번 사건에서 밝혀낼 것" 카드의 첫 줄 `intro`. 카드 본문은 보고서 칸(`title` + `prompt`)에서 만들어진다 (8절) |
+| `tour` | 선택. 도구 안내(코치 마크) 단계들 (13절) |
 
 ## 3. hosts
 
@@ -55,6 +57,7 @@ clues: 플레이어가 본 출력/연 항목을 정규식으로 감지 → 진�
   last: ['sjkang   pts/1        vpn-10.8.3.41    Sat Nov 14 02:05 - 02:14  (00:09)'],
   df: [...], free: [...], ulimitN: 1024, ssSummary: [...], ssConns: {...}, http: { 'localhost:8080/metrics': '…' },
   sudoRead: true,   // 남의 홈은 700 → sudo로만 읽힘
+  env: { PATH: '…:/opt/wiki/bin' },   // 로그인 셸의 환경 (Case 1: ~/.bashrc가 늘린 PATH)
 }
 ```
 
@@ -63,6 +66,7 @@ clues: 플레이어가 본 출력/연 항목을 정규식으로 감지 → 진�
 - `binary: '설명'`이면 `cat` 대신 설명이 나온다(PDF, 엑셀).
 - `size: 바이트`는 내용보다 훨씬 큰 파일의 겉보기 크기다(Case 0의 11G 로그: 내용은 앞뒤 수십 줄). `ls -l`, `du`가 이 값을 쓰고, 50 MB가 넘는 파일은 `cat`이 "너무 커요, tail로 끝만"이라고 세계관 안에서 거절한다.
 - `/etc/group`, `/etc/passwd`, `/etc/hostname`, `/proc/<pid>/…`, `/var/spool/cron/crontabs/<사용자>`, systemd 유닛 파일은 자동 생성된다.
+- `env`: 그 호스트에서 세션 사용자의 로그인 셸 환경(기본 `PATH=/usr/local/bin:/usr/bin:/bin` 위에 덮어씀). `echo $PATH`, `env`, `printenv`, `which`, `type`, 그리고 명령 찾기가 이 PATH를 쓴다. 엔진의 도구들은 `/usr/bin`(과 merged `/bin`)에 있는 것으로 치고, 그 밖의 실행 파일(`mode`에 x가 있는 파일, 예: `/opt/wiki/bin/wikictl`)은 PATH로 찾되 실행하지는 않는다("조사 모드: … 실행하지 않아요"). `env -i PATH=/usr/bin:/bin which wikictl`, `PATH=… 명령`처럼 바꾼 환경에서는 같은 이름도 못 찾는다 — cron의 환경을 흉내 내는 방법이다. `/usr/bin/df`처럼 경로로 부르면 그 도구가 돈다. `bash`/`sh`(스크립트 실행)는 막혀 있다.
 - git 커밋: `sha`(40자), `parent`, `author`(인물 id), `authorDate`, `commitDate`, `subject`, `body`(트레일러 포함), `diff`. 리뷰 트레일러가 없다는 사실 자체가 단서가 되게 `body`를 비워 둔다.
 
 ## 4. timeline — 사건의 뼈대
@@ -116,7 +120,7 @@ clues: 플레이어가 본 출력/연 항목을 정규식으로 감지 → 진�
 
 ASCII 스냅샷과 같은 내용만 담을 것: 패널은 단서를 새로 알려 주지 않는다. 플레이어가 핀한 증거는 자동으로 주석이 된다 — 시각이 있는 핀은 그 시각에, 크론탭 줄(`15 3 * * 6 …`)은 구간 안의 실행 시각마다 ▲로. 종류(◆ 변경 · ▲ 크론 · ■ 알림 · ✖ 오류·경고 · ● 이벤트)와 로그 레벨(ERR · WARN · INFO)은 핀 글에서 정해진다(`src/ui/dashboard/derive.ts`).
 
-움직임은 조사 중에는 작게만: 새 핀이 보드에 붙는 스냅, 기준선을 넘은 그래프와 위험 스탯의 짧은 깜빡임, 실시간 그래프에 새 점이 들어오는 표시. 모두 1초 미만이고 입력을 막지 않으며, `prefers-reduced-motion`이면 움직임 없이 끝 상태만 보인다(길이는 `src/ui/motion.ts`의 `DUR`).
+움직임은 조사 중에는 작게만: 새 핀이 보드에 붙는 스냅, 기준선을 넘은 그래프와 위험 스탯의 짧은 깜빡임, 실시간 그래프에 새 점이 들어오는 표시, 동료의 "입력 중…", 알림이 미끄러져 들어오는 것. 모두 1초 미만이고 입력을 막지 않으며, `prefers-reduced-motion`(또는 `?motion=0`)이면 움직임 없이 끝 상태만 보인다(길이는 `src/ui/motion.ts`의 `DUR`). 큰 순간은 셋뿐이다: 사건 시작의 브리핑, 결정적 단서(`aha`, 7절), 보고서 결과(제출해서 해설이 열릴 때의 카드). 셋 다 Esc·클릭으로 넘길 수 있다.
 
 ## 7. clues — 단서 감지
 
@@ -129,6 +133,7 @@ ASCII 스냅샷과 같은 내용만 담을 것: 패널은 단서를 새로 알�
 - `key: true` = 핵심 증거. 찾으면 "막힘" 타이머가 리셋되고, 보드에 핀하면 ★와 증거 보너스.
 - `trace: true` = 1단 힌트(기계 안의 흔적). 처음 닿은 시각이 플레이 로그의 `rung1`.
 - `slot`의 핵심 단서를 모두 찾으면 그 칸은 "풀렸다"로 본다(원인 칸이 풀리면 대기 넛지가 멈춤).
+- `aha: '한 줄'` = 결정적 단서(사건마다 하나, 핵심 단서 중에서). 처음 찾는 순간 그 문장이 화면 가운데 "큰 순간"으로 한 번 뜬다(💡 카드, 약 1.8초). 입력을 막지 않고(포인터가 통과, 포커스 그대로), Esc나 클릭으로 바로 사라지며, `prefers-reduced-motion`이면 움직임 없이 짧게. 로그에 `aha`. Case 0 `c0_du`, Case 1 `c1_notfound`, Case 2 `c2_deleted`, Case 3 `c_cron`.
 
 `tests/game.test.ts`가 모든 핵심 단서가 실제 명령으로 닿는지 검사한다. 단서를 추가하면 그 테스트의 탐색 목록에 명령을 하나 더한다.
 
@@ -139,6 +144,7 @@ ASCII 스냅샷과 같은 내용만 담을 것: 패널은 단서를 새로 알�
 - `blames: '<인물 id>'`: 이 보기를 고르면 그 사람의 목소리로 2단 넛지가 온다.
 - `maxSubmissions`: 3. `0`이면 무제한(Case 0).
 - `slots`는 세 칸 중 필요한 것만 둔다(Case 0은 `cause`, `sequence` 두 칸). 점수 만점은 칸 수 × 100 + 증거 보너스 30.
+- **목표 카드 "이번 사건에서 밝혀낼 것"** (`src/engine/goal.ts`): 보고서 칸의 `title`과 `prompt`만으로 만든다 — 보기 문장은 절대 안 나온다. 위 줄은 `goal.intro`(없으면 "보고서 N칸… 제출은 N번까지"). 작업 표시줄 🎯, ❓ 도움말 맨 위, 그리고 `goal`이 있는 사건은 "오늘 할 일" 포스트잇의 🎯 줄에서 늘 열린다(Case 1~3).
 - `intro`(보고서 맨 위 한 줄)와 `reply`(`from`, `partial`의 `{n}`/`{total}`, `bundled`, `sign`)로 "오미래 CTO의 회신" 틀을 사건에 맞게 바꾼다(Case 0은 서진).
 - `feedback`: 틀린 보고서에 어떻게 답하나. 기본 `'bundled'`(본편): 칸이 하나 틀려도 셋 다 틀려도 같은 한 줄, "보고서 어딘가가 사실과 맞지 않습니다"(`reply.bundled`가 있으면 그 문장). 어느 칸인지, 몇 칸인지 말하지 않는다(Obra Dinn, 웹 방탈출 분석 §9 #12). `'per-slot'`(Case 0): "{total}칸 중 {n}칸이…". 오답 뒤 2단 넛지(`hints.wrong`)는 두 방식 모두 그대로 온다.
 - 점수에서 힌트는 빠지지 않는다. 해설과 결과 카드는 기록("힌트 N회 · 소요 · 명령 수", 힌트 0회 배지)을 보여 준다. `?senior=1`(시니어 모드)일 때만 방향의 `cost`와 정답의 `answerCost`(기본 30)를 뺀다.
@@ -218,7 +224,7 @@ opening: {
 
 사건 2를 만들 때는 그 사건의 첫 동선에 맞춰 항목 3개 안팎을 고른다. 첫 항목은 "눈에 보이는 첫 클릭"(`interact` + `pulse`), 둘째는 은재의 흔적 한 줄을 처음 보는 순간(`clue`/`output`), 셋째는 증거 보드 사용(`pins`)이 무난하다.
 
-## 13. 튜토리얼 장치 (Case 0)
+## 13. 튜토리얼 장치 (Case 0) · 도구 안내 (Case 1)
 
 웹 방탈출 분석(`data/web-escape-analysis/report.md` §9)의 "미리 준비된 첫 행동, 화면 위 선택지 줄이기, 막히기 전에 말 거는 동료"를 데이터로 켠다. 모두 선택 칸이다.
 
@@ -238,14 +244,31 @@ desktop: { icons: [{ app: 'terminal' }, { app: 'messenger' }, { app: 'mail' }, {
 - `desktop.icons`: 아이콘 순서와 해금 조건. `after`가 없는 아이콘만 처음에 보이고, 나머지는 그 항목이 체크되거나 체크리스트가 접히면 나타난다. 아이콘이 없어도 메시지 알림이나 보드의 "보고서 쓰기"로는 창이 열린다.
 - 은재는 레일 동료가 될 수 없다(§8-3, 실시간 대사 없음). `tests/case0.test.ts`가 검사한다.
 
+**도구 안내 `tour` (코치 마크, Case 1)** — 캡틴 요청(2026-11-20) "이건 메모장 이건 대시보드 이건 모를 때 보는 거, 그리고 최종적으로 이거 푸는 거구나를 알아야 몰입이". 레일과 달리 명령을 알려 주지 않고 **도구가 무엇에 쓰는지**만 한 번씩 말한다.
+
+```ts
+tour: { steps: [
+  { id: 'terminal', app: 'terminal', title: '터미널', text: '서버에 명령을 치는 곳. …' },
+  { id: 'goal', app: 'goal', title: '🎯 이번 사건에서 밝혀낼 것', text: '최종 목표예요. …' },
+  { id: 'notes', app: 'notes', title: '메모장', text: '단서 정리. …', after: 'crontab' },   // 그 체크 항목 뒤
+  { id: 'hint', app: 'hint', title: '💡 힌트', text: '막힐 때 보는 곳. …', afterMin: 4 },   // 플레이 4분 뒤
+] }
+```
+
+- 기준점은 앱 id 하나뿐이다: 열린 창 → 바탕화면 아이콘 → 작업 표시줄의 `data-tour="<id>"`(`hint`, `goal`, `help`) 순으로 찾는다. 화면 구조(보드·대시보드 마크업)에 묶이지 않는다.
+- 한 번에 하나, 데이터 순서대로, 조건(`after` 체크 항목, `afterMin` 분, 기준점이 화면에 있음)이 맞는 첫 단계. 아이콘이 아직 안 나온 단계는 건너뛰었다가 나오면 보인다(`src/engine/tour.ts`, `tests/tour.test.ts`).
+- 막지 않는다: 덮개 없음, 포커스를 가져가지 않음(터미널 입력이 그대로). "알겠어요"·Esc로 닫고, 15초 뒤에는 저절로 닫히며(본 것으로 침), "투어 건너뛰기"는 그 사건의 나머지를 모두 끈다. 본 상태는 `no-handover:tour:<사건 id>`에 남고 `?fresh=1`이 지운다. 로그: `tour-step`, `tour-skip`.
+- `role="dialog"`(`aria-modal="false"`) + 제목·본문 연결, 버튼은 Tab으로 닿는다.
+
 ## 14. 새 사건 체크리스트
 
-1. 원칙 하나를 정한다(캡틴 제약: 리눅스/IT 공통 분모. Case 3은 "프로세스별 열린 파일 한도, 소켓도 파일", Case 0은 "로그는 디스크를 채운다").
+1. 원칙 하나를 정한다(캡틴 제약: 리눅스/IT 공통 분모. Case 3은 "프로세스별 열린 파일 한도, 소켓도 파일", Case 0은 "로그는 디스크를 채운다", Case 1은 "cron은 로그인 셸이 아니다", Case 2는 "지운 파일도 열려 있으면 공간을 차지한다").
 2. 확정 타임라인 표를 먼저 쓰고 `timeline`으로 옮긴다.
 3. 은재 history에 "알아보면 풀리는 한 줄"을 숨기지 않고 둔다.
 4. 칸마다 핵심 단서 2~5개, 각 단서는 서로 다른 명령으로 닿게(같은 명령으로 두 용의자를 동시에 확인하지 않게).
 5. 넛지·트리거 대사는 보이스 치트시트로 검토.
 6. `opening`: 브리핑 대사(30~60초), 오늘 할 일 3개, 새 음성 줄이 있으면 `src/audio/manifest.ts`와 큐 시트(`data/infra-mystery-game/audio-cues.md`)에 id 추가.
+6-1. 결정적 단서 하나에 `aha`, 사건에 `goal.intro`. 주니어 사건이면 `tour`도.
 7. `src/cases/index.ts`의 `CAMPAIGN`에서 자리(`slot`)의 `cs`를 채운다. 자리만 있던 "준비 중" 칸이 플레이 가능한 사건이 된다.
 8. 대시보드가 있으면 `panels`를 ASCII 스냅샷과 같은 내용으로 채운다(선택).
 9. `npm test` (무결성·도달 가능성 테스트), `npm run build && npm run e2e`.

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../src/engine/game.ts';
 import { caseOneCron as cs, WIKI_LOG_BYTES } from '../src/cases/case-1-cron.ts';
-import { checkIntegrity, briefingSecs } from './case-integrity.ts';
+import { checkIntegrity, briefingSecs, at } from './case-integrity.ts';
 
 const out = (g: Game, cmd: string) => g.runCommand(0, cmd).lines.filter((l) => l.cls !== 'dim').map((l) => l.text);
 
@@ -98,4 +98,13 @@ test('case 1: five wrong reports end the case (the debrief still opens the next 
   for (let i = 0; i < 5; i++) g.submit({ cause: 'not-run', sequence: 'leftover', responsibility: [] });
   assert.ok(g.st.finished);
   assert.equal(g.submit({ cause: 'cron-path', sequence: 'true', responsibility: [] }), null);
+});
+
+test('case 1 dashboard panels agree with df and the alert: /var crosses 80% at the 07:15 alert, 92% at 09:30', () => {
+  const v = cs.panels!.timeseries.find((p) => p.id === 'var')!;
+  assert.equal(v.thresholds![0].value, 80);
+  const pts = v.series[0].points;
+  assert.ok(Math.abs(at(pts, '2026-11-11T07:15') - 80) <= 1.5, String(at(pts, '2026-11-11T07:15')));
+  assert.equal(at(pts, '2026-11-11T09:30'), 92);
+  assert.equal(cs.panels!.stats![0].value, '92%');
 });

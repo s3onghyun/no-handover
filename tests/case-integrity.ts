@@ -69,3 +69,17 @@ export function briefingSecs(cs: CaseFile): number {
   const pauses = b.lines.reduce((a, l) => a + (l.pauseMs ?? 700), 0);
   return (3000 + 2200 + chars * 72 + pauses + 4200 + 1300) / 1000;
 }
+
+/** Linear value of a panel series at a local time. */
+export function at(points: [string, number | null][], t: string): number {
+  const x = Date.parse(t + 'Z');
+  for (let i = 1; i < points.length; i++) {
+    const [a, va] = points[i - 1];
+    const [b, vb] = points[i];
+    const xa = Date.parse(a + 'Z');
+    const xb = Date.parse(b + 'Z');
+    if (x >= xa && x <= xb) return va! + ((vb! - va!) * (x - xa)) / (xb - xa);
+  }
+  return points.at(-1)![1]!;
+}
+

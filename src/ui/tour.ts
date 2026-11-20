@@ -30,8 +30,8 @@ export function mountTour(game: Game, opts: { blocked: () => boolean }): { refre
     const w = el.offsetWidth || 280;
     const hgt = el.offsetHeight || 120;
     const isWindow = a.classList.contains('window');
-    // windows: inside their top-left corner; icons and tray buttons: beside / above them
-    let x = isWindow ? r.left + 24 : r.right + 12;
+    // windows: inside their top-right corner (text starts on the left); icons: beside; tray: above
+    let x = isWindow ? r.right - w - 24 : r.right + 12;
     let y = isWindow ? r.top + 44 : r.top;
     if (a.closest('#taskbar')) {
       x = r.left + r.width / 2 - w / 2;

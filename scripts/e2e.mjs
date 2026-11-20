@@ -260,6 +260,7 @@ try {
   // ---- tool tour: one coach mark at a time, shown once, skippable
   await page.locator('.tour[data-step="terminal"]').waitFor({ timeout: 5000 });
   assert.equal(await page.locator('.tour').count(), 1, 'one mark at a time');
+  await page.waitForTimeout(500);
   await shot('case1-03-tour.png');
   await page.locator('.tour .tour-ok').click();
   await page.locator('.tour[data-step="goal"]').waitFor({ timeout: 3000 });

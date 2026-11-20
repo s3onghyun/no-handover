@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { Game } from '../src/engine/game.ts';
 import { caseTwoDeleted as cs, DELETED_BYTES } from '../src/cases/case-2-deleted.ts';
 import { caseFriday1802 } from '../src/cases/friday-1802.ts';
-import { checkIntegrity, briefingSecs } from './case-integrity.ts';
+import { checkIntegrity, briefingSecs, at } from './case-integrity.ts';
 
 const out = (g: Game, cmd: string) => g.runCommand(0, cmd).lines.filter((l) => l.cls !== 'dim').map((l) => l.text);
 const ALL = ['c2_rm', 'c2_debug', 'c2_growth', 'r2_quota', 'r2_noverify'];
@@ -105,4 +105,11 @@ test('case 2: the p99 mail arrives in the senior\'s inbox at the case\'s 16:40',
   assert.ok(g.st.mailsDelivered.includes('p99'));
   const hm = new Date(g.now()).toISOString().slice(11, 16);
   assert.equal(hm, '16:40');
+});
+
+test('case 2 dashboard panels agree with the journal: 70% at the 19:30 warning, 90% at the 04:43 page, 97% at 09:30', () => {
+  const pts = cs.panels!.timeseries.find((p) => p.id === 'data')!.series[0].points;
+  assert.ok(Math.abs(at(pts, '2026-11-11T19:30') - 70) <= 1.5, String(at(pts, '2026-11-11T19:30')));
+  assert.ok(Math.abs(at(pts, '2026-11-12T04:43') - 90) <= 1.5, String(at(pts, '2026-11-12T04:43')));
+  assert.equal(at(pts, '2026-11-12T09:30'), 97);
 });

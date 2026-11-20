@@ -601,6 +601,42 @@ export const caseOneCron: CaseFile = {
     '위키 응답: 정상 (p50 118ms)   위키 로그 쓰기: 약 1G/시간 (00:00부터)',
   ],
 
+  // the same snapshot as structured panels (dashboard app; the player's pins become annotations)
+  panels: {
+    title: '사내 위키 · wiki-01 /var',
+    from: '2026-11-10T10:40',
+    to: '2026-11-11T09:30',
+    stepMin: 10,
+    live: true,
+    marks: ['2026-11-11T00:00', '2026-11-11T07:15'],
+    stats: [
+      { title: '/var', value: '92%', state: 'crit', note: '17G / 20G' },
+      { title: 'wiki.log 쓰기', value: '약 1G/시간', state: 'warn', note: '00:00부터' },
+      { title: '위키 응답', value: '정상', state: 'ok', note: 'p50 118ms' },
+      { title: '정리 스크립트 결과', value: null, note: '수집하지 않습니다 (cron 은 종료 코드를 남기지 않아요)' },
+    ],
+    timeseries: [
+      {
+        id: 'var', title: '/var 사용량 (%)', unit: '%', min: 0, max: 100,
+        thresholds: [{ value: 80, label: '알림 기준 80%' }],
+        series: [{ name: '/var', color: 'yellow', interp: 'linear', points: [['2026-11-10T10:40', 43], ['2026-11-11T00:00', 43], ['2026-11-11T09:30', 92]] }],
+      },
+      {
+        id: 'wikilog', title: 'wiki.log 크기 (GB)', unit: 'G', min: 0, max: 10, width: 'half',
+        description: '화요일 10:40 에 비운 뒤로 작았다가, 수요일 00:00 부터 시간당 약 1G.',
+        series: [{ name: 'wiki.log', color: 'red', interp: 'linear', points: [['2026-11-10T10:40', 0], ['2026-11-11T00:00', 0], ['2026-11-11T09:30', 9.2]] }],
+      },
+      {
+        id: 'p50', title: '위키 응답 시간 p50', unit: 'ms', min: 0, max: 200, width: 'half',
+        series: [{ name: 'p50', color: 'blue', jitter: 0.08, points: [['2026-11-10T10:40', 118]] }],
+      },
+    ],
+    annotations: [
+      { at: '2026-11-10T23:12', label: 'nginx reload', kind: 'deploy' },
+      { at: '2026-11-11T07:15', label: '/var 80% 알림', kind: 'alert' },
+    ],
+  },
+
   // ------------------------------------------------------------------ clues (no yellow lines from here on: grep yourself)
   clues: [
     { id: 'c1_crontab', label: 'crontab -l: "0 * * * * ~/bin/wiki-log-clean.sh >> wiki-clean.log 2>&1" (도윤의 줄)', slot: 'cause', key: true, match: [{ output: '^0 \\* \\* \\* \\* ~/bin/wiki-log-clean\\.sh >> wiki-clean\\.log 2>&1$', host: W }] },
