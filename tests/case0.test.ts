@@ -169,28 +169,41 @@ test('case 0 scoring: two slots, max 230, unlimited submissions, wrong answers n
   assert.equal(rep.summary.submissions.length, 6);
 });
 
-test('campaign: Case 0 first, Friday opens after Case 0 is solved or skipped, placeholders never block', () => {
+test('campaign: Case 0 → 1 → 2 → 3, each opens when the one before is solved or skipped, placeholders never block', () => {
   const c = new Campaign(CAMPAIGN);
   assert.deepEqual(c.entries.map((e) => e.slot), [0, 1, 2, 3, 4]);
+  assert.deepEqual(c.playable().map((e) => e.id), [cs.id, 'case1-cron-env', 'case2-deleted-open', caseFriday1802.id]);
   assert.equal(c.first().id, cs.id);
   assert.equal(c.tutorialId(), cs.id);
   assert.equal(c.entry(caseFriday1802.id)!.slot, 3);
-  assert.equal(c.next(cs.id)!.id, caseFriday1802.id, 'placeholders 1 and 2 are passed over');
-  assert.equal(c.next(caseFriday1802.id), null);
+  assert.equal(c.next(cs.id)!.id, 'case1-cron-env');
+  assert.equal(c.next('case1-cron-env')!.id, 'case2-deleted-open');
+  assert.equal(c.next('case2-deleted-open')!.id, caseFriday1802.id);
+  assert.equal(c.next(caseFriday1802.id), null, 'placeholder 4 is passed over');
   let p = parseProgress(null);
+  assert.equal(c.status('case1-cron-env', p), 'locked');
   assert.equal(c.status(caseFriday1802.id, p), 'locked');
-  assert.equal(c.status('case1-cron-env', p), 'soon');
+  assert.equal(c.status('case4-keys', p), 'soon');
   assert.equal(c.pick(null, null, p).id, cs.id);
   assert.equal(c.pick(null, caseFriday1802.id, p).id, cs.id, 'a locked last case falls back to the first');
   assert.equal(c.pick(caseFriday1802.id, null, p).id, caseFriday1802.id, '?case= ignores locks (facilitator)');
   p = c.solve(cs.id, p);
   assert.equal(c.status(cs.id, p), 'solved');
+  assert.equal(c.status('case1-cron-env', p), 'open');
+  assert.equal(c.status('case2-deleted-open', p), 'locked');
+  p = c.solve('case1-cron-env', p);
+  assert.equal(c.status('case2-deleted-open', p), 'open');
+  assert.equal(c.status(caseFriday1802.id, p), 'locked');
+  p = c.solve('case2-deleted-open', p);
   assert.equal(c.status(caseFriday1802.id, p), 'open');
   assert.equal(c.pick(null, caseFriday1802.id, p).id, caseFriday1802.id);
-  const skipped = c.skipTo(caseFriday1802.id, parseProgress('{"solved":[],"skipped":[]}'));
+  // the tutorial's skip goes to the next case and marks only the tutorial skipped
+  const skipped = c.skipTo(c.next(cs.id)!.id, parseProgress('{"solved":[],"skipped":[]}'));
   assert.deepEqual(skipped.skipped, [cs.id]);
-  assert.equal(c.status(caseFriday1802.id, skipped), 'open');
+  assert.equal(c.status('case1-cron-env', skipped), 'open');
   assert.equal(c.status(cs.id, skipped), 'skipped');
+  // skipping straight to Case 3 marks 0, 1 and 2 skipped
+  assert.deepEqual(c.skipTo(caseFriday1802.id, parseProgress(null)).skipped, [cs.id, 'case1-cron-env', 'case2-deleted-open']);
   assert.deepEqual(parseProgress('not json'), { solved: [], skipped: [] });
 });
 

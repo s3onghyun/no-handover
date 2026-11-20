@@ -55,6 +55,8 @@ export const MANIFEST = {
   'music.tension': { class: 'music', loop: true, gain: 0.5, where: '게임 시계 18:00 이후 또는 첫 오답 뒤 (선택, ?music=loop 일 때만 루프)' },
   // ---------------------------------------------------------------- voice (files only)
   'voice.briefing-jihun': { class: 'voice', where: '오프닝: 지훈의 음성 메시지 (자막과 함께)' },
+  'voice.briefing-case1-seojin': { class: 'voice', where: 'Case 1 오프닝: 서진의 음성 메시지 (파일이 없으면 자막 + 타이핑 소리)' },
+  'voice.briefing-case2-seojin': { class: 'voice', where: 'Case 2 오프닝: 서진의 음성 메시지 (파일이 없으면 자막 + 타이핑 소리)' },
   'voice.nudge-idle-1': { class: 'voice', where: '2단 넛지 idle-1 (지훈) 도착 시 (선택)' },
   'voice.nudge-idle-2': { class: 'voice', where: '2단 넛지 idle-2 (서진) 도착 시 (선택)' },
   'voice.nudge-idle-3': { class: 'voice', where: '2단 넛지 idle-3 (지훈) 도착 시 (선택)' },

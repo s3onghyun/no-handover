@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AudioManager, PENDING_MS, defaultFetch, type CtxLike, type StorageLike } from '../src/audio/audio.ts';
 import { MANIFEST, cueFiles, cueFolder, type CueDef } from '../src/audio/manifest.ts';
+import { CAMPAIGN } from '../src/cases/index.ts';
 
 function fakeCtx(initial = 'suspended') {
   const log: string[] = [];
@@ -264,7 +265,7 @@ test('audio: music/voice asked for just before the unlock play on unlock; UI cue
 
 test('audio manifest: ids, classes, files and fallbacks', () => {
   const ids = Object.keys(MANIFEST);
-  assert.equal(ids.length, 24);
+  assert.equal(ids.length, 26);
   for (const [id, c] of Object.entries(MANIFEST) as [string, CueDef][]) {
     assert.match(id, /^(amb|music|voice|sfx)\.[a-z0-9-]+$/, id);
     assert.ok(['music', 'ambience', 'voice', 'sfx', 'ui'].includes(c.class), id);
@@ -273,4 +274,6 @@ test('audio manifest: ids, classes, files and fallbacks', () => {
     if (id.startsWith('sfx.')) assert.ok(c.zzfx, `${id}: every sfx has a zzfx fallback so the UI is audible today`);
   }
   assert.ok('voice.briefing-jihun' in MANIFEST);
+  // every case briefing's voice cue is in the manifest (the file may be missing: subtitles + typing then)
+  for (const e of CAMPAIGN) if (e.cs?.opening?.briefing.voiceCue) assert.ok(e.cs.opening.briefing.voiceCue in MANIFEST, e.id);
 });
