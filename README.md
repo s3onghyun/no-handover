@@ -77,18 +77,20 @@ public/characters/  캐릭터 아트 (아래 참고)
 | 폴더 | 파일 |
 |---|---|
 | `public/audio/music/` | `amb.office`, `music.briefing`, `music.reveal`, `music.tension` |
-| `public/audio/voice/` | `voice.briefing-jihun`, `voice.nudge-idle-1` … `voice.nudge-idle-4` |
+| `public/audio/voice/` | `voice.briefing-jihun`, `voice.briefing-case1-seojin`, `voice.briefing-case2-seojin`, 사건별 넛지 `voice.nudge-<사건 id>-idle-N` (직접 물었을 때 문구가 다르면 `…-idle-N-ask`) |
 | `public/audio/sfx/` | `sfx.ring`, `sfx.typing` (CC0 파일이 오면 ZzFX 대체음을 덮어씀), 그 밖의 `sfx.*`도 같은 이름이면 ZzFX보다 먼저 쓰인다 |
 
 예: `public/audio/music/amb.office.ogg`와 `public/audio/music/amb.office.mp3`. 하나만 있어도 된다. 다른 경로를 쓰려면 그 큐에 `src: [...]`를 적는다.
 
-**들어 있는 음원 파일** (2026-11-17, 합계 2.55 MB / 예산 4 MB, 각각 Opus `.ogg` + `.mp3`, 48 kHz):
+**들어 있는 음원 파일** (2026-11-17·11-20, 합계 3.81 MB / 예산 4 MB, 각각 Opus `.ogg` + `.mp3`):
 
 | 큐 | 길이 | 라우드니스 | 내용 |
 |---|---|---|---|
 | `amb.office` | 78.9 s 이음매 없는 루프 | −24 LUFS | 데스크톱 환경음 (Gemini 음악) |
 | `music.briefing` | 12.7 s | −18 LUFS | 브리핑 잠금 화면 스팅 (Gemini 음악) |
 | `voice.briefing-jihun` | 23.6 s, 모노 | −16 LUFS | Case 3 브리핑의 지훈 음성 메시지 (Gemini TTS, Puck) |
+| `voice.briefing-case1-seojin` · `voice.briefing-case2-seojin` | 35.1 s · 30.9 s, 모노 | −16 LUFS | Case 1·2 브리핑의 서진 음성 메시지 (Gemini TTS, Aoede) |
+| `voice.nudge-*` (20개) | 3–12 s, 모노 | −16 LUFS | Case 0–3 동료 넛지, 서진 = Aoede, 지훈 = Puck (Gemini TTS) |
 
 `music.reveal`은 아직 비어 있다(무음). **출처·처리 명령·측정값은 [`public/audio/audio-credits.md`](public/audio/audio-credits.md).** 음악·음성은 캡틴의 Gemini 계정으로 만든 **프로토타입용**이며, Gemini 앱 음악·TTS의 상업적 이용 조건은 판매 전에 확인해야 한다. 원본(저장소 밖 `data/infra-mystery-game/audio-in/`)에서 다시 만들기: `scripts/audio-prepare.sh <원본 폴더>`. 루프 이음매 검사: `scripts/audio-check-seam.sh`. 20초 미리듣기: `scripts/audio-preview.sh /tmp/nh-preview.wav`.
 

@@ -265,7 +265,7 @@ test('audio: music/voice asked for just before the unlock play on unlock; UI cue
 
 test('audio manifest: ids, classes, files and fallbacks', () => {
   const ids = Object.keys(MANIFEST);
-  assert.equal(ids.length, 26);
+  assert.equal(ids.length, 42);
   for (const [id, c] of Object.entries(MANIFEST) as [string, CueDef][]) {
     assert.match(id, /^(amb|music|voice|sfx)\.[a-z0-9-]+$/, id);
     assert.ok(['music', 'ambience', 'voice', 'sfx', 'ui'].includes(c.class), id);
@@ -276,4 +276,9 @@ test('audio manifest: ids, classes, files and fallbacks', () => {
   assert.ok('voice.briefing-jihun' in MANIFEST);
   // every case briefing's voice cue is in the manifest (the file may be missing: subtitles + typing then)
   for (const e of CAMPAIGN) if (e.cs?.opening?.briefing.voiceCue) assert.ok(e.cs.opening.briefing.voiceCue in MANIFEST, e.id);
+  // every idle nudge has its own per-case voice cue, plus `-ask` where the asked wording differs (main.ts plays it when present)
+  for (const e of CAMPAIGN) for (const n of e.cs?.hints.idle ?? []) {
+    assert.ok(`voice.nudge-${e.cs!.id}-${n.id}` in MANIFEST, `${e.id} ${n.id}`);
+    if (n.askText !== undefined) assert.ok(`voice.nudge-${e.cs!.id}-${n.id}-ask` in MANIFEST, `${e.id} ${n.id} ask`);
+  }
 });

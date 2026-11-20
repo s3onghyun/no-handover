@@ -455,8 +455,12 @@ game.on('message', (m) => {
   const reason = last?.type === 'message' ? String(last.reason ?? '') : '';
   if (reason === 'ask') return; // the player's own quick reply: no ding, no toast
   void audio.play('sfx.ding');
-  // a recorded line for a colleague nudge, if main produced one (voice.nudge-<id>)
-  if (reason.startsWith('nudge:') && `voice.nudge-${reason.slice(6)}` in MANIFEST) void audio.play(`voice.nudge-${reason.slice(6)}`);
+  // a recorded line for a colleague nudge: voice.nudge-<case id>-<nudge id>, `-ask` for its asked wording; no file = subtitles only
+  if (reason.startsWith('nudge:')) {
+    const n = game.cs.hints.idle.find((x) => x.id === reason.slice(6));
+    const cue = `voice.nudge-${game.cs.id}-${reason.slice(6)}${n?.askText !== undefined && msg.text === n.askText ? '-ask' : ''}`;
+    if (cue in MANIFEST) void audio.play(cue);
+  }
   const c = game.cs.channels.find((x) => x.id === msg.channel);
   const el = h('div', null, h('b', null, `${ctx.name(msg.from)}`), h('span', { style: 'opacity:.7' }, ` · ${c?.title ?? ''}`), h('div', null, msg.text.length > 90 ? msg.text.slice(0, 90) + '…' : msg.text));
   ctx.toast(el, () => wm.open('messenger', msg.channel));
