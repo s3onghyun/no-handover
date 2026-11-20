@@ -61,7 +61,8 @@ input, textarea, select { font: inherit; }
 }
 .window.focused { border-color: #8e8a80; }
 .window.min { display: none; }
-.window.max { left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; border-radius: 0; resize: none; }
+.window.max { left: 0 !important; top: 0 !important; width: calc(100% - var(--max-right, 0px)) !important; height: 100% !important; border-radius: 0; resize: none; }
+/* --max-right: a maximized window stops short of the "오늘 할 일" sticky, which sits above every window, so its ✕ stays clickable */
 .titlebar {
   height: 34px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px;
   background: linear-gradient(#efece5, #e3dfd6); border-bottom: 1px solid var(--line); user-select: none; cursor: grab;
@@ -708,3 +709,15 @@ span.crit.miss { color: var(--obs-ink-2); border-style: dashed; }
 html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
 html.reduce-motion .window.pulse { box-shadow: var(--shadow), 0 0 0 4px rgba(242, 217, 78, 0.85); }
 html.reduce-motion .icon.pulse { background: rgba(242, 217, 78, 0.35); }
+
+/* ---------- in-game modal (src/ui/modal.ts; replaces confirm()/alert()) ---------- */
+.modal-back { position: fixed; inset: 0; z-index: 220000; display: grid; place-items: center; padding: 16px; background: rgba(20, 22, 26, 0.55); animation: modal-in var(--motion-micro) ease-out; }
+.modal { width: min(440px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--panel, #fff); color: var(--ink, #23262b); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.4); padding: 16px 18px 14px; }
+.modal h3 { margin: 0 0 8px; font-size: 15px; }
+.modal-body p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.55; }
+.modal-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.modal-acts button { padding: 7px 14px; font-size: 13.5px; }
+.modal-acts button:focus-visible { outline: 2px solid #3a6fd8; outline-offset: 2px; }
+@keyframes modal-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .modal-back { animation: none; } }
+html.reduce-motion .modal-back { animation: none; }

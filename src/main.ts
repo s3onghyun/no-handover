@@ -23,6 +23,7 @@ import { applyMotionPref, showMoment } from './ui/motion.ts';
 import { flashAnchor, mountTour, toolGuide, tourKey, TOUR_SEEN_KEY } from './ui/tour.ts';
 import { EXPERIENCE_KEY, experienceRules, parseExperience, shouldAskExperience, type Experience } from './engine/experience.ts';
 import { goalCard } from './ui/goal.ts';
+import { modal } from './ui/modal.ts';
 import type { ClueDef, TourStep } from './engine/types.ts';
 import type { Message } from './engine/build.ts';
 import type { ScoreResult } from './engine/scoring.ts';
@@ -65,6 +66,23 @@ function goCase(id: string): void {
   const q = new URLSearchParams({ case: id });
   if (params.get('lang')) q.set('lang', params.get('lang')!);
   location.href = `${location.pathname}?${q}`;
+}
+/**
+ * Leaving this case for another one always asks first, in game (a stray click or a tool that
+ * auto-accepts browser dialogs used to land the player in the next case).
+ */
+async function confirmCase(to: CampaignEntry, how: 'skip' | 'list'): Promise<boolean> {
+  const toLabel = `${caseLabel(to)} 「${to.title}」`;
+  const ok = await modal({
+    kind: 'modal-case',
+    title: t('case.switchTitle', { to: toLabel }),
+    body: t(how === 'skip' ? 'case.switchSkip' : 'case.switchList', { from: caseLabel(ENTRY) }),
+    ok: t('case.switchGo', { to: caseLabel(to) }),
+    cancel: t('case.switchStay'),
+    focusCancel: true,
+  });
+  game.log('case-switch', { to: to.id, how, ok });
+  return ok;
 }
 
 function loadGame(): Game {
@@ -145,8 +163,8 @@ volume.onchange = logAudio;
 renderSound();
 // tutorial only: a visible way out for experienced players (Case 0 is marked skipped)
 const nextAfterTutorial = ENTRY.tutorial ? campaign.next(CASE.id) : null;
-function skipTutorial(): void {
-  if (!nextAfterTutorial) return;
+async function skipTutorial(): Promise<void> {
+  if (!nextAfterTutorial || !(await confirmCase(nextAfterTutorial, 'skip'))) return;
   game.log('tutorial-skip', { to: nextAfterTutorial.id });
   storage.set(SAVE_KEY, game.serialize());
   progress = campaign.skipTo(nextAfterTutorial.id, progress);
@@ -155,11 +173,25 @@ function skipTutorial(): void {
 }
 const skipBtn =
   nextAfterTutorial && !progress.solved.includes(CASE.id)
-    ? h('button.tray-btn.skiptut', { title: `${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」`, onclick: () => confirm(`${t('case.skipShort')} → ${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」?`) && skipTutorial() }, `⏭ ${t('case.skipShort')}`)
+    ? h('button.tray-btn.skiptut', { title: `${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」`, onclick: () => void skipTutorial() }, `⏭ ${t('case.skipShort')}`)
     : null;
 const taskbar = h('div#taskbar', null, h('div.brand', null, t('game.title'), h('small', null, t('game.titleKo'))), tasks, skipBtn, guideBtn, goalBtn, hintBtn, notifBtn, helpBtn, h('div.soundctl', null, soundBtn, volume), ptBtn, clock);
 const toasts = h('div.toasts', { 'aria-live': 'polite' });
 document.body.append(desktop, taskbar, toasts);
+/**
+ * While the lock screen or the opening briefing covers the desktop, nothing behind it is reachable
+ * by mouse, keyboard or screen reader (the briefing's own 건너뛰기 was easy to confuse with the
+ * taskbar's "⏭ 튜토리얼 건너뛰기" behind it).
+ */
+const setCovered = (on: boolean) => {
+  for (const el of [desktop, taskbar, toasts]) {
+    el.inert = on;
+    // inert already leaves the accessibility tree; aria-hidden also tells DOM-based tools
+    if (on) el.setAttribute('aria-hidden', 'true');
+    else el.removeAttribute('aria-hidden');
+  }
+};
+setCovered(true);
 
 const wm = new WM(desktop, tasks);
 const ctx: UiCtx = {
@@ -574,6 +606,7 @@ function playBriefing(replay: boolean) {
   if (!game.cs.opening || briefingActive) return;
   audio.unlock(); // inside the click that started it: browsers allow sound from here on
   briefingActive = true;
+  setCovered(true);
   closePop();
   game.briefingStart(replay);
   if (replay) audio.stopLoop('amb.office', 400);
@@ -586,6 +619,8 @@ function playBriefing(replay: boolean) {
     onReveal: () => (replay ? audio.loop('amb.office') : revealDesktop(true)),
     onDone: (skipped, watchedMs, step) => {
       briefingActive = false;
+      setCovered(false);
+      if (!replay) wm.instance('terminal')?.focus?.(); // the prompt the desktop opened with (focus could not land while covered)
       last = performance.now();
       game.briefingEnd(skipped, watchedMs, step, replay);
       save();
@@ -600,7 +635,10 @@ function start(first: boolean) {
   audio.unlock();
   boot.remove();
   if (first && game.cs.opening && params.get('briefing') !== '0') playBriefing(false);
-  else revealDesktop(first);
+  else {
+    setCovered(false);
+    revealDesktop(first);
+  }
   save();
 }
 
@@ -624,7 +662,7 @@ const expChoice = h(
   h('p.expq-note', null, t('exp.note')),
 );
 /** Tutorial only: experienced players jump to the next case (Case 0 is marked skipped). */
-const skipLink = skipBtn && nextAfterTutorial ? h('button.linkbtn.skip', { onclick: skipTutorial }, `${t('case.skip')} ${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」`) : null;
+const skipLink = skipBtn && nextAfterTutorial ? h('button.linkbtn.skip', { onclick: () => void skipTutorial() }, `${t('case.skip')} ${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」`) : null;
 
 /** Case list: the five rungs, locked until the previous playable case is solved. */
 function showCaseList(): void {
@@ -641,7 +679,7 @@ function showCaseList(): void {
         h('div.cl-head', null, h('b', null, caseLabel(e)), h('span.cl-when', null, e.when), statusText[st] ? h('span.cl-st', null, statusText[st]) : null),
         h('div.cl-title', null, e.title),
         h('div.cl-pr', null, e.principle),
-        e.cs && (st === 'open' || st === 'solved' || st === 'skipped') && !current ? h('button', { onclick: () => goCase(e.id) }, t('case.play')) : null,
+        e.cs && (st === 'open' || st === 'solved' || st === 'skipped') && !current ? h('button', { onclick: async () => (await confirmCase(e, 'list')) && goCase(e.id) }, t('case.play')) : null,
       ),
     );
   }

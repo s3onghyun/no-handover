@@ -9,6 +9,7 @@ import type { SlotId } from '../../engine/types.ts';
 import { playRecord, recordLine, resultCard } from '../../engine/record.ts';
 import { openedFor } from '../hintpanel.ts';
 import { drawResultCard, downloadResultCard } from '../resultcard.ts';
+import { modal, notice } from '../modal.ts';
 
 function debrief(root: HTMLElement, ctx: UiCtx): void {
   const g = ctx.game;
@@ -264,9 +265,9 @@ export const reportApp: AppDef = {
             'button.primary-btn',
             {
               disabled: left <= 0,
-              onclick: () => {
+              onclick: async () => {
                 if (!complete(g.cs, sub)) {
-                  alert(t('report.need'));
+                  await notice(t('report.notReady'), t('report.need'), t('modal.ok'));
                   return;
                 }
                 // cited pins that were taken off the board since do not count
@@ -274,10 +275,20 @@ export const reportApp: AppDef = {
                 sub.cites = Object.fromEntries(Object.entries(sub.cites ?? {}).map(([k, v]) => [k, (v ?? []).filter((id) => live.has(id))]));
                 const noCite = missingCites(g.cs, sub, g.st.pins);
                 if (noCite.length) {
-                  alert(t('report.needCite', { slots: g.cs.accusation.slots.filter((x) => noCite.includes(x.id)).map(slotName).join(', ') }));
+                  await notice(t('report.notReady'), t('report.needCite', { slots: g.cs.accusation.slots.filter((x) => noCite.includes(x.id)).map(slotName).join(', ') }), t('modal.ok'));
                   return;
                 }
-                if (!confirm(t('report.confirm'))) return;
+                // the copy follows the case's real rule: unlimited, n of max left, or the last one
+                const lastOne = max > 0 && left <= 1;
+                const ok = await modal({
+                  kind: 'modal-submit',
+                  title: t('report.confirmTitle'),
+                  body: max <= 0 ? t('report.confirmUnlimited') : lastOne ? t('report.confirmLast', { max }) : t('report.confirmLeft', { n: g.st.submissions.length + 1, left, max }),
+                  ok: lastOne ? t('report.confirmOkLast') : t('report.confirmOk'),
+                  cancel: t('report.confirmCancel'),
+                  focusCancel: lastOne,
+                });
+                if (!ok || g.submissionsLeft() <= 0) return;
                 const r = g.submit(sub);
                 if (!r) return;
                 if (!r.allCorrect && !g.st.finished) {
