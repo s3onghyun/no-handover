@@ -27,7 +27,7 @@ export function mountTour(game: Game, opts: { blocked: () => boolean }): { refre
     storage.set(TOUR_SEEN_KEY, JSON.stringify({ seen: [...new Set([...shared, ...st.seen])] }));
     storage.set(key, JSON.stringify({ skipped: st.skipped }));
   };
-  let cur: { step: TourStep; el: HTMLElement; timer: number } | null = null;
+  let cur: { step: TourStep; el: HTMLElement; timer: number; back: HTMLElement | null } | null = null;
 
   const anchor = (app: string): HTMLElement | null =>
     (document.querySelector(`.window[data-app="${app}"]:not(.min)`) as HTMLElement | null) ??
@@ -39,8 +39,8 @@ export function mountTour(game: Game, opts: { blocked: () => boolean }): { refre
     const w = el.offsetWidth || 280;
     const hgt = el.offsetHeight || 120;
     const isWindow = a.classList.contains('window');
-    // windows: inside their top-right corner (text starts on the left); icons: beside; tray: above
-    let x = isWindow ? r.right - w - 24 : r.right + 12;
+    // windows: inside their top-right corner, left of the 📌 column (text starts on the left); icons: beside; tray: above
+    let x = isWindow ? r.right - w - 56 : r.right + 12;
     let y = isWindow ? r.top + 44 : r.top;
     if (a.closest('#taskbar')) {
       x = r.left + r.width / 2 - w / 2;
@@ -54,10 +54,16 @@ export function mountTour(game: Game, opts: { blocked: () => boolean }): { refre
 
   const close = (how: 'ok' | 'skip' | 'auto') => {
     if (!cur) return;
-    const { step, el, timer } = cur;
+    const { step, el, timer, back } = cur;
     clearTimeout(timer);
+    // a click on "알겠어요" moved focus into the mark: hand it back (usually the terminal prompt) instead of dropping it on <body>
+    const hadFocus = el.contains(document.activeElement);
     el.remove();
     cur = null;
+    if (hadFocus) {
+      const to = back?.isConnected ? back : document.querySelector<HTMLElement>('.window.focused:not(.min) .tin input');
+      to?.focus({ preventScroll: true });
+    }
     if (!st.seen.includes(step.id)) st.seen.push(step.id);
     if (how === 'skip') st.skipped = true;
     save();
@@ -76,7 +82,12 @@ export function mountTour(game: Game, opts: { blocked: () => boolean }): { refre
     );
     document.body.appendChild(el);
     place(el, a);
-    cur = { step, el, timer: window.setTimeout(() => close('auto'), AUTO_HIDE_MS) };
+    cur = { step, el, timer: window.setTimeout(() => close('auto'), AUTO_HIDE_MS), back: null };
+    // remember where focus came from when it enters the mark (mouse click or Tab)
+    el.addEventListener('focusin', (e) => {
+      const from = e.relatedTarget as HTMLElement | null;
+      if (cur?.el === el && from && !el.contains(from)) cur.back = from;
+    });
     a.classList.add('tour-target');
     setTimeout(() => a.classList.remove('tour-target'), 1600);
   };
