@@ -864,6 +864,36 @@ done`,
     '온콜 호출: 37건 → 수신자 남은재 (2순위)   확인(ack): 0건',
   ],
 
+  // the same snapshot as structured panels (drawn by the dashboard app; pins appear as annotations)
+  panels: {
+    title: '결제 API · pay-api-01',
+    from: '2026-11-14T02:00',
+    to: '2026-11-14T07:00',
+    stepMin: 1,
+    live: true,
+    marks: ['2026-11-14T03:15', '2026-11-14T05:40'],
+    stats: [
+      { title: '디스크 /', value: '42%', state: 'ok' },
+      { title: '메모리', value: '2.1 / 7.7 GiB', state: 'ok' },
+      { title: 'CPU', value: '18%', state: 'ok' },
+      { title: '재시작 횟수', value: '0', state: 'ok' },
+      { title: '온콜 호출', value: '37건', state: 'crit', note: '수신자 남은재 (2순위)' },
+      { title: '확인 (ack)', value: '0건', state: 'crit' },
+    ],
+    timeseries: [
+      {
+        id: 'err', title: '5xx 비율 (%)', unit: '%', min: 0, max: 50,
+        thresholds: [{ value: 20, label: '알림 기준 20%' }],
+        series: [{ name: '5xx', color: 'yellow', jitter: 0.05, points: [['2026-11-14T02:00', 0.3], ['2026-11-14T03:15', 8], ['2026-11-14T03:16', 41.7], ['2026-11-14T05:40', 0.2]] }],
+      },
+      {
+        id: 'fds', title: '열린 파일 수 (open_fds / 한도 4096)', min: 0, max: 4400,
+        thresholds: [{ value: 4096, label: '한도 4096' }],
+        series: [{ name: 'open_fds', color: 'blue', points: [['2026-11-14T02:00', 1947], ['2026-11-14T03:15', 3000], ['2026-11-14T03:16', 4096], ['2026-11-14T05:40', 1947]] }],
+      },
+    ],
+  },
+
   // ------------------------------------------------------------------ clues
   clues: [
     { id: 'c_emfile', label: 'journalctl: 03:15:40 "too many open files"', slot: 'cause', key: true, match: [{ output: 'too many open files', host: 'pay-api-01' }] },

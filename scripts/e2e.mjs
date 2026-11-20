@@ -4,7 +4,7 @@
 // report — and the debrief's "다음 사건" button opens Case 3 「금요일 18:02」. There it watches
 // the whole opening briefing, ticks the three "오늘 할 일" boxes, solves the case from the
 // departed senior's history line, then checks the skip path, the help-menu replay and the
-// persisted mute toggle in a second page.
+// persisted mute toggle in a second page, and the board/dashboard once more with reduced motion.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
@@ -158,6 +158,45 @@ try {
   await page.evaluate(() => {
     for (const w of document.querySelectorAll('.window')) w.classList.add('min');
   });
+
+  // ---- evidence board as an observability dashboard: pins sit on the shared timeline
+  await page.locator('.icon[data-app="board"]').dblclick();
+  const board0 = page.locator('.window[data-app="board"]');
+  await board0.locator('.obs-lanes .obs-mk[data-pin]').first().waitFor();
+  const lanes0 = await board0.locator('.obs-lanes').getAttribute('aria-label');
+  assert.match(lanes0, /^증거 타임라인, .*주석 2개: 오류·경고 2\./, lanes0);
+  assert.equal(await board0.locator('.obs-lanes .obs-mk[data-pin]').count(), 2, '21:14 and 08:47 markers');
+  assert.equal(await board0.locator('.obs-row.card').count(), 3, 'two timed log rows + the df line in the tray');
+  assert.match(await board0.locator('.obs-logp .obs-row').first().innerText(), /11-09 21:14:03\s+WARN/);
+  assert.equal(await board0.locator('.obs-trayp .obs-row').count(), 1);
+  // the dashboard panels on the board carry the pins as annotations
+  assert.ok((await board0.locator('.obs-tsp .obs-ann').count()) >= 4, 'pin annotations on the linked panels');
+  // a marker is keyboard reachable and jumps to its log row
+  const mk0 = board0.locator('.obs-lanes .obs-mk[data-pin]').last();
+  const mkPin = await mk0.getAttribute('data-pin');
+  await mk0.focus();
+  await page.keyboard.press('Enter');
+  await board0.locator(`.obs-row.flash[data-pin="${mkPin}"]`).waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.pin), mkPin);
+  // search box filters the log panel
+  await board0.locator('.obs-search').fill('No space');
+  assert.equal(await board0.locator('.obs-logp .obs-row').count(), 1);
+  assert.equal(await board0.locator('.obs-logp mark').first().innerText(), 'No space');
+  await board0.locator('.obs-search').fill('');
+  await page.evaluate(() => document.querySelector('.window[data-app="board"]').classList.add('max'));
+  await page.waitForTimeout(300);
+  await shot('case0-board-observability.png');
+  await board0.locator('.titlebar button.close').click();
+  await page.locator('.icon[data-app="dashboard"]').dblclick();
+  const dash0 = page.locator('.window[data-app="dashboard"]');
+  await dash0.locator('.obs-tsp .obs-chart svg').first().waitFor();
+  assert.equal(await dash0.locator('.obs-tsp').count(), 3);
+  assert.match(await dash0.locator('.obs-tsp .obs-chart').first().getAttribute('aria-label'), /^응답 \(요청\/분\), 11\/9 \(월\) 18:00 → 11\/10 \(화\) 09:30\. 2xx: .*주석 2개/);
+  assert.ok((await dash0.locator('.obs-tsp').first().locator('.obs-ann').count()) >= 2, 'pins drawn on the snapshot');
+  assert.equal(await dash0.locator('.obs-stat').count(), 3);
+  assert.match(await dash0.locator('.obs-stat').nth(2).innerText(), /데이터 없음/);
+  await dash0.locator('.titlebar button.close').click();
+  step('board: two pins on the evidence timeline + linked panels, Enter on a marker jumps to its row, search filters; dashboard draws the pins as annotations');
   await page.locator('.icon[data-app="report"]').dblclick();
   const rep0 = page.locator('.window[data-app="report"]');
   assert.equal(await rep0.locator('section.slot').count(), 2, 'two report slots');
@@ -304,6 +343,71 @@ try {
   await shot('03-evidence-board.png');
   step(`evidence board holds ${cards} cards on the timeline`);
 
+  const board = page.locator('.window[data-app="board"]');
+  await board.locator('.obs-lanes .obs-mk[data-pin]').first().waitFor();
+  const lanes = await board.locator('.obs-lanes').getAttribute('aria-label');
+  assert.match(lanes, /변경 1/, lanes);
+  assert.match(lanes, /크론 1/, lanes);
+  assert.match(lanes, /오류·경고 1/, lanes);
+  // the crontab line (no time of its own) is drawn at its Saturday 03:15 run
+  assert.match(await board.locator('.obs-lanes .obs-mk.k-cron').getAttribute('aria-label'), /^11\/14 \(토\) 03:15 크론 \(반복\): ⟳ 15 3 \* \* 6/);
+  assert.match(await board.locator('.obs-lanes .obs-mk.k-deploy').getAttribute('aria-label'), /^11\/13 \(금\) 18:02 변경: AuthorDate/);
+  assert.match(await board.locator('.obs-trayp .obs-cron').first().innerText(), /▲ 크론 15 3 \* \* 6 · 지금 구간 1회 실행 · 지난 실행 11\/14 \(토\) 03:15 · 다음 11\/21 \(토\) 03:15/);
+  // 5xx panel: threshold label in text, pins as annotations
+  const err = board.locator('.obs-tsp', { hasText: '5xx 비율' });
+  assert.match(await err.locator('.obs-over-txt').innerText(), /알림 기준 20% 이상 03:16–/);
+  assert.ok((await err.locator('.obs-ann.k-cron').count()) >= 1 && (await err.locator('.obs-ann.k-error').count()) >= 1);
+  // the time range runs on the in-game clock: the last 6 hours hold none of the weekend's pins
+  await board.locator('.obs-range').selectOption('6h');
+  await board.locator('.obs-lanes .obs-nodata').waitFor();
+  assert.match(await board.locator('.obs-logp .obs-empty').last().innerText(), /시간 범위 밖에 \d+개 더 있어요/);
+  await board.locator('.obs-logp .obs-link').click();
+  await board.locator('.obs-lanes .obs-mk[data-pin]').first().waitFor();
+  assert.equal(await board.locator('.obs-range').inputValue(), 'fit');
+  // panel menu: keyboard opens it, Escape closes it
+  const kb = board.locator('.obs-tl .obs-kebab');
+  await kb.focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await kb.getAttribute('aria-expanded'), 'true');
+  await page.keyboard.press('Escape');
+  assert.equal(await kb.getAttribute('aria-expanded'), 'false');
+  // narrow screens: panels reflow to one column
+  await page.evaluate(() => document.querySelector('.window[data-app="board"]').classList.add('max'));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(400);
+  const boxes = await Promise.all(['.obs-tl', '.obs-logp', '.obs-trayp'].map((sel) => board.locator(sel).boundingBox()));
+  assert.ok(boxes.every((b) => Math.abs(b.x - boxes[0].x) < 2 && b.width > 300), JSON.stringify(boxes));
+  await shot('03b-evidence-board-narrow.png');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => document.querySelector('.window[data-app="board"]').classList.remove('max'));
+  step('board: deploy, cron (from the crontab line) and error markers on the timeline; 5xx panel threshold + annotations; range picker on the in-game clock; kebab menu by keyboard; one column at 390 px');
+
+  // motion: a pin that arrives while the board is open snaps onto the timeline (< 1 s)
+  await page.evaluate(() => window.__game.pin({ kind: 'line', text: 'Nov 14 03:17:00 pay-api-01 payment-api[2817]: http: 5xx ratio 41.7% over last 60s (503 Service Unavailable)', source: 'pay-api-01 · journalctl' }));
+  await board.locator('.obs-logp .obs-row.snap').waitFor({ timeout: 1000 });
+  await board.locator('.obs-lanes .obs-mk.snap').waitFor({ timeout: 1000 });
+  await board.locator('.obs-row.snap').waitFor({ state: 'detached', timeout: 1500 });
+  step('motion: a new pin snaps onto the log panel and its marker onto the timeline, gone within a second');
+
+  // live dashboard: the in-game clock drives new points; thresholds and critical stats blink once
+  await page.locator('.icon[data-app="dashboard"]').dblclick();
+  const dash = page.locator('.window[data-app="dashboard"]');
+  await dash.locator('.obs-tsp .obs-chart svg').first().waitFor();
+  assert.ok((await dash.locator('.obs-thrg.blink').count()) >= 2, 'crossed thresholds blink on open');
+  assert.equal(await dash.locator('.obs-stat.blink').count(), 2, 'the two critical stats blink');
+  assert.equal(await dash.locator('.obs-live').getAttribute('aria-pressed'), 'true');
+  await dash.locator('.obs-range').selectOption('1h');
+  const last1 = await dash.locator('.obs-tsp .obs-chart').first().getAttribute('data-last');
+  await page.waitForFunction((v) => document.querySelector('.window[data-app="dashboard"] .obs-tsp .obs-chart').dataset.last !== v, last1, { timeout: 10000 });
+  await dash.locator('.obs-tail').first().waitFor();
+  await dash.locator('.obs-live').click();
+  assert.equal(await dash.locator('.obs-live').getAttribute('aria-pressed'), 'false');
+  const paused = await dash.locator('.obs-tsp .obs-chart').first().getAttribute('data-last');
+  await page.waitForTimeout(2500);
+  assert.equal(await dash.locator('.obs-tsp .obs-chart').first().getAttribute('data-last'), paused, 'paused graphs stay put');
+  await dash.locator('.titlebar button.close').click();
+  step('live dashboard: last hour grows with the in-game clock (new point pulses), 실시간 toggle pauses it; crossed thresholds and critical stats blink once');
+
   await page.locator('.window[data-app="board"] .primary-btn').click();
   const report = page.locator('.window[data-app="report"]');
   await report.locator('input[name="slot-cause"]').nth(2).check();
@@ -364,6 +468,47 @@ try {
   assert.equal(await p2.locator('.tray-btn.sound').innerText(), '🔇');
   step('mute toggle persists across reloads');
   await p2.close();
+
+  // ---- reduced motion: same board and dashboard, static end states (no snap, blink or pulse)
+  const rmCtx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  const p3 = await rmCtx.newPage();
+  p3.on('pageerror', (e) => errors.push(String(e)));
+  p3.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  await p3.goto(`${url}?fresh=1&case=friday-1802&briefing=0`);
+  await p3.locator('#boot button.primary').click();
+  await p3.locator('.tin input').waitFor();
+  await p3.locator('.tin input').fill('crontab -l');
+  await p3.locator('.tin input').press('Enter');
+  await p3.evaluate(() => {
+    for (const w of document.querySelectorAll('.window')) w.classList.add('min');
+  });
+  await p3.locator('.icon[data-app="board"]').dblclick();
+  const b3 = p3.locator('.window[data-app="board"]');
+  await b3.locator('.obs-lanes').waitFor();
+  await p3.evaluate(() => {
+    window.__game.pin({ kind: 'line', text: '15 3 * * 6 /home/eunjae/bin/ledger-backup.sh >> /home/eunjae/log/backup.log 2>&1', source: 'pay-api-01 · crontab -l' });
+    window.__game.pin({ kind: 'line', text: 'Nov 14 03:15:40 pay-api-01 payment-api[2817]: http: Accept error: accept tcp [::]:8080: accept4: too many open files; retrying in 1s', source: 'pay-api-01 · journalctl' });
+  });
+  await b3.locator('.obs-lanes .obs-mk.k-cron').waitFor();
+  await b3.locator('.obs-lanes .obs-mk.k-error').waitFor();
+  assert.equal(await b3.locator('.snap').count(), 0, 'no snap under reduced motion');
+  await b3.locator('.obs-lanes .obs-mk.k-error').click();
+  assert.equal(await b3.locator('.flash').count(), 0, 'jump-to-row without the flash animation');
+  const boardAnims = await p3.evaluate(() => document.getAnimations().filter((a) => a.effect?.target?.closest?.('.window[data-app="board"]')).length);
+  assert.equal(boardAnims, 0);
+  await b3.locator('.titlebar button.close').click();
+  await p3.locator('.icon[data-app="dashboard"]').dblclick();
+  const d3 = p3.locator('.window[data-app="dashboard"]');
+  await d3.locator('.obs-tsp .obs-chart svg').first().waitFor();
+  assert.equal(await d3.locator('.blink').count(), 0, 'no blink under reduced motion');
+  await d3.locator('.obs-range').selectOption('1h');
+  const l3 = await d3.locator('.obs-tsp .obs-chart').first().getAttribute('data-last');
+  await p3.waitForFunction((v) => document.querySelector('.window[data-app="dashboard"] .obs-tsp .obs-chart').dataset.last !== v, l3, { timeout: 10000 });
+  assert.equal(await d3.locator('.obs-tail.arrive').count(), 0, 'new points appear without the pulse');
+  assert.ok((await d3.locator('.obs-tail').count()) >= 1);
+  assert.equal(await p3.evaluate(() => document.getAnimations().filter((a) => a.effect?.target?.closest?.('.obs')).length), 0);
+  await rmCtx.close();
+  step('reduced motion: pins land and graphs still update, with no snap, blink, pulse or flash');
 
   assert.deepEqual(errors, []);
   console.log('e2e passed');

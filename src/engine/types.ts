@@ -373,7 +373,14 @@ export interface CaseFile {
   stickies: Sticky[];
   notifications: NotificationDef[];
   terminalTabs: TabDef[];
+  /** Dashboard snapshot as ASCII lines (shown as a text panel when `panels` is absent). */
   dashboard: string[];
+  /**
+   * Optional structured dashboard (docs/case-format.md §6): time-series, stat panels and
+   * annotations drawn by the dashboard app and linked to the evidence board. Without it the
+   * ASCII `dashboard` lines are shown in a text panel.
+   */
+  panels?: DashboardDef;
   clues: ClueDef[];
   /**
    * Report slots (any subset of cause / sequence / responsibility, in display order).
@@ -501,4 +508,73 @@ export interface OpeningDef {
     /** Lines added under the folded checklist in the notebook (what to do next). */
     after: string[];
   };
+}
+
+// ------------------------------------------------------------------ dashboard panels (optional)
+
+/** Named series colour (the UI maps it to its palette; the shape/label carries the meaning too). */
+export type SeriesColor = 'green' | 'yellow' | 'red' | 'blue' | 'purple' | 'grey';
+
+export interface SeriesDef {
+  name: string;
+  /**
+   * Value changes as [time, value]; `null` = no data from that time on. With `interp: 'step'`
+   * (default) a value holds until the next point; 'linear' draws a ramp between points.
+   */
+  points: [LocalTime, number | null][];
+  interp?: 'step' | 'linear';
+  /** Deterministic noise, as a fraction of the value (0.05 = ±5 %). */
+  jitter?: number;
+  color?: SeriesColor;
+}
+
+export interface ThresholdDef {
+  value: number;
+  /** Shown on the line, e.g. '알림 기준 20%' or '한도 4096'. */
+  label: string;
+}
+
+export interface TimeSeriesPanelDef {
+  id: string;
+  title: string;
+  /** Appended to values: '%', 'ms', '/분' … */
+  unit?: string;
+  min?: number;
+  max?: number;
+  series: SeriesDef[];
+  thresholds?: ThresholdDef[];
+  /** 'half' panels sit two per row on wide screens; default 'full'. */
+  width?: 'full' | 'half';
+  /** Shown from the panel menu ("설명"). */
+  description?: string;
+}
+
+export interface StatPanelDef {
+  title: string;
+  /** Display text ('42%', '0건'); `null` = the panel has no data ("데이터 없음"). */
+  value: string | null;
+  /** Colour plus a word on the panel; 'none' = neutral. */
+  state?: 'ok' | 'warn' | 'crit' | 'none';
+  note?: string;
+}
+
+export type AnnotationKind = 'deploy' | 'cron' | 'alert' | 'error' | 'event';
+
+export interface DashboardDef {
+  title: string;
+  /** Window the snapshot covers and its sample step (minutes). */
+  from: LocalTime;
+  to: LocalTime;
+  stepMin: number;
+  /**
+   * Live dashboard: after `to` the series keep their last values up to the in-game clock and
+   * the graphs grow as the clock runs. Without it the panels stop at `to` (an archive).
+   */
+  live?: boolean;
+  timeseries: TimeSeriesPanelDef[];
+  stats?: StatPanelDef[];
+  /** Annotations already on the archived dashboard (what the snapshot itself shows). */
+  annotations?: { at: LocalTime; label: string; kind: AnnotationKind }[];
+  /** Extra labelled ticks on the time axis (like the ASCII snapshot's 03:15 / 05:40). */
+  marks?: LocalTime[];
 }

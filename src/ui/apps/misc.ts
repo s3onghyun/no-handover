@@ -1,18 +1,119 @@
 import { clear, download, h } from '../dom.ts';
 import { t } from '../../i18n.ts';
 import type { AppDef } from '../wm.ts';
+import { parseLocal } from '../../engine/time.ts';
+import { caseAnnotations, dataWindow, fmtHM, logRows, pinAnnotations, pinLevel, rangeOptions, type Level, type RangeId } from '../dashboard/derive.ts';
+import { liveUpdaters, logsBody, logTools, panel, statPanel, timeSeriesPanel, toolbar } from '../dashboard/panels.ts';
+import { LIVE_TICK_MS } from '../motion.ts';
 
 export const dashboardApp: AppDef = {
   id: 'dashboard',
   title: () => t('app.dashboard'),
   icon: '📈',
-  w: 760,
-  h: 470,
+  w: 1000,
+  h: 640,
   mount(body, ctx) {
-    const pre = h('pre.dash', null, ctx.game.cs.dashboard.join('\n'));
-    body.appendChild(pre);
-    ctx.game.open('dashboard');
-    return {};
+    const g = ctx.game;
+    const cp = g.cs.panels;
+    const root = h('div.obs.obs-dash');
+    body.appendChild(root);
+    const keyIds = new Set(g.cs.clues.filter((c) => c.key).map((c) => c.id));
+    const marks = (cp?.marks ?? []).map(parseLocal);
+    let rangeId: RangeId = cp ? 'panel' : 'fit';
+    let refreshedAt = g.now();
+    let showPins = true;
+    let live = !!cp?.live;
+    let mounted = false;
+    let query = '';
+    const levels = new Set<Level>(['error', 'warn', 'info']);
+    const tsPanels: HTMLElement[] = [];
+    const currentRange = () => {
+      const opts = rangeOptions({ now: g.now(), pins: g.st.pins, panels: cp, rel: ['1h', '3h', '12h', '24h', '3d'], panelLabel: '스냅샷 전체' });
+      return { opts, opt: opts.find((o) => o.id === rangeId) ?? opts[0] };
+    };
+
+    const render = () => {
+      clear(root);
+      tsPanels.length = 0;
+      const pins = g.st.pins;
+      const { opts, opt } = currentRange();
+      const range = opt.range;
+      const data = cp ? dataWindow(cp, refreshedAt) : undefined;
+      const anns = [...(showPins ? pinAnnotations(pins, range).anns : []), ...caseAnnotations(cp)];
+      const pinToggle = h('label.obs-check', null, h('input', { type: 'checkbox', checked: showPins, onchange: (e: Event) => ((showPins = (e.target as HTMLInputElement).checked), render()) }), ' 핀 주석');
+      const liveBtn = cp?.live
+        ? h('button.obs-btn.obs-live', { type: 'button', 'aria-pressed': String(live), title: '게임 시계를 따라 그래프를 계속 갱신', onclick: () => ((live = !live), render()) }, h('span.obs-dot', { 'aria-hidden': 'true' }), live ? ' 실시간' : ' 일시정지')
+        : null;
+      root.appendChild(
+        toolbar({
+          crumbs: [t('app.dashboard'), cp?.title ?? g.cs.title],
+          badge: cp?.live ? undefined : '보관본',
+          options: opts,
+          value: opt.id,
+          onRange: (id) => ((rangeId = id), render()),
+          onRefresh: () => ((refreshedAt = g.now()), render()),
+          refreshedAt,
+          extra: [pinToggle, ...(liveBtn ? [liveBtn] : [])],
+        }),
+      );
+      const grid = h('div.obs-grid');
+      root.appendChild(grid);
+      if (cp) {
+        const stats = cp.stats ?? [];
+        const span = stats.length <= 2 ? 'half' : stats.length === 3 ? 'third' : stats.length === 4 ? 'quarter' : 'sixth';
+        for (const st of stats) grid.appendChild(statPanel({ ...st, span, blink: !mounted }));
+        for (const def of cp.timeseries) {
+          const el = timeSeriesPanel({ def, range, stepMin: cp.stepMin, anns, marks, now: refreshedAt, data, blinkOnMount: !mounted });
+          tsPanels.push(el);
+          grid.appendChild(el);
+        }
+      } else {
+        grid.appendChild(panel({ title: g.cs.dashboard[0] ?? t('app.dashboard'), cls: 'obs-text' }, h('pre.dash', null, g.cs.dashboard.slice(1).join('\n'))));
+      }
+      const counts: Record<Level, number> = { error: 0, warn: 0, info: 0 };
+      for (const p of logRows(pins, range, { query: '', levels: new Set(['error', 'warn', 'info']) })) counts[pinLevel(p)]++;
+      const host = h('div.obs-logshost', { 'aria-live': 'polite' });
+      const fill = () => {
+        clear(host);
+        const rows = logRows(pins, range, { query, levels });
+        const outside = pins.filter((p) => p.onTimeline && p.ts !== null).length - logRows(pins, range, { query: '', levels: new Set(['error', 'warn', 'info']) }).length;
+        host.appendChild(logsBody({ rows, query, levels, counts, onQuery: () => {}, onLevel: () => {}, keyIds, empty: pins.length ? '이 구간에 핀한 증거가 없어요.' : t('board.empty'), hiddenOutside: outside, onShowAll: () => ((rangeId = 'fit'), render()) }));
+      };
+      fill();
+      const tools = logTools(
+        {
+          query,
+          levels,
+          counts,
+          onQuery: (q) => ((query = q), fill()),
+          onLevel: (l) => {
+            if (levels.has(l)) levels.delete(l);
+            else levels.add(l);
+            for (const b of root.querySelectorAll<HTMLButtonElement>('.obs-lvbtn')) b.setAttribute('aria-pressed', String(levels.has(b.className.match(/lv-(\w+)/)![1] as Level)));
+            fill();
+          },
+        },
+        '핀한 증거 검색',
+      );
+      grid.appendChild(panel({ title: '핀한 증거 — 증거 보드와 연결', cls: 'obs-logp', tools, menu: [{ label: `${t('app.board')} 열기`, run: () => ctx.wm.open('board') }] }, host));
+      mounted = true;
+    };
+    render();
+    // live graphs: the in-game clock drives new points; only the charts redraw (focus, menus and
+    // the search box stay put). Paused by the 실시간 toggle, a minimised window or a hidden tab.
+    const timer = setInterval(() => {
+      if (!root.isConnected) return clearInterval(timer);
+      if (!live || !cp || document.hidden || root.closest('.window.min')) return;
+      refreshedAt = g.now();
+      const { opt } = currentRange();
+      const data = dataWindow(cp, refreshedAt);
+      if (opt.range.to < data.from) return;
+      for (const el of tsPanels) liveUpdaters.get(el)?.({ range: opt.range, now: refreshedAt, data });
+      const rt = root.querySelector('.obs-rt');
+      if (rt) rt.textContent = fmtHM(refreshedAt);
+    }, LIVE_TICK_MS);
+    g.open('dashboard');
+    return { refresh: (type?: string) => (type === 'pins' ? render() : undefined) };
   },
 };
 
