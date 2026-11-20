@@ -20,9 +20,10 @@ import { runBriefing } from './ui/briefing.ts';
 import { renderHintPanel } from './ui/hintpanel.ts';
 import { mountObjectives } from './ui/objectives.ts';
 import { applyMotionPref, showMoment } from './ui/motion.ts';
-import { mountTour, tourKey, TOUR_SEEN_KEY } from './ui/tour.ts';
+import { flashAnchor, mountTour, toolGuide, tourKey, TOUR_SEEN_KEY } from './ui/tour.ts';
+import { EXPERIENCE_KEY, experienceRules, parseExperience, shouldAskExperience, type Experience } from './engine/experience.ts';
 import { goalCard } from './ui/goal.ts';
-import type { ClueDef } from './engine/types.ts';
+import type { ClueDef, TourStep } from './engine/types.ts';
 import type { Message } from './engine/build.ts';
 import type { ScoreResult } from './engine/scoring.ts';
 
@@ -43,10 +44,14 @@ if (params.has('fresh')) {
     storage.remove(tourKey(e.id));
   }
   storage.remove(TOUR_SEEN_KEY);
+  storage.remove(EXPERIENCE_KEY); // asked again on the lock screen
   storage.remove(PROGRESS_KEY);
   storage.remove(CURRENT_KEY);
 }
 let progress: Progress = parseProgress(storage.get(PROGRESS_KEY));
+/** "터미널이 익숙해요 / 처음이에요" (src/engine/experience.ts): null until the player has chosen. */
+let experience: Experience | null = parseExperience(storage.get(EXPERIENCE_KEY));
+const rules = () => experienceRules(experience);
 const saveProgress = () => storage.set(PROGRESS_KEY, JSON.stringify(progress));
 const ENTRY = campaign.pick(params.get('case'), storage.get(CURRENT_KEY), progress);
 const CASE = ENTRY.cs!;
@@ -109,6 +114,9 @@ const notifBtn = h('button.tray-btn', { title: t('tb.notifications'), 'aria-labe
 const hintBtn = h('button.tray-btn', { title: t('tb.hint'), dataset: { tour: 'hint' } }, `💡 ${t('tb.hint')}`);
 const goalBtn = h('button.tray-btn.goalbtn', { title: t('goal.title'), 'aria-label': t('goal.title'), dataset: { tour: 'goal' } }, `🎯 ${t('goal.short')}`);
 const ptBtn = h('button.tray-btn', { title: t('app.playtest') }, '📋');
+// "터미널이 익숙해요": the coach marks fold into this one entry (only in cases that have a tour)
+const guideBtn = h('button.tray-btn.guidebtn', { title: t('guide.open'), 'aria-label': t('guide.open'), dataset: { tour: 'guide' } }, `🧭 ${t('guide.short')}`);
+const syncGuideBtn = () => (guideBtn.hidden = !(game.cs.tour?.steps.length && !rules().coachMarks));
 const helpBtn = h('button.tray-btn', { title: t('tb.help'), 'aria-label': t('tb.help'), dataset: { tour: 'help' } }, '❓');
 const soundBtn = h('button.tray-btn.sound', { 'aria-pressed': 'false' });
 const volume = h('input.vol', { type: 'range', min: 0, max: 100, step: 5, title: t('tb.volume'), 'aria-label': t('tb.volume') }) as HTMLInputElement;
@@ -149,7 +157,7 @@ const skipBtn =
   nextAfterTutorial && !progress.solved.includes(CASE.id)
     ? h('button.tray-btn.skiptut', { title: `${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」`, onclick: () => confirm(`${t('case.skipShort')} → ${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」?`) && skipTutorial() }, `⏭ ${t('case.skipShort')}`)
     : null;
-const taskbar = h('div#taskbar', null, h('div.brand', null, t('game.title'), h('small', null, t('game.titleKo'))), tasks, skipBtn, goalBtn, hintBtn, notifBtn, helpBtn, h('div.soundctl', null, soundBtn, volume), ptBtn, clock);
+const taskbar = h('div#taskbar', null, h('div.brand', null, t('game.title'), h('small', null, t('game.titleKo'))), tasks, skipBtn, guideBtn, goalBtn, hintBtn, notifBtn, helpBtn, h('div.soundctl', null, soundBtn, volume), ptBtn, clock);
 const toasts = h('div.toasts', { 'aria-live': 'polite' });
 document.body.append(desktop, taskbar, toasts);
 
@@ -367,8 +375,52 @@ helpBtn.onclick = () => {
   const ul = h('ul.help-list');
   for (const k of ['help.l1', 'help.l2', 'help.l3', 'help.l4', 'help.l5'] as const) ul.appendChild(h('li', null, t(k)));
   pop.appendChild(ul);
+  // the first-run choice, changeable here; and the tool guide for anyone who wants it again
+  const expBtn = (e: Experience, label: string) =>
+    h('button.ghost-btn', { type: 'button', 'aria-pressed': String((experience ?? 'new') === e), dataset: { exp: e }, onclick: () => (setExperience(e, 'help'), closePop(), helpBtn.click()) }, label);
+  pop.appendChild(h('div.exp-set', { role: 'group', 'aria-label': t('exp.setting') }, h('span', null, `${t('exp.setting')}:`), expBtn('familiar', t('exp.familiar')), expBtn('new', t('exp.new'))));
+  if (guideSteps.length) pop.appendChild(h('div.help-acts', null, h('button.ghost-btn.guide-open', { type: 'button', onclick: openGuide }, `🧭 ${t('guide.open')}`)));
   document.body.appendChild(pop);
 };
+
+/** Coach-mark lines for the tool guide: the tutorial's tool marks, then this case's own. */
+const guideSteps: TourStep[] = (() => {
+  const all = [...(CAMPAIGN.find((e) => e.tutorial)?.cs?.tour?.steps ?? []), ...(game.cs.tour?.steps ?? [])];
+  return all.filter((s, i) => all.findIndex((x) => x.id === s.id) === i);
+})();
+function openGuide(): void {
+  closePop();
+  game.log('guide');
+  // Esc closes the guide and hands focus back to the terminal prompt (as "알겠어요" does for a coach mark)
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    closePop();
+    document.querySelector<HTMLElement>('.window[data-app="terminal"]:not(.min) .tin input')?.focus({ preventScroll: true });
+  };
+  pop = h(
+    'div.popover.guidepop',
+    { role: 'dialog', 'aria-label': t('guide.title'), onkeydown: onKey },
+    h('h3', null, `🧭 ${t('guide.title')}`),
+    h('p.hp-intro', null, t('guide.intro')),
+    toolGuide(guideSteps, (s) => {
+      game.log('guide-pick', { step: s.id });
+      flashAnchor(s.app);
+    }),
+  );
+  document.body.appendChild(pop);
+  (pop.querySelector('button') as HTMLElement | null)?.focus();
+}
+guideBtn.onclick = () => (pop?.classList.contains('guidepop') ? closePop() : openGuide());
+
+function setExperience(e: Experience, via: 'boot' | 'help'): void {
+  experience = e;
+  storage.set(EXPERIENCE_KEY, e);
+  game.log('experience', { choice: e, via });
+  syncGuideBtn();
+  tourUi?.refresh();
+}
+syncGuideBtn();
 
 // ------------------------------------------------------------------ events
 let rafPending = false;
@@ -417,9 +469,12 @@ game.on('mail', (id) => {
 const memoNote = game.cs.notes.find((n) => n.highlight !== undefined)?.id;
 game.on('toast', (text) => ctx.toast(h('div', null, String(text)), () => wm.open('notes', memoNote)));
 game.on('note', (id) => {
-  wm.open('notes', id);
-  // the memo pops up by itself while the player works in the terminal: keep its 📌 column uncovered
-  wm.keepClearOf('notes', 'terminal');
+  // "터미널이 익숙해요": no window opens by itself; the scene's toast still offers to open it
+  if (rules().autoWindows) {
+    wm.open('notes', id);
+    // the memo pops up by itself while the player works in the terminal: keep its 📌 column uncovered
+    wm.keepClearOf('notes', 'terminal');
+  } else game.log('auto-window-held', { app: 'notes', id });
 });
 game.on('friction', () => void audio.play('sfx.error'));
 game.on('hint-panel', () => {
@@ -500,7 +555,7 @@ function revealDesktop(first: boolean) {
   if (first && !game.cs.opening) wm.open('mail', 'brief');
   wm.open('terminal');
   objectivesUi.refresh();
-  tourUi ??= mountTour(game, { blocked: () => briefingActive || !game.st.unlocked || game.st.finished || !!document.querySelector('.moment, #briefing') });
+  tourUi ??= mountTour(game, { blocked: () => briefingActive || !game.st.unlocked || game.st.finished || !!document.querySelector('.moment, #briefing'), collapsed: () => !rules().coachMarks });
   setTimeout(() => tourUi?.refresh(), 1200);
   if (first) {
     void audio.play('sfx.pulse');
@@ -537,6 +592,7 @@ function playBriefing(replay: boolean) {
 function start(first: boolean) {
   game.st.unlocked = true;
   game.log(first ? 'unlock' : 'resume');
+  game.log('experience', { choice: experience, via: 'stored' });
   audio.unlock();
   boot.remove();
   if (first && game.cs.opening && params.get('briefing') !== '0') playBriefing(false);
@@ -545,6 +601,24 @@ function start(first: boolean) {
 }
 
 const resumable = game.st.unlocked && game.st.playMs > 0;
+/** First run on this profile: the unlock button becomes the "터미널이 익숙해요 / 처음이에요" choice. */
+const askExperience = shouldAskExperience(experience, resumable);
+const choose = (e: Experience) => {
+  setExperience(e, 'boot');
+  start(true);
+};
+const expChoice = h(
+  'div.expq',
+  { role: 'group', 'aria-labelledby': 'expq-q' },
+  h('p.expq-q#expq-q', null, t('exp.question')),
+  h(
+    'div.expq-opts',
+    null,
+    h('button.exp-familiar', { type: 'button', dataset: { exp: 'familiar' }, onclick: () => choose('familiar') }, h('span', null, `⌨ ${t('exp.familiar')}`), h('small', null, t('exp.familiarSub'))),
+    h('button.primary.exp-new', { type: 'button', dataset: { exp: 'new' }, onclick: () => choose('new'), autofocus: true }, h('span', null, `🌱 ${t('exp.new')}`), h('small', null, t('exp.newSub'))),
+  ),
+  h('p.expq-note', null, t('exp.note')),
+);
 /** Tutorial only: experienced players jump to the next case (Case 0 is marked skipped). */
 const skipLink = skipBtn && nextAfterTutorial ? h('button.linkbtn.skip', { onclick: skipTutorial }, `${t('case.skip')} ${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」`) : null;
 
@@ -567,7 +641,10 @@ function showCaseList(): void {
       ),
     );
   }
-  const close = () => dlg.remove();
+  const close = () => {
+    dlg.remove();
+    if (boot.isConnected) focusBoot();
+  };
   const dlg = h('div#cases', { role: 'dialog', 'aria-label': t('case.listTitle') }, h('div.cl-card', null, h('h3', null, t('case.listTitle')), list, h('button.primary', { onclick: close }, t('case.close'))));
   document.body.appendChild(dlg);
 }
@@ -585,12 +662,17 @@ const boot = h(
     h('div.status', null, game.cs.boot?.status ?? t('boot.status')),
     resumable
       ? [h('button.primary', { onclick: () => start(false) }, t('boot.resume')), h('button', { onclick: () => document.dispatchEvent(new CustomEvent('nh-reset')) }, t('boot.restart'))]
-      : h('button.primary', { onclick: () => start(true), autofocus: true }, game.cs.boot?.unlock ?? t('boot.unlock')),
+      : askExperience
+        ? expChoice
+        : h('button.primary', { onclick: () => start(true), autofocus: true }, game.cs.boot?.unlock ?? t('boot.unlock')),
     skipLink,
     h('div', null, h('button.linkbtn.cases', { onclick: showCaseList }, `☰ ${t('case.list')}`)),
     h('div.fine', null, game.cs.boot?.note ?? t('boot.note'), h('br'), `${game.cs.company}(가칭) · 모든 인물·회사·서버는 가상입니다.`),
   ),
 );
 document.body.appendChild(boot);
+/** Keyboard players start on the lock screen's main button (the first-run choice or unlock). */
+const focusBoot = () => (boot.querySelector('[autofocus]') as HTMLElement | null)?.focus();
+focusBoot();
 renderIcons();
 renderClock();

@@ -6,16 +6,24 @@ import { t } from '../i18n.ts';
 import type { Game } from '../engine/game.ts';
 import type { PanelSection } from '../engine/hintpanel.ts';
 import { DEFAULT_ANSWER_COST } from '../engine/hintpanel.ts';
+import { playRecord } from '../engine/record.ts';
 
 export function renderHintPanel(game: Game, opts: { focus?: string; rerender: () => void }): HTMLElement {
   const senior = !!game.st.settings.senior;
-  const n = game.hintCount();
+  const rec = playRecord(game);
   const root = h(
     'div.hintpanel',
     null,
     h('h3', null, `💡 ${t('hint.title')}`),
     h('p.hp-intro', null, t('hint.intro')),
-    h('p.hp-record', null, senior ? t('hint.senior', { cost: game.cs.hints.answerCost ?? DEFAULT_ANSWER_COST }) : t('hint.record', { n })),
+    // two separate counters: opening the panel is free and never counted; only 방향/정답 steps are
+    h(
+      'dl.hp-counts',
+      null,
+      h('div.hp-count.hp-opens', null, h('dt', null, t('hint.opens')), h('dd', null, t('hint.opensVal', { n: rec.panelOpens }))),
+      h('div.hp-count.hp-steps', null, h('dt', null, t('hint.steps')), h('dd', null, t('hint.stepsVal', { n: rec.hints }))),
+    ),
+    h('p.hp-record', null, senior ? t('hint.senior', { cost: game.cs.hints.answerCost ?? DEFAULT_ANSWER_COST }) : t('hint.record')),
   );
   for (const sec of game.hintPanel()) root.appendChild(section(game, sec, opts));
   return root;

@@ -107,7 +107,7 @@ test('hint record: no score penalty by default; senior mode (?senior=1) takes th
   assert.equal(playRecord(s).senior, true);
 });
 
-test('hint record: time and commands stop at the finish; "힌트 N회 · 소요 · 명령 수"', () => {
+test('hint record: time and commands stop at the finish; "힌트 단계 N개 · 소요 · 명령 수"', () => {
   const g = new Game(c0);
   run(g, 'history');
   tickFor(g, 65_000, 1000);
@@ -119,7 +119,7 @@ test('hint record: time and commands stop at the finish; "힌트 N회 · 소요 
   assert.equal(r.commands, 2);
   assert.equal(r.playMs, 65_000);
   assert.equal(r.hints, 0);
-  assert.equal(recordLine(r), '힌트 0회 · 1분 05초 · 명령 2개');
+  assert.equal(recordLine(r), '힌트 단계 0개 · 1분 05초 · 명령 2개');
   assert.equal(fmtDuration(48_400), '48초');
   assert.deepEqual((g.playtestReport() as { summary: { record: unknown } }).summary.record, r);
 });
@@ -133,8 +133,8 @@ test('result card: title, case, time, commands, hints, badge — and nothing fro
   const card = resultCard(g, 'Case 3');
   assert.equal(card.caseTitle, c3.title);
   assert.equal(card.headline, '인수인계 완료');
-  assert.equal(card.badge, '힌트 0회');
-  assert.deepEqual(card.stats.map((s) => s.label), ['소요', '명령', '힌트', '제출']);
+  assert.equal(card.badge, '힌트 단계 0');
+  assert.deepEqual(card.stats.map((s) => s.label), ['소요', '명령', '힌트 단계', '제출']);
   const text = JSON.stringify(card);
   const spoilers = [
     ...c3.accusation.slots.flatMap((s) => s.options.map((o) => o.text)),
@@ -380,4 +380,31 @@ test('audio: key-click variants exist and play with a stereo pan', async () => {
   await a.play('sfx.key-1');
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(f.pans.length, 1, 'no panner without a pan');
+});
+
+// ------------------------------------------------------------------ panel opens vs hint steps
+
+test('hint record: opening the 💡 panel is counted apart from hint steps and never touches the record line or badge', () => {
+  const g = new Game(c3);
+  // the UI logs one 'hint-panel' per opening (tray, report slot, `hint`); a summary is free too
+  g.log('hint-panel', { focus: null });
+  g.log('hint-panel', { focus: 'cause' });
+  g.openHint('cause', 'summary');
+  g.log('hint-panel', { focus: null });
+  let r = playRecord(g);
+  assert.equal(r.panelOpens, 3);
+  assert.equal(r.hints, 0, 'opening the panel and reading the summary are not hint steps');
+  assert.match(recordLine(r), /^힌트 단계 0개 · /);
+  assert.ok(!recordLine(r).includes('3'), 'panel opens stay out of the record line');
+  g.submit({ cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account'] });
+  assert.equal(resultCard(g, 'Case 3').badge, '힌트 단계 0', 'panel opens do not cost the badge');
+  tickFor(g, 2000, 1000);
+  g.log('hint-panel', { focus: null }); // after the finish: not counted
+  r = playRecord(g);
+  assert.equal(r.panelOpens, 3);
+  const d = new Game(c3);
+  d.log('hint-panel', { focus: null });
+  d.openHint('cause', 'summary');
+  d.openHint('cause', 'direction');
+  assert.deepEqual([playRecord(d).panelOpens, playRecord(d).hints], [1, 1]);
 });

@@ -141,7 +141,7 @@ export const playtestApp: AppDef = {
         rung2: { t: number; nudge: string; why?: string }[];
         rung3: { t: number; slot?: string; key?: string; rung?: string }[];
         asks?: { t: number; prompt: string; from: string }[];
-        record?: { hints: number; asks: number; commands: number; playMs: number };
+        record?: { hints: number; panelOpens?: number; asks: number; commands: number; playMs: number };
         frictionCount: number;
         cluesFound: { id: string }[];
         keyCluesTotal: number;
@@ -197,7 +197,7 @@ export const playtestApp: AppDef = {
           h('tr', null, h('th', null, '2단(동료 넛지)'), h('td', null, s.rung2.map((x) => `${mmss(x.t)} ${x.nudge}${x.why === 'ask' ? ' (물어봄)' : ''}`).join(', ') || '—')),
           h('tr', null, h('th', null, '"뭐부터 봐요?"'), h('td', null, (s.asks ?? []).map((x) => `${mmss(x.t)} → ${x.from}`).join(', ') || '—')),
           h('tr', null, h('th', null, '3단(💡 방향·정답)'), h('td', null, s.rung3.map((x) => `${mmss(x.t)} ${x.key ?? x.slot}${x.rung ? `·${x.rung === 'answer' ? '정답' : '방향'}` : ''}`).join(', ') || '—')),
-          h('tr', null, h('th', null, '기록 (힌트 · 명령)'), h('td', null, s.record ? `힌트 ${s.record.hints}회 · 명령 ${s.record.commands}개` : '—')),
+          h('tr', null, h('th', null, '기록 (힌트 단계 · 명령)'), h('td', null, s.record ? `힌트 단계 ${s.record.hints}개 · 명령 ${s.record.commands}개 · 💡 패널 ${s.record.panelOpens ?? 0}번 열람(세지 않음)` : '—')),
           h('tr', null, h('th', null, '명령 막힘(오타·미지원·차단)'), h('td', null, String(s.frictionCount))),
           h('tr', null, h('th', null, '핵심 단서'), h('td', null, `${keyFound} / ${s.keyCluesTotal}`)),
           h('tr', null, h('th', null, '제출'), h('td', null, String(s.submissions.length))),

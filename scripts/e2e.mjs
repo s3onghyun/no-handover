@@ -11,7 +11,9 @@
 // fourth page with reduced motion where the tour, the aha moment and typing never block each other,
 // and "투어 건너뛰기" ends Case 0's tour. A fifth page plays Case 0 at 1280x800 with single mouse
 // clicks at element centres (the blind playtester's tool): board icon, taskbar, Enter, and pins
-// with the memo and the checklist on screen.
+// with the memo and the checklist on screen. The first launch asks "터미널이 익숙해요 / 처음이에요"
+// once; the main run answers 처음이에요 (the tour), a sixth page answers 익숙해요 by keyboard (no
+// coach marks, a 도구 안내 entry, no window opening by itself) and switches back in ❓.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
@@ -85,7 +87,17 @@ try {
   await page.locator('#cases button.primary').click();
   step('first launch: Case 0 · 튜토리얼 lock screen with a skip link to Case 1; case list shows 5 rungs, Cases 1–3 locked');
 
-  await page.locator('#boot button.primary').click();
+  // first run: the unlock button is the one-time "터미널이 익숙해요 / 처음이에요" choice
+  const expq = page.locator('#boot .expq');
+  await expq.waitFor();
+  assert.equal(await expq.locator('button').count(), 2);
+  assert.match(await expq.locator('.exp-familiar').innerText(), /터미널이 익숙해요/);
+  assert.match(await expq.locator('.exp-new').innerText(), /처음이에요/);
+  assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('exp-new')), true, 'keyboard focus starts on a choice');
+  await shot('case0-00-experience.png');
+  await page.locator('#boot .exp-new').click();
+  assert.equal(await page.evaluate(() => localStorage.getItem('no-handover:experience')), 'new');
+  step('first run asks once: 터미널이 익숙해요 / 처음이에요 → 처음이에요 (tour on), saved');
   let t0 = Date.now();
   await page.locator('#briefing').waitFor();
   await page.locator('#briefing').waitFor({ state: 'detached', timeout: 30000 });
@@ -154,11 +166,13 @@ try {
   await causeSec.locator('[data-rung="summary"] button').click();
   await causeSec.locator('[data-rung="direction"] button').click();
   await causeSec.locator('.hp-dir', { hasText: 'Mounted on' }).waitFor();
-  assert.match(await hp.locator('.hp-record').innerText(), /힌트 3회/);
+  assert.equal(await hp.locator('.hp-opens dd').innerText(), '1번 · 세지 않음');
+  assert.equal(await hp.locator('.hp-steps dd').innerText(), '3개 · 방향·정답');
+  assert.match(await hp.locator('.hp-record').innerText(), /패널을 열거나 요약을 보는 건 세지 않아요/);
   await shot('polish-01-hint-panel.png');
   await page.mouse.click(700, 300);
   await hp.waitFor({ state: 'detached' });
-  step('`hint` → 💡 panel: 요약 (free) → 방향 → 정답 behind a second confirm, for the checklist item and the cause slot; record says 힌트 3회');
+  step('`hint` → 💡 panel: 요약 (free) → 방향 → 정답 behind a second confirm, for the checklist item and the cause slot; counters: panel opened 1번 (not counted) apart from 3 hint steps');
 
   await run('df -h');
   await todoItem('df').and(page.locator('.done')).waitFor();
@@ -252,7 +266,8 @@ try {
   await page.evaluate(() => document.querySelector('.window[data-app="report"]').classList.add('max'));
   await page.waitForTimeout(400);
   await shot('case0-03-debrief.png');
-  assert.match(await rep0.locator('.record .rec-line').innerText(), /^힌트 3회 · (\d+분 )?\d+초 · 명령 \d+개$/);
+  assert.match(await rep0.locator('.record .rec-line').innerText(), /^힌트 단계 3개 · (\d+분 )?\d+초 · 명령 \d+개$/);
+  assert.match(await rep0.locator('.record .rec-panel').innerText(), /💡 패널은 \d+번 열었어요 — 패널을 연 횟수는 세지 않아요/);
   assert.equal(await rep0.locator('.badge-nohint').count(), 0, 'no badge after hints');
   assert.equal(await rep0.locator('.scorebox').innerText().then((x) => /−\d/.test(x)), false, 'no hint penalty outside senior mode');
   await rep0.locator('.cardbox').scrollIntoViewIfNeeded();
@@ -266,7 +281,7 @@ try {
   assert.equal(png.subarray(1, 4).toString(), 'PNG');
   assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1200, 630]);
   rmSync(dlDir, { recursive: true, force: true });
-  step('debrief: record "힌트 3회 · 소요 · 명령 수", no penalty; 결과 카드 downloads as a 1200×630 PNG');
+  step('debrief: record "힌트 단계 3개 · 소요 · 명령 수" with panel opens noted as not counted, no penalty; 결과 카드 downloads as a 1200×630 PNG');
   assert.match(await rep0.locator('.nextcase').innerText(), /다음 사건 → Case 1 「밤에만 실패하는 스크립트」/);
   step(`a wrong report gets 서진's short reply and 지훈's nudge; the second solves Case 0 (${total0.replace(/\s+/g, ' ')})`);
 
@@ -274,6 +289,7 @@ try {
   await page.locator('#boot .caselabel', { hasText: 'Case 1' }).waitFor();
   assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('no-handover:campaign'))).solved, ['case0-wiki']);
   assert.equal(await page.locator('#boot .skip').count(), 0);
+  assert.equal(await page.locator('#boot .expq').count(), 0, 'the experience question is asked once');
   await shot('case1-01-boot.png');
   step('debrief → 다음 사건: Case 1 lock screen; Case 0 recorded as solved');
 
@@ -612,8 +628,8 @@ try {
   await page.evaluate(() => document.querySelector('.window[data-app="report"]').classList.add('max'));
   await page.waitForTimeout(400);
   await shot('04-debrief.png');
-  assert.match(await report.locator('.record .rec-line').innerText(), /^힌트 0회 · /);
-  await report.locator('.badge-nohint', { hasText: '힌트 0회' }).waitFor();
+  assert.match(await report.locator('.record .rec-line').innerText(), /^힌트 단계 0개 · /);
+  await report.locator('.badge-nohint', { hasText: '힌트 단계 0' }).waitFor();
   await report.locator('.cardbox').scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
   await shot('polish-03-result-card.png');
@@ -621,7 +637,7 @@ try {
     const [dl3] = await Promise.all([page.waitForEvent('download'), report.locator('.card-dl').click()]);
     await dl3.saveAs(join(shots, 'result-card-case3.png'));
   }
-  step('Case 3 debrief: 힌트 0회 badge and the result card');
+  step('Case 3 debrief: 힌트 단계 0 badge and the result card');
 
   const log = await page.evaluate(() => window.__game.playtestReport());
   assert.equal(log.summary.solved, true);
@@ -809,6 +825,69 @@ try {
   await p5.locator('.todo li[data-id="pins"].done').waitFor({ timeout: 2000 });
   step('1280x800, clicked like the playtester: "알겠어요" returns focus to the prompt; one click on the 📌 icon opens the board with a coach mark up, the taskbar minimizes/restores it, Enter opens it; the terminal clears the checklist and the memo clears its 📌 column, so both pins land and box 5 ticks');
   await p5.close();
+
+  // ---- sixth page: "터미널이 익숙해요" by keyboard — no coach marks, a 도구 안내 entry, no window opens by itself
+  const p6 = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  p6.on('pageerror', (e) => errors.push(String(e)));
+  p6.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  await p6.goto(`${url}?fresh=1&briefing=0`);
+  await p6.locator('#boot .caselabel', { hasText: 'Case 0' }).waitFor();
+  await p6.locator('#boot .expq').waitFor();
+  for (let i = 0; i < 12 && !(await p6.evaluate(() => document.activeElement?.classList.contains('exp-familiar'))); i++) await p6.keyboard.press('Shift+Tab');
+  assert.equal(await p6.evaluate(() => document.activeElement?.classList.contains('exp-familiar')), true, 'reachable by keyboard');
+  await p6.keyboard.press('Enter');
+  await p6.locator('#boot').waitFor({ state: 'detached' });
+  assert.equal(await p6.evaluate(() => localStorage.getItem('no-handover:experience')), 'familiar');
+  const guideBtn = p6.locator('#taskbar .guidebtn');
+  await guideBtn.waitFor();
+  await p6.waitForTimeout(2500);
+  assert.equal(await p6.locator('.tour').count(), 0, 'familiar: no coach mark');
+  await guideBtn.click();
+  const guide = p6.locator('.popover.guidepop');
+  await guide.waitFor();
+  assert.equal(await guide.locator('li').count(), 8, 'every Case 0 tool line, on demand');
+  assert.equal(await guide.locator('li.later[data-step="board"]').count(), 1, 'tools not unlocked yet are marked as such');
+  await guide.locator('li[data-step="terminal"] button').click();
+  await p6.locator('.window[data-app="terminal"].tour-target').waitFor({ timeout: 2000 });
+  if (shots) await p6.screenshot({ path: join(shots, 'familiar-01-guide.png') });
+  await p6.keyboard.press('Escape');
+  await guide.waitFor({ state: 'detached' });
+  assert.equal(await p6.evaluate(() => document.activeElement === document.querySelector('.tin input')), true, 'Esc on the guide hands focus back to the prompt');
+  step('익숙해요 (keyboard): no coach marks, the 🧭 도구 안내 entry lists the tool lines and points at a tool on screen; Esc returns focus to the prompt');
+  const run6 = async (cmd) => {
+    const input = p6.locator('.tin input');
+    await input.fill(cmd);
+    await input.press('Enter');
+    await p6.waitForTimeout(80);
+  };
+  await p6.locator('.window[data-app="terminal"] .tout').click();
+  for (const cmd of ['history', 'df -h', 'du -sh /var/log/*', 'tail -n 20 /var/log/wiki/wiki.log', 'systemctl status wiki']) await run6(cmd);
+  await p6.waitForFunction(() => window.__game.st.notesRevealed.length > 0, null, { timeout: 5000 });
+  await p6.waitForTimeout(800);
+  assert.equal(await p6.locator('.window[data-app="notes"]').count(), 0, 'familiar: the memo page does not open by itself');
+  assert.ok(await p6.evaluate(() => window.__game.st.log.some((e) => e.type === 'auto-window-held' && e.app === 'notes')));
+  assert.equal(await p6.locator('.tour').count(), 0, 'still no coach mark after the icons unlock');
+  step('익숙해요: the memo scene leaves the notebook closed (its toast still offers it); no mark as icons unlock');
+  // ❓: switch to 처음이에요 — the tour comes back, the entry goes away
+  await p6.locator('#taskbar button[data-tour="help"]').click();
+  await p6.locator('.exp-set button[data-exp="familiar"][aria-pressed="true"]').waitFor();
+  await p6.locator('.exp-set button[data-exp="new"]').click();
+  await p6.locator('.tour').first().waitFor({ timeout: 5000 });
+  assert.equal(await p6.evaluate(() => localStorage.getItem('no-handover:experience')), 'new');
+  assert.equal(await guideBtn.isHidden(), true);
+  await p6.locator('.tour .tour-ok').click();
+  const exp6 = await p6.evaluate(() => window.__game.playtestReport().summary.experience);
+  assert.equal(exp6, 'new');
+  step('❓ 터미널 경험 → 처음이에요: coach marks resume, 🧭 entry hidden, the play log records the choice');
+  // asked once: another case opens with its normal unlock button; ?fresh=1 asks again
+  await p6.goto(`${url}?case=case1-cron-env&briefing=0`);
+  await p6.locator('#boot .caselabel', { hasText: 'Case 1' }).waitFor();
+  assert.equal(await p6.locator('#boot .expq').count(), 0);
+  await p6.goto(`${url}?fresh=1&briefing=0`);
+  await p6.locator('#boot .expq').waitFor();
+  assert.equal(await p6.evaluate(() => localStorage.getItem('no-handover:experience')), null);
+  step('the choice persists across cases; ?fresh=1 asks again');
+  await p6.close();
 
   assert.deepEqual(errors, []);
   console.log('e2e passed');

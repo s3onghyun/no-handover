@@ -359,6 +359,14 @@ input, textarea, select { font: inherit; }
 #boot button.linkbtn { background: none; border: none; color: #f2d94e; text-decoration: underline; text-underline-offset: 3px; font-size: 14px; padding: 6px 4px; }
 #boot button.linkbtn.cases { color: #f1efe9; opacity: 0.8; font-size: 13px; }
 #boot .skip { display: block; margin: 10px auto 0; }
+/* first-run choice: 터미널이 익숙해요 / 처음이에요 (src/engine/experience.ts) */
+#boot .expq { margin: 4px auto 0; }
+#boot .expq-q { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
+#boot .expq-opts { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+#boot .expq-opts button { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 200px; padding: 10px 16px; }
+#boot .expq-opts button small { font-size: 12px; font-weight: 400; opacity: 0.75; }
+#boot .expq-opts button:focus-visible { outline: 2px solid #f2d94e; outline-offset: 3px; }
+#boot .expq-note { font-size: 12px; opacity: 0.65; margin: 8px 0 0; }
 #cases { position: fixed; inset: 0; z-index: 210000; display: grid; place-items: center; background: rgba(20, 22, 26, 0.72); }
 #cases .cl-card { background: var(--paper, #f4f2ec); color: #23262b; border-radius: 12px; padding: 18px 20px; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; box-shadow: 0 18px 50px rgba(0,0,0,.4); }
 #cases h3 { margin: 0 0 10px; }
@@ -383,6 +391,11 @@ input, textarea, select { font: inherit; }
 .popover.hints { width: 430px; max-height: 72vh; }
 .hintpanel .hp-intro { margin: 0 4px 6px; font-size: 12.5px; color: var(--ink-2); }
 .hintpanel .hp-record { margin: 0 4px 10px; font-size: 12px; color: var(--accent-2); }
+.hintpanel .hp-counts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 0 4px 6px; }
+.hintpanel .hp-count { border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; }
+.hintpanel .hp-count dt { font-size: 11.5px; color: var(--ink-2); }
+.hintpanel .hp-count dd { margin: 1px 0 0; font-size: 13px; font-weight: 600; }
+.hintpanel .hp-opens dd { color: var(--ink-2); font-weight: 500; }
 .hp-sec { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; background: #fcfbf8; }
 .hp-sec.focus { border-color: #d8c26a; box-shadow: 0 0 0 2px #fff1b8; }
 .hp-title { font-size: 13.5px; margin-bottom: 6px; display: flex; gap: 6px; align-items: baseline; }
@@ -419,6 +432,7 @@ input, textarea, select { font: inherit; }
 .debrief .rec-line { font-weight: 600; }
 .badge-nohint { background: var(--hl); color: var(--ink); border-radius: 14px; padding: 3px 12px; font-weight: 700; font-size: 13px; transform: rotate(-3deg); display: inline-block; }
 .rec-senior { font-size: 12px; color: #fff; background: var(--accent-2); border-radius: 4px; padding: 1px 6px; }
+.rec-panel { flex-basis: 100%; font-size: 12px; color: var(--ink-2); }
 .cardbox { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 12px 0 6px; }
 .cardbox canvas.resultcard { width: 360px; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
 .cardbox .cardside { flex: 1; min-width: 180px; }
@@ -636,6 +650,15 @@ body:has(.popover.hints) .toasts, body:has(.popover.goalpop) .toasts { right: 45
 .tour-acts button { border-radius: 999px; padding: 3px 12px; font-size: 12.5px; border: 1px solid rgba(255,255,255,0.35); background: transparent; color: #f1efe9; cursor: pointer; }
 .tour-acts .tour-ok { background: #f2d94e; border-color: #f2d94e; color: #2a2e33; font-weight: 600; }
 .tour-acts button:focus-visible { outline: 2px solid #f2d94e; outline-offset: 2px; }
+.toolguide { list-style: none; margin: 0; padding: 0 2px; }
+.toolguide li { margin: 0 0 4px; }
+.toolguide .tg-pick { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; font: inherit; font-size: 12.5px; color: var(--ink-2); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; }
+.toolguide button.tg-pick { cursor: pointer; }
+.toolguide button.tg-pick:hover, .toolguide button.tg-pick:focus-visible { border-color: var(--accent-2); }
+.toolguide .tg-pick b { color: var(--ink); font-size: 13px; }
+.toolguide li.later .tg-pick { opacity: 0.6; border-style: dashed; }
+.exp-set { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 0 4px 10px; font-size: 12.5px; color: var(--ink-2); }
+.exp-set button[aria-pressed="true"] { background: var(--accent-2); color: #fff; border-color: var(--accent-2); }
 .tour-target { outline: 3px solid rgba(242, 217, 78, 0.9); outline-offset: 2px; transition: outline-color var(--motion-base); }
 @keyframes tour-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
