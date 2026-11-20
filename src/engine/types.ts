@@ -51,6 +51,11 @@ export interface ProcDef {
   limitNofile: number;
   /** Optional first fds shown by `ls -l /proc/<pid>/fd` (the rest are sockets). */
   fdSample?: string[];
+  /**
+   * Files this process still holds open after their name was removed (fdSample entries ending in
+   * " (deleted)"): what `ls -lL /proc/<pid>/fd/<n>`, `du -L` and `/proc/<pid>/fdinfo/<n>` see.
+   */
+  deleted?: { path: string; size: number; owner: string; group: string; mode: string; mtime: LocalTime; ino: number }[];
 }
 
 export interface UnitDef {

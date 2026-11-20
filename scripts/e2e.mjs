@@ -13,7 +13,7 @@
 // clicks at element centres (the blind playtester's tool): board icon, taskbar, Enter, and pins
 // with the memo and the checklist on screen. The first launch asks "터미널이 익숙해요 / 처음이에요"
 // once; the main run answers 처음이에요 (the tour), a sixth page answers 익숙해요 by keyboard (no
-// coach marks, a 도구 안내 entry, no window opening by itself — not even the terminal in Case 0 — and
+// coach marks, a 도구 안내 entry, no window opening by itself — not even the terminal, in Case 0 or later cases — and
 // a goals-only checklist), switches back in ❓, and restarts Case 0 from the case list and the lock
 // screen (both ask first). Between Case 0 and Case 1 the case list shows done + grade, next, locked.
 // A seventh page (1280x800): the briefing's 건너뛰기 stays in Case 0, every way to another case asks
@@ -110,6 +110,16 @@ try {
   assert.equal(await page.locator('#cases li').count(), 5);
   for (const id of ['case1-cron-env', 'case2-deleted-open', 'friday-1802']) assert.equal(await page.locator(`#cases li[data-id="${id}"].case-locked`).count(), 1, `${id} locked until the case before it is solved`);
   assert.equal(await page.locator('#cases li.case-soon').count(), 1, 'Case 4 is the only titled placeholder');
+  // round 3: a locked case says how it opens and links back to the case that opens it (here, the one on screen)
+  for (const id of ['case1-cron-env', 'case2-deleted-open', 'friday-1802']) {
+    assert.equal(await page.locator(`#cases li[data-id="${id}"] .cl-st`).innerText(), '🔒 잠김 — Case 0 · 튜토리얼: 증거 핀 → 보고서 제출 후 열려요');
+    assert.equal(await page.locator(`#cases li[data-id="${id}"] .cl-back`).innerText(), '← 지금 사건으로 돌아가기');
+  }
+  await page.locator('#cases li[data-id="case2-deleted-open"] .cl-back').click();
+  await page.locator('#cases').waitFor({ state: 'detached' });
+  await page.locator('#boot .caselabel', { hasText: 'Case 0 · 튜토리얼' }).waitFor();
+  step('case list: each locked case says "Case 0 · 튜토리얼: 증거 핀 → 보고서 제출 후 열려요" and "← 지금 사건으로 돌아가기" closes the list on the current case');
+  await page.locator('#boot .linkbtn.cases').click();
   await page.locator('#cases button.primary').click();
   step('first launch: Case 0 · 튜토리얼 lock screen with a skip link to Case 1; case list shows 5 rungs, Cases 1–3 locked');
 
@@ -356,6 +366,8 @@ try {
   assert.equal(await cl.locator('li[data-id="case1-cron-env"].next .cl-next').innerText(), '다음 사건');
   assert.equal(await cl.locator('li[data-id="case1-cron-env"] .cl-here').count(), 1, 'the case on screen is marked, not offered');
   assert.equal(await cl.locator('li[data-id="case2-deleted-open"][data-state="locked"]').count(), 1);
+  assert.match(await cl.locator('li[data-id="case2-deleted-open"] .cl-st').innerText(), /^🔒 잠김 — Case 1: 증거 핀 → 보고서 제출 후 열려요$/, 'now Case 1 is what opens it');
+  assert.equal(await cl.locator('li[data-id="case2-deleted-open"] .cl-back').innerText(), '← 지금 사건으로 돌아가기');
   await shot('case-list-01.png');
   await cl.locator('li[data-id="case0-wiki"] .cl-open').click();
   await page.locator('.modal-case .modal-ok').click(); // leaving a case asks first (in-game dialog)
@@ -483,8 +495,21 @@ try {
   const notes2 = page.locator('.window[data-app="notes"] .titlebar button.close');
   if (await notes2.count()) await notes2.click(); // the memo scene opened the notebook
   await pinLine(/\(deleted\)/);
-  await run('journalctl --since "2026-11-11 14:00" --until "2026-11-11 15:00"');
+  // round 3: the nameless file's size is observable — following the fd link (ls -lL) and its fdinfo offset
+  await run('ls -lhL /proc/1187/fd/7');
+  await page.locator('.tline', { hasText: /-rw-r----- 0 logship adm\s+85G Nov 12 09:30 \/proc\/1187\/fd\/7/ }).waitFor();
+  await run('cat /proc/1187/fdinfo/7');
+  await page.locator('.tline', { hasText: /pos:\s+91321742131/ }).waitFor();
+  assert.ok(await page.evaluate(() => 'c2_size' in window.__game.st.clues));
+  // ... and the departed senior's history shows how she found the time: journalctl -t sudo
+  await run('history | grep "journalctl -t sudo"');
+  await page.locator('.tline', { hasText: /journalctl -t sudo --since "2024-08-21 07:00"/ }).waitFor();
+  step('round 3: ls -lhL /proc/1187/fd/7 shows the nameless 85G (link count 0), fdinfo pos agrees; 은재\'s history has journalctl -t sudo');
+  await run('journalctl -t sudo --since "2026-11-11 14:00" --until "2026-11-11 15:00"');
   await pinLine(/COMMAND=\/usr\/bin\/rm pay-api-01\.log/);
+  await run('journalctl --since "2026-11-11 14:00" --until "2026-11-11 15:00"');
+  // the logout a minute after the rm (r2_noverify) opens Seojin's changes as report choices: a toast says so
+  await page.locator('.toast-options', { hasText: '새 보기가 열렸어요' }).waitFor({ timeout: 3000 });
   assert.equal(await todoItem('pins').and(page.locator('.done')).count(), 0, '재발 방지 has no pin yet');
   step('df 180G vs du 95G → pgrep → /proc/1187/fd "(deleted)" (aha) → the sudo rm in the journal; two boxes tick, "증거 3개" waits for 재발 방지');
   await run('ssh pay-api-01');
@@ -1020,6 +1045,20 @@ try {
   await p6.goto(`${url}?case=case1-cron-env&briefing=0`);
   await p6.locator('#boot .caselabel', { hasText: 'Case 1' }).waitFor();
   assert.equal(await p6.locator('#boot .expq').count(), 0);
+  // round 3: Case 1 on 익숙해요 — "창도 저절로 열지 않아요" holds past the tutorial: no terminal by itself, its icon is one click away
+  assert.equal(await p6.evaluate(() => localStorage.getItem('no-handover:experience')), 'new', '(switched to 처음이에요 above)');
+  await p6.evaluate(() => localStorage.setItem('no-handover:experience', 'familiar'));
+  await p6.reload();
+  await p6.locator('#boot button.primary').click();
+  await p6.locator('#boot').waitFor({ state: 'detached' });
+  await p6.waitForTimeout(1500);
+  assert.equal(await p6.locator('.window[data-app="terminal"]').count(), 0, '익숙해요: no terminal opens by itself in Case 1');
+  assert.ok(await p6.evaluate(() => window.__game.st.log.some((e) => e.type === 'auto-window-held' && e.app === 'terminal')));
+  assert.equal(await p6.locator('.icon[data-app="terminal"].pulse').count(), 1, 'its icon pulses instead');
+  if (shots) await p6.screenshot({ path: join(shots, 'familiar-02-case1-desktop.png') });
+  await p6.locator('.icon[data-app="terminal"]').click();
+  await p6.locator('.window[data-app="terminal"] .tin input').waitFor();
+  step('익숙해요 in Case 1: the desktop opens with no window (as the choice promised), the terminal icon pulses, one click opens it');
   await p6.goto(`${url}?fresh=1&briefing=0`);
   await p6.locator('#boot .expq').waitFor();
   assert.equal(await p6.evaluate(() => localStorage.getItem('no-handover:experience')), null);
@@ -1324,7 +1363,12 @@ try {
       await p9.locator('#briefing[data-step="ring"]').waitFor({ timeout: 10000 });
       await p9.keyboard.press('Escape');
       await p9.locator('#briefing').waitFor({ state: 'detached', timeout: 3000 });
-      await p9.locator('.window[data-app="terminal"]').waitFor();
+      // round 3: 숙련자 (익숙해요) keeps its promise in every case — the terminal is one click away, not opened for you
+      await p9.waitForTimeout(600);
+      assert.equal(await p9.locator('.window[data-app="terminal"]').count(), 0, `숙련자: no terminal opens by itself in ${next}`);
+      assert.ok(await p9.evaluate(() => window.__game.st.log.some((e) => e.type === 'auto-window-held' && e.app === 'terminal')));
+      await p9.locator('.icon[data-app="terminal"]').click();
+      await p9.locator('.window[data-app="terminal"] .tin input').waitFor();
     }
   };
   await p9.goto(`${url}?fresh=1&briefing=0`);
@@ -1390,6 +1434,12 @@ try {
   await p9.keyboard.press('Escape');
   await p9.locator('#briefing').waitFor({ state: 'detached', timeout: 3000 });
   step('Case 0 (숙련자): the journald herring is in the report, du and journald.conf rule it out; 2 submissions, a 시간 row in the debrief');
+  // round 3: past the tutorial too, 숙련자 (익숙해요) opens no terminal by itself
+  await p9.waitForTimeout(600);
+  assert.equal(await p9.locator('.window[data-app="terminal"]').count(), 0, '숙련자: no terminal opens by itself in Case 1');
+  await p9.locator('.icon[data-app="terminal"]').click();
+  await p9.locator('.window[data-app="terminal"] .tin input').waitFor();
+  step('숙련자 Case 1: no terminal opens by itself; one click on its icon');
 
   // Case 1: the /bin/sh herring — the shebang and the hourly output rule it out
   assert.equal(await p9.evaluate(() => window.__game.expert()), true, 'the mode carries to the next case');

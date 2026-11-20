@@ -411,7 +411,9 @@ input, textarea, select { font: inherit; }
 #cases .caselist { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
 #cases li { border: 1px solid #d8d3c7; border-radius: 9px; padding: 9px 12px; background: #fff; }
 #cases li.current { border-color: #2f3e5c; box-shadow: inset 3px 0 0 #2f3e5c; }
-#cases li.case-locked, #cases li.case-soon { opacity: 0.6; background: #efece4; }
+#cases li.case-locked, #cases li.case-soon { background: #efece4; }
+#cases li.case-soon, #cases li.case-locked :is(.cl-head b, .cl-when, .cl-title, .cl-pr) { opacity: 0.6; }
+#cases li.case-locked .cl-st { color: #4a4a4a; }
 #cases .cl-head { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
 #cases .cl-when { opacity: 0.7; }
 #cases .cl-st { margin-left: auto; font-size: 12px; }
@@ -425,7 +427,7 @@ input, textarea, select { font: inherit; }
 #cases .cl-next { padding: 1px 7px; border-radius: 999px; background: #f2d94e; font-size: 11px; font-weight: 700; }
 #cases .cl-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
 #cases .cl-acts button { margin-top: 0; }
-#cases li button.cl-restart { background: #fff; color: #2f3e5c; }
+#cases li button.cl-restart, #cases li button.cl-back { background: #fff; color: #2f3e5c; }
 #cases .cl-here { font-size: 12px; opacity: 0.7; }
 .tray-btn.nextcase-btn { background: #f2d94e; color: #23262b; font-weight: 600; }
 .debrief .nextcase { margin: 22px 0 4px; padding: 14px; border-radius: 10px; background: #fff7d1; text-align: center; }

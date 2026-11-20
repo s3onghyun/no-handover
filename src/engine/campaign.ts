@@ -109,6 +109,13 @@ export class Campaign {
     return list.slice(0, i).every((e) => p.solved.includes(e.id) || p.skipped.includes(e.id));
   }
 
+  /** What keeps a locked case shut: the first playable case before it that is neither solved nor skipped. */
+  blocker(id: string, p: Progress): CampaignEntry | null {
+    const list = this.playable();
+    const i = list.findIndex((e) => e.id === id);
+    return i < 0 ? null : list.slice(0, i).find((e) => !p.solved.includes(e.id) && !p.skipped.includes(e.id)) ?? null;
+  }
+
   status(id: string, p: Progress): EntryStatus {
     const e = this.entry(id);
     if (!e?.cs) return 'soon';

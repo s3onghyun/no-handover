@@ -53,3 +53,15 @@ test('parseGrades keeps only S–D letters', () => {
   assert.deepEqual(parseGrades('[1]'), {});
   assert.deepEqual(parseGrades('oops'), {});
 });
+
+test('blocker: a locked case names the first unsolved, unskipped case before it (what the case list links to)', () => {
+  let p = parseProgress(null);
+  assert.equal(c.blocker(c0, p), null, 'the first case is never locked');
+  assert.equal(c.blocker(c1, p)?.id, c0);
+  assert.equal(c.blocker(c3, p)?.id, c0, 'Case 3 waits on Case 0 first');
+  p = c.solve(c0, p);
+  assert.equal(c.blocker(c2, p)?.id, c1);
+  assert.equal(c.blocker(c1, p), null, 'open: nothing blocks it');
+  assert.equal(c.blocker(c3, c.skipTo(c2, parseProgress(null)))?.id, c2, 'skipped cases do not block');
+  assert.equal(c.blocker('case4-keys', p), null, 'placeholders are not in the ladder of playable cases');
+});

@@ -12,7 +12,7 @@ import { emptyObjectiveState, Objectives, type Observation, type ObjectiveState 
 import { scoreSubmission, type ScoreResult, type Submission } from './scoring.ts';
 import { Shell, type OutLine, type RunResult, type Session, type ShellEvent } from './shell.ts';
 import { detectTime, parseLocal } from './time.ts';
-import type { CaseFile, ClueDef, MailDef, NudgeDef, OptionDef, SlotId, TriggerAction } from './types.ts';
+import type { CaseFile, ClueDef, MailDef, NudgeDef, OptionDef, SlotId, TriggerAction, TriggerDef } from './types.ts';
 
 export const SAVE_VERSION = 1;
 
@@ -117,6 +117,8 @@ export class Game {
   private listeners = new Map<string, Set<Listener>>();
   private typingSig = '';
   private clueRegex = new Map<string, { re: RegExp; host?: string }[]>();
+  /** Nesting depth of clue/trigger changes (a clue can fire a trigger): only the outermost announces new report options. */
+  private optionWatch = 0;
 
   constructor(cs: CaseFile, saved?: SaveState | null, settings?: Partial<Settings>) {
     const s = saved && saved.v === SAVE_VERSION && saved.caseId === cs.id ? saved : null;
@@ -322,8 +324,32 @@ export class Game {
     return this.cs.clues.find((c) => c.id === id);
   }
 
+  /** Gated report options ("slot/option") the report shows right now. */
+  private gatedShown(): string[] {
+    return this.cs.accusation.slots.flatMap((sl) => sl.options.filter((o) => o.needs?.length && this.optionShown(o)).map((o) => `${sl.id}/${o.id}`));
+  }
+
+  /** Run a clue or trigger change; if it opened gated report options, say so once ('options-unlocked', round-3 playtest). */
+  private watchOptions(fn: () => void): void {
+    const before = this.optionWatch++ === 0 ? new Set(this.gatedShown()) : null;
+    try {
+      fn();
+    } finally {
+      this.optionWatch--;
+    }
+    if (!before) return;
+    const fresh = this.gatedShown().filter((k) => !before.has(k));
+    if (!fresh.length) return;
+    this.log('options-unlocked', { options: fresh });
+    this.emit('options-unlocked', fresh);
+  }
+
   private discover(c: ClueDef, via: string): void {
     if (c.id in this.st.clues) return;
+    this.watchOptions(() => this.discoverNow(c, via));
+  }
+
+  private discoverNow(c: ClueDef, via: string): void {
     this.st.clues[c.id] = { at: this.st.playMs, via };
     this.log('clue', { clue: c.id, slot: c.slot, key: !!c.key, trace: !!c.trace, via });
     if (c.trace && !this.st.log.some((e) => e.type === 'rung1')) this.log('rung1', { clue: c.id });
@@ -377,6 +403,11 @@ export class Game {
   private fire(id: string): void {
     const tr = this.cs.triggers.find((x) => x.id === id);
     if (!tr || this.st.triggersFired.includes(id)) return;
+    this.watchOptions(() => this.fireNow(tr));
+  }
+
+  private fireNow(tr: TriggerDef): void {
+    const id = tr.id;
     this.st.triggersFired.push(id);
     this.log('trigger', { trigger: id });
     for (const a of tr.actions) {
