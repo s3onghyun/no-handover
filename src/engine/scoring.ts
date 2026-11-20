@@ -44,6 +44,8 @@ export interface ScoreResult {
 export const ATTEMPT_MULTIPLIER = [1, 0.85, 0.7];
 export const EVIDENCE_POINTS = 5;
 export const EVIDENCE_CAP = 30;
+/** Multi slots with `picks`: points off for every option ticked beyond N (and the slot fails). */
+export const EXTRA_PICK_COST = 25;
 
 export function scoreSlot(def: SlotDef, picked: string | string[] | null): SlotScore & { blamed: string[] } {
   const ids = picked === null ? [] : Array.isArray(picked) ? picked : [picked];
@@ -55,9 +57,13 @@ export function scoreSlot(def: SlotDef, picked: string | string[] | null): SlotS
   }
   const sum = chosen.reduce((a, o) => a + (o.weight ?? 0), 0);
   const negative = chosen.some((o) => (o.weight ?? 0) < 0);
-  const maxW = def.options.reduce((a, o) => a + Math.max(0, o.weight ?? 0), 0) || 1;
-  const points = Math.max(0, Math.round((sum / maxW) * 100));
-  const correct = !negative && sum >= (def.pass ?? maxW);
+  // with `picks`, the best N positive weights are the full mark; without, all of them
+  const positive = def.options.map((o) => Math.max(0, o.weight ?? 0)).sort((a, b) => b - a);
+  const maxW = (def.picks ? positive.slice(0, def.picks) : positive).reduce((a, w) => a + w, 0) || 1;
+  const extra = def.picks ? Math.max(0, chosen.length - def.picks) : 0;
+  const points = Math.max(0, Math.min(100, Math.round((sum / maxW) * 100)) - extra * EXTRA_PICK_COST);
+  const count = def.picks ? chosen.length === def.picks : true;
+  const correct = !negative && count && sum >= (def.pass ?? (def.picks ? 0 : maxW));
   return { correct, points, blamed };
 }
 
@@ -65,12 +71,15 @@ export function picked(sub: Submission, id: SlotId): string | string[] | null {
   return id === 'responsibility' ? sub.responsibility : sub[id];
 }
 
+/** A slot is filled in: an answer, or for a multi slot with `picks` exactly that many. */
+export function filled(def: SlotDef, v: string | string[] | null): boolean {
+  if (!Array.isArray(v)) return !!v;
+  return def.picks ? v.length === def.picks : v.length > 0;
+}
+
 /** True when every slot the case has is filled in. */
 export function complete(cs: CaseFile, sub: Submission): boolean {
-  return cs.accusation.slots.every((s) => {
-    const v = picked(sub, s.id);
-    return Array.isArray(v) ? v.length > 0 : !!v;
-  });
+  return cs.accusation.slots.every((s) => filled(s, picked(sub, s.id)));
 }
 
 /** Slots with evidence kinds that have no cited pin yet (the report asks before submitting). */

@@ -3,7 +3,7 @@ import { t } from '../../i18n.ts';
 import type { AppDef, UiCtx } from '../wm.ts';
 import type { Submission } from '../../engine/scoring.ts';
 import type { FieldMark } from '../../engine/scoring.ts';
-import { fieldMarks, grade, picked, slotName, wrongReply } from '../../engine/scoring.ts';
+import { fieldMarks, filled, grade, picked, slotName, wrongReply } from '../../engine/scoring.ts';
 import { citeState, kindsFor, kindsOf } from '../../engine/evidence.ts';
 import type { Game, Pin } from '../../engine/game.ts';
 import type { SlotDef, SlotId } from '../../engine/types.ts';
@@ -249,15 +249,15 @@ export const reportApp: AppDef = {
     const unmet = (): { slot: SlotDef; need: 'pick' | 'cite' | 'kind' }[] => {
       const out: { slot: SlotDef; need: 'pick' | 'cite' | 'kind' }[] = [];
       for (const slot of g.cs.accusation.slots) {
-        const v = picked(sub, slot.id);
-        if (Array.isArray(v) ? !v.length : !v) out.push({ slot, need: 'pick' });
+        if (!filled(slot, picked(sub, slot.id))) out.push({ slot, need: 'pick' });
         if (!slot.evidence?.length) continue;
         const cs = citeState(slot, liveCites(slot.id), g.st.pins);
         if (cs !== 'ok') out.push({ slot, need: cs === 'missing' ? 'cite' : 'kind' });
       }
       return out;
     };
-    const needText = (u: { slot: SlotDef; need: 'pick' | 'cite' | 'kind' }) => t(u.need === 'pick' ? 'report.needPick' : u.need === 'cite' ? 'report.needCite' : 'report.needKind', { f: slotName(u.slot) });
+    const needText = (u: { slot: SlotDef; need: 'pick' | 'cite' | 'kind' }) =>
+      u.need === 'pick' && u.slot.picks ? t('report.needPicks', { f: slotName(u.slot), n: u.slot.picks }) : t(u.need === 'pick' ? 'report.needPick' : u.need === 'cite' ? 'report.needCite' : 'report.needKind', { f: slotName(u.slot) });
 
     let submitBtn: HTMLButtonElement | null = null;
     let needBox: HTMLElement | null = null;
@@ -318,6 +318,16 @@ export const reportApp: AppDef = {
           ),
         );
         const shown = slot.options.filter((o) => g.optionShown(o));
+        // a multi slot with `picks` takes exactly N: the unticked boxes stop at N, a counter shows it
+        const boxes: HTMLInputElement[] = [];
+        const counter = slot.type === 'multi' && slot.picks ? h('p.picks', { 'aria-live': 'polite' }) : null;
+        const cap = () => {
+          if (!counter || !slot.picks) return;
+          const n = boxes.filter((b) => b.checked).length;
+          for (const b of boxes) b.disabled = !b.checked && n >= slot.picks;
+          counter.textContent = n >= slot.picks ? t('report.picksFull', { max: slot.picks }) : t('report.picks', { n, max: slot.picks });
+          counter.classList.toggle('full', n >= slot.picks);
+        };
         for (const o of shown) {
           const checked = slot.type === 'single' ? sub[slot.id as 'cause' | 'sequence'] === o.id : sub.responsibility.includes(o.id);
           const inp = h('input', {
@@ -331,9 +341,15 @@ export const reportApp: AppDef = {
               else sub.responsibility = on ? [...new Set([...sub.responsibility, o.id])] : sub.responsibility.filter((x) => x !== o.id);
               save();
               syncSubmit();
+              cap();
             },
-          });
+          }) as HTMLInputElement;
+          boxes.push(inp);
           box.appendChild(h('label.opt', null, inp, h('span', null, o.text)));
+        }
+        if (counter) {
+          box.appendChild(counter);
+          cap();
         }
         if (shown.length < slot.options.length) box.appendChild(h('p.muted.more-opts', null, t('report.moreOptions')));
         if (slot.evidence?.length) box.appendChild(citeBox(slot));

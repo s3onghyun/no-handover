@@ -167,16 +167,22 @@ export const boardApp: AppDef = {
       const grid = h('div.obs-grid');
       root.appendChild(grid);
 
+      // 숙련자 모드 (Cases 0–2): no evidence timeline. Pins land on it by their own time stamps, so it
+      // orders itself and scores nothing; the senior builds the order in the report (src/engine/expert.ts).
+      const lanes = !g.expert();
       grid.append(
         statPanel({ title: '📌 핀', value: String(pins.length), state: 'none' }),
         statPanel({ title: `★ ${t('board.keyCount')}`, value: String(keys), state: keys ? 'ok' : 'none', word: '' }),
-        statPanel({ title: t('board.timeline'), value: String(onTl.length), state: 'none', note: '시각이 있는 증거' }),
-        statPanel({ title: '시각 없음', value: String(inTray.length), state: inTray.length ? 'warn' : 'none', note: inTray.length ? '시각을 넣으면 타임라인에 올라가요' : undefined }),
       );
+      if (lanes)
+        grid.append(
+          statPanel({ title: t('board.timeline'), value: String(onTl.length), state: 'none', note: '시각이 있는 증거' }),
+          statPanel({ title: '시각 없음', value: String(inTray.length), state: inTray.length ? 'warn' : 'none', note: inTray.length ? '시각을 넣으면 타임라인에 올라가요' : undefined }),
+        );
       if (hasEvidence(g.cs)) grid.appendChild(criteria());
 
       const cronPins = pins.filter((p) => cronExpr(p.text));
-      grid.appendChild(
+      if (lanes) grid.appendChild(
         panel(
           {
             title: `증거 타임라인 · ${fmtDayHM(range.from)} → ${fmtDayHM(range.to)}`,
@@ -230,7 +236,7 @@ export const boardApp: AppDef = {
         if (hasEvidence(g.cs)) tagRows(logsHost);
       };
       fillLogs();
-      const logs = panel({ title: `${t('board.timeline')} — 증거 로그`, span: 'twothirds', cls: 'obs-logp', tools }, logsHost);
+      const logs = panel({ title: lanes ? `${t('board.timeline')} — 증거 로그` : '증거 로그', span: 'twothirds', cls: 'obs-logp', tools }, logsHost);
       dropZone(logs, true);
       grid.appendChild(logs);
 

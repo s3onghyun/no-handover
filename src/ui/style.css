@@ -236,6 +236,9 @@ input, textarea, select { font: inherit; }
 .cite-state.ok { color: #2f7a3a; }
 .cite-state.unsupported { color: #a35a00; }
 .more-opts { font-size: 12px; margin: 4px 8px 0; }
+.picks { font-size: 12px; margin: 4px 8px 0; color: var(--ink-3); }
+.picks.full { color: inherit; font-weight: 600; }
+.opt:has(input:disabled) { opacity: 0.55; cursor: default; }
 .cites ul { margin: 4px 0; padding-left: 18px; font-size: 13px; }
 .cites li { margin: 2px 0; overflow-wrap: anywhere; }
 .hint-btn { font-size: 12px; border: 1px solid #d8c26a; background: #fff8dc; border-radius: 6px; padding: 2px 8px; white-space: nowrap; }

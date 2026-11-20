@@ -99,7 +99,7 @@ test('scripted solve from the intended history line: rung 1 only, no hints, firs
   // pin the key evidence
   for (const t of [0, 2, 3, 4]) for (const l of g.tab(t).lines) if (g.cluesFor(l.text).some((c) => g.clue(c)?.key)) g.pin({ kind: 'line', text: l.text, source: `tab${t}` });
   assert.ok(g.pinnedKeyClues() >= 6);
-  const r = g.submit(cited(g, { cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account', 'bottleneck', 'cover-seojin', 'cover-jihoon'] }))!;
+  const r = g.submit(cited(g, { cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account'] }))!;
   assert.equal(r.allCorrect, true);
   assert.equal(r.total, 330);
   assert.ok(g.st.finished);

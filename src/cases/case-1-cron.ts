@@ -87,6 +87,24 @@ echo "$(date '+%F %T') wiki.log \${SIZE_MB}M — 정리 시작"
 wikictl log truncate --keep-tail 50M
 echo "$(date '+%F %T') 정리 끝 ✓"`;
 
+/** 숙련자 모드: one comment line, the size check in bash's [[ ]]; the wikictl call stays on line 15. */
+const EXPERT_SCRIPT = `#!/bin/bash
+# wiki.log 임시 정리 — 한도윤 (11/10, 서진님 숙제!!)
+
+LOG=/var/log/wiki/wiki.log
+LIMIT_MB=500
+KEEP_TAIL=50M
+SIZE_MB=$(( $(stat -c %s "$LOG") / 1048576 ))
+
+if [[ "$SIZE_MB" -lt "$LIMIT_MB" && "$1" != "--force" ]]; then
+  echo "$(date '+%F %T') wiki.log \${SIZE_MB}M — 괜찮음"
+  exit 0
+fi
+
+echo "$(date '+%F %T') wiki.log \${SIZE_MB}M — 정리 시작"
+wikictl log truncate --keep-tail "$KEEP_TAIL"
+echo "$(date '+%F %T') 정리 끝 ✓"`;
+
 const DISK_REPORT = `#!/bin/bash
 # 월요일 09:00 디스크 리포트 (은재, 2024-03)
 # cron에서 도니까 전부 절대 경로로.
@@ -879,6 +897,9 @@ export const caseOneCron: CaseFile = {
   },
 
   // ------------------------------------------------------------------ 숙련자 모드 (docs/campaign-ladder.md §숙련자 모드)
+  // Records: Eunjae's 2024-03 cron lesson is gone from the history and the crontab's two comment
+  // lines with it; what is left is three `crontab -e` in a row that day and her absolute-path line
+  // next to Doyun's relative one. No file names the commands that solve it.
   // Red herring: "cron's /bin/sh chokes on bash syntax". ~/log/cron-env.txt says SHELL=/bin/sh and
   // in this mode the script's size check is written with [[ … ]]. But SHELL only runs the crontab
   // line; the script itself is exec'd by its #!/bin/bash line (`head -1 ~/bin/wiki-log-clean.sh`),
@@ -888,13 +909,57 @@ export const caseOneCron: CaseFile = {
     parMin: 12,
     intro: '서진님께 보낼 원인 보고. 두 칸. 제출은 2번까지 — 틀리면 칸마다 ✓/✗ 만 온다.',
     goalIntro: '서진님께 보낼 원인 보고서를 채우면 사건이 끝나요. 제출은 2번까지 — 틀리면 칸마다 ✓/✗ 만 알려 줘요.',
-    after: ['다음: 📝 보고서 — 원인, 경위 두 칸 (제출 2번)', '막히면: crontab 맨 위 주석, history, 💡 (숙련자 모드: 감점)'],
+    after: ['다음: 📝 보고서 — 원인, 경위 두 칸 (제출 2번)', '막히면: crontab, history, 💡 (숙련자 모드: 감점)'],
+    stickies: [{ text: '도윤님 —\n제 줄이랑\n비교해 봐요 🌱', x: 74, y: 70, color: '#C9E4B4' }],
+    history: [
+      {
+        host: W,
+        user: 'eunjae',
+        lines: [
+          { at: '2023-04-03T10:31:50', cmd: 'sudo systemctl enable --now wiki' },
+          { at: '2023-04-03T10:45:30', cmd: 'wikictl stats --short' },
+          { at: '2024-03-12T10:18:40', cmd: 'crontab -e' },
+          { at: '2024-03-12T10:20:02', cmd: 'crontab -e' },
+          { at: '2024-03-12T10:26:15', cmd: 'crontab -e' },
+          { at: '2026-11-10T09:31:02', cmd: 'history' },
+          { at: '2026-11-10T09:45:03', cmd: 'journalctl -u wiki' },
+          { at: '2026-11-10T18:31:40', cmd: 'cd ~/bin' },
+          { at: '2026-11-10T18:36:12', cmd: './wiki-log-clean.sh --force >> wiki-clean.log 2>&1' },
+          { at: '2026-11-10T18:36:41', cmd: '# 됨!! ✓ (도윤)' },
+          { at: '2026-11-10T18:40:02', cmd: 'crontab -e' },
+          { at: '2026-11-11T09:11:05', cmd: '# 도윤님, 오늘은 제 crontab 이에요 🌱' },
+        ],
+      },
+    ],
+    crontabs: [
+      {
+        host: W,
+        user: 'eunjae',
+        content: '# m h dom mon dow  command\n0 9 * * 1 /home/eunjae/bin/disk-report.sh > /home/eunjae/log/disk-report.txt 2>&1\n\n# 11/10 한도윤 — wiki.log 임시 정리 (매시 정각) 🙇\n0 * * * * ~/bin/wiki-log-clean.sh >> wiki-clean.log 2>&1',
+      },
+    ],
+    mails: [
+      {
+        id: 'eunjae-cron', account: 'me', folder: 'inbox', from: 'eunjae', to: '한도윤', at: '2026-11-10T18:20',
+        subject: 'RE: 정리 스크립트 cron 어디에 걸까요?',
+        body: '도윤님,\n제 crontab 써도 돼요. 도윤님 계정은 아직 wiki-01 cron 권한이 없어서요(/etc/cron.allow).\n\n걸기 전에 제 줄이 왜 그렇게 생겼는지 한 번 보고요 :)\n\n남은재 🌱',
+      },
+    ],
+    terminalTabs: [
+      {
+        label: 'wiki-01', host: W, cwd: '/home/eunjae',
+        scrollback: ['Nuri wiki-01 (Ubuntu 22.04 LTS) — 사내 위키', '조사 모드 (읽기 전용) — 명령 목록: help', 'eunjae@wiki-01:~$ # 도윤님, 오늘은 제 crontab 이에요 🌱'],
+      },
+    ],
     files: [
       {
         host: W,
-        // same script, the size check in bash's [[ ]] (line 10); line 15 is still the wikictl call
-        file: { path: '/home/eunjae/bin/wiki-log-clean.sh', content: SCRIPT.replace('if [ "$SIZE_MB" -lt "$LIMIT_MB" ] && [ "$1" != "--force" ]; then', 'if [[ "$SIZE_MB" -lt "$LIMIT_MB" && "$1" != "--force" ]]; then'), mode: '755', mtime: '2026-11-10T18:35' },
+        // same script, one comment line, the size check in bash's [[ ]] (line 9); line 15 is still the wikictl call
+        file: { path: '/home/eunjae/bin/wiki-log-clean.sh', content: EXPERT_SCRIPT, mode: '755', mtime: '2026-11-10T18:35' },
       },
+      { host: W, file: { path: '/home/eunjae/README.txt', mtime: '2025-06-17T10:35', content: 'wiki-01 — 다음 사람에게 (남은재, 2023-04 / 2025-06 고침)\n\n왜: 사내 위키 서버. 위키가 죽으면 런북도 못 봐요.\n관리 도구: wikictl. 로그 자르기, 작업 큐, 통계.\n조사할 때는 아무것도 지우지 마세요. :)' } },
+      { host: W, file: { path: '/home/eunjae/.bashrc', mtime: '2025-06-17T10:40', content: EUNJAE_BASHRC.slice(0, EUNJAE_BASHRC.indexOf('\n\n# 다음 사람')).replace('   # wikictl (2023-04)', '') } },
+      { host: W, file: { path: '/home/eunjae/bin/disk-report.sh', mode: '755', mtime: '2024-03-12T10:18', content: DISK_REPORT.replace('# cron에서 도니까 전부 절대 경로로.\n', '') } },
     ],
     clues: [
       { id: 'c1x_shebang', label: '스크립트 첫 줄 #!/bin/bash — 스크립트는 cron 의 /bin/sh 가 아니라 bash 로 돈다', slot: 'cause', match: [{ output: '^#!/bin/bash$', host: W }] },

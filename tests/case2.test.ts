@@ -99,7 +99,7 @@ test('case 2: scripted solve, three slots (max 330), wrong reports nudge in the 
   assert.equal(w.allCorrect, false);
   g.tick(2500);
   assert.equal(g.st.live.at(-1)?.from, 'seojin');
-  const r = g.submit(cited(g, { cause: 'open', sequence: 'true', responsibility: ['no-verify', 'open-rule', 'debug-expiry', 'quota', 'silent-drop'] }))!;
+  const r = g.submit(cited(g, { cause: 'open', sequence: 'true', responsibility: ['no-verify', 'open-rule', 'debug-expiry'] }))!;
   assert.equal(r.allCorrect, true);
   assert.equal(r.base, 300);
   assert.ok(g.st.finished && g.st.mailsDelivered.includes('closing'));

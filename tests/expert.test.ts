@@ -97,7 +97,7 @@ test('Case 1 herring: SHELL=/bin/sh and a [[ ]] check; the shebang and the hourl
   assert.match(out(g, 'cat ~/log/cron-env.txt'), /^SHELL=\/bin\/sh$/m);
   const script = out(g, 'cat ~/bin/wiki-log-clean.sh');
   assert.match(script, /if \[\[ "\$SIZE_MB" -lt "\$LIMIT_MB" && "\$1" != "--force" \]\]; then/);
-  assert.equal(script.split('\n')[14], 'wikictl log truncate --keep-tail 50M', 'line 15 is still the wikictl call');
+  assert.match(script.split('\n')[14], /^wikictl log truncate --keep-tail /, 'line 15 is still the wikictl call');
   assert.ok('c1x_shebang' in g.st.clues, 'the first line is #!/bin/bash');
   // got past the check every hour: the error is on line 15, not a syntax error
   assert.match(out(g, 'cat ~/wiki-clean.log'), /정리 시작\n.*line 15: wikictl: command not found/);
