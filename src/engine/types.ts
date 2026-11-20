@@ -466,6 +466,38 @@ export interface CaseFile {
    * `intro` is the line above them; default: who the report goes to and how many submissions.
    */
   goal?: { intro?: string };
+  /**
+   * 숙련자 모드 (docs/campaign-ladder.md §숙련자 모드): what changes when the player chose the
+   * harder mode. Applied by src/engine/expert.ts over a copy of the case; the default path never
+   * sees any of it.
+   */
+  expert?: ExpertDef;
+}
+
+/**
+ * 숙련자 모드 overlay for one case. Besides these fields the mode folds the "오늘 할 일" checklist
+ * from the start (no steps, no rail), sends no unasked colleague nudges, and charges hint steps,
+ * recaps and asks (src/engine/expert.ts).
+ */
+export interface ExpertDef {
+  /** Submissions in this mode (the default path keeps `accusation.maxSubmissions`). */
+  maxSubmissions: number;
+  /** Play minutes before the time cost starts (−5 for every full 2 minutes over, at most −30). */
+  parMin: number;
+  /** Texts that name the submission count, rewritten for this mode. */
+  intro?: string;
+  goalIntro?: string;
+  after?: string[];
+  /** Extra or replaced files (same path = replaced), per host. */
+  files?: { host: string; file: FileDef }[];
+  /** `df` output replaced, per host. */
+  df?: { host: string; lines: string[] }[];
+  /** Extra timeline events (journal lines, messages) appended to the case's. */
+  timeline?: TimelineEvent[];
+  /** Extra clues (the red herring and what rules it out; never in an evidence kind). */
+  clues?: ClueDef[];
+  /** Extra report options (the red herring), inserted into a slot at `at` (default: the end). */
+  options?: { slot: SlotId; at?: number; option: OptionDef }[];
 }
 
 /** One coach mark: what an app is for, shown when it first matters. Anchored by app id only. */

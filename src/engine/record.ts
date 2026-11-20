@@ -1,6 +1,6 @@
 // The play record: hints used, time, commands. Hints are a record, not a penalty (web-escape
 // analysis §9 item 6): the debrief and the shareable result card show "힌트 단계 N개 · 소요 · 명령 수"
-// and a "힌트 단계 0" badge. Only senior mode (`?senior=1`) still takes hint cost off the score.
+// and a "힌트 단계 0" badge. Only 숙련자 모드 (`?senior=1`, src/engine/expert.ts) takes hint cost off the score.
 //
 // Two numbers that must never be mixed up (playtest: opening the panel looked like a penalty):
 // `hints` = 힌트 단계 used (방향 + 정답, the only thing recorded), `panelOpens` = how often the 💡
@@ -88,7 +88,7 @@ export function resultCard(g: GameLike & Pick<Game, 'cs'>, caseLabel: string): R
       { label: '제출', value: `${r.submissions}회` },
     ],
     badge: r.solved && r.hints === 0 ? '힌트 단계 0' : null,
-    mode: r.senior ? '시니어 모드' : null,
+    mode: r.senior ? '숙련자 모드' : null,
     footer: '정답은 직접 찾아보세요 — 스포일러 없는 기록 카드',
   };
 }

@@ -803,4 +803,74 @@ export const caseTwoDeleted: CaseFile = {
     unlock: '은재님이 열어 둔 세션으로 들어가기',
     note: '조사 세션 — 읽기 전용이라 아무것도 망가지지 않아요.',
   },
+
+  // ------------------------------------------------------------------ 숙련자 모드 (docs/campaign-ladder.md §숙련자 모드)
+  // Red herring: "files hidden under a mount point". With wiki-01, Seojin also mounted a 2G tmpfs
+  // over /data/collector/spool, and systemd noted the directory was not empty. Files under a mount
+  // point do count in df and not in du — the other textbook reason for df ≠ du. It is ruled out
+  // by logshipd's own line a second earlier (it flushed the spool into raw/ and kept only its lock
+  // file) and because covered files cannot grow, while /data grew 3.7G/h all night.
+  expert: {
+    maxSubmissions: 2,
+    parMin: 16,
+    intro: '서진님 검토 후 오미래 CTO 에게 갈 보고서. 세 칸. 제출은 2번까지 — 틀리면 어느 칸인지는 알려 주지 않는다.',
+    goalIntro: '서진님 검토 뒤 오미래 CTO 에게 갈 보고서. 세 칸을 채우면 사건이 끝나요. 제출은 2번까지 — 틀리면 어느 칸인지는 알려 주지 않아요.',
+    after: ['다음: 📝 보고서 — 원인, 경위, 재발 방지 세 칸 (제출 2번)', '막히면: ~/README.txt, history, 💡 (숙련자 모드: 감점)'],
+    df: [
+      {
+        host: L,
+        lines: [
+          'Filesystem      Size  Used Avail Use% Mounted on',
+          'tmpfs           794M  1.3M  793M   1% /run',
+          '/dev/sda1        48G   11G   35G  24% /',
+          'tmpfs           3.9G     0  3.9G   0% /dev/shm',
+          `/dev/sdb1       ${DATA_DF.size}  ${DATA_DF.used}  ${DATA_DF.avail}  ${DATA_DF.pct} /data`,
+          'tmpfs           2.0G  8.0K  2.0G   1% /data/collector/spool',
+          'tmpfs           794M  4.0K  794M   1% /run/user/1001',
+        ],
+      },
+    ],
+    files: [
+      {
+        host: L,
+        file: {
+          path: '/etc/fstab',
+          mtime: '2026-11-11T11:01',
+          content: [
+            '# /etc/fstab: static file system information.',
+            '# <file system>                           <mount point>          <type>  <options>                              <dump> <pass>',
+            'UUID=5b0e3c2a-7d1f-4e8b-9a61-2f3c4d5e6a7b  /                      ext4    errors=remount-ro                      0      1',
+            'UUID=9c8d7e6f-1a2b-4c3d-8e9f-0a1b2c3d4e5f  /data                  ext4    defaults,noatime                       0      2',
+            '# 11/11 서진: 수신 버퍼(spool)는 메모리로 — 디스크 덜 쓰게',
+            'tmpfs                                      /data/collector/spool  tmpfs   size=2G,mode=0750,uid=logship,gid=logship  0  0',
+          ].join('\n'),
+        },
+      },
+      { host: L, file: { path: '/data/collector/spool/wiki-01.buf', content: '', size: 4096, binary: '수신 버퍼 (바이너리)', owner: 'logship', group: 'logship', mode: '640', mtime: '2026-11-12T09:30' } },
+    ],
+    timeline: [
+      {
+        at: '2026-11-11T11:01:48',
+        emits: [
+          j(L, 'session-873.scope', '  sjkang : TTY=pts/0 ; PWD=/home/sjkang ; USER=root ; COMMAND=/usr/bin/mount /data/collector/spool', { ident: 'sudo', pid: 39188, priority: 5 }),
+          shipd('spool: flushed 2 buffer file(s) (38M) into raw/ before remount; kept logshipd.lock'),
+        ],
+      },
+      {
+        at: '2026-11-11T11:01:49',
+        emits: [
+          j(L, 'data-collector-spool.mount', 'data-collector-spool.mount: Directory /data/collector/spool to mount over is not empty, mounting anyway.', { ident: 'systemd', pid: 1, priority: 5 }),
+          j(L, 'data-collector-spool.mount', 'Mounting data-collector-spool.mount - /data/collector/spool...', { ident: 'systemd', pid: 1 }),
+          j(L, 'data-collector-spool.mount', 'Mounted data-collector-spool.mount - /data/collector/spool.', { ident: 'systemd', pid: 1 }),
+        ],
+      },
+      { at: '2026-11-11T11:05:40', emits: [msg('pc-logs', 'seojin', 'spool 은 tmpfs(2G)로 붙였어요. 디스크 덜 쓰게.')] },
+    ],
+    clues: [
+      { id: 'c2x_spool', label: '수 11:02 logshipd: spool 을 raw/ 로 비우고 잠금 파일만 남긴 뒤 tmpfs 마운트 — 가려진 건 잠금 파일 하나', slot: 'cause', match: [{ output: 'spool: flushed 2 buffer file\\(s\\) \\(38M\\)', host: L }] },
+    ],
+    options: [
+      { slot: 'cause', at: 2, option: { id: 'mount', text: '어제 /data 아래 새로 붙인 마운트가 원래 있던 파일들을 가려서, du 에는 안 보여도 공간은 그대로 차지한다' } },
+    ],
+  },
 };

@@ -17,6 +17,9 @@
 // A seventh page (1280x800): the briefing's 건너뛰기 stays in Case 0, every way to another case asks
 // in an in-game dialog, a blank Enter is not a command, a maximized terminal closes and reopens, and
 // the last submission's dialog says so; no browser confirm()/alert() anywhere.
+// A ninth page picks "익숙해요 · 숙련자 모드로" and solves Cases 0–3 in that mode: no checklist,
+// every icon at once, two submissions, one more red herring per case that a command rules out, a
+// time row in the debrief.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
@@ -111,7 +114,8 @@ try {
   // first run: the unlock button is the one-time "터미널이 익숙해요 / 처음이에요" choice
   const expq = page.locator('#boot .expq');
   await expq.waitFor();
-  assert.equal(await expq.locator('button').count(), 2);
+  assert.equal(await expq.locator('.expq-opts button').count(), 2);
+  assert.match(await expq.locator('.exp-expert').innerText(), /숙련자 모드/, 'the harder way sits under 익숙해요');
   assert.match(await expq.locator('.exp-familiar').innerText(), /터미널이 익숙해요/);
   assert.match(await expq.locator('.exp-new').innerText(), /처음이에요/);
   assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('exp-new')), true, 'keyboard focus starts on a choice');
@@ -1204,6 +1208,208 @@ try {
   await rep8.locator('.cite[data-slot="responsibility"] .crit.met').first().waitFor();
   step('report: each field lists the kinds it accepts with ✓/○ and whether the cited pin counts; once 재발 방지 has a pin, "증거 3개" ticks');
   await p8.close();
+  // ---- ninth page: 숙련자 모드 — Cases 0–3 solved the harder way
+  const p9 = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  p9.on('pageerror', (e) => errors.push(String(e)));
+  p9.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  p9.on('dialog', (d) => (nativeDialogs.push(`p9 ${d.type()}: ${d.message()}`), d.accept()));
+  const run9 = async (cmd) => {
+    const input = p9.locator('.tin input');
+    await input.fill(cmd);
+    await input.press('Enter');
+    await p9.waitForTimeout(80);
+  };
+  const pin9 = async (re) => {
+    const line = p9.locator('.tline', { hasText: re }).last();
+    await line.hover();
+    await line.locator('.pinbtn').click();
+  };
+  const skipAha9 = async () => {
+    await p9.locator('.moment.moment-aha').waitFor({ timeout: 3000 });
+    await p9.keyboard.press('Escape');
+    await p9.locator('.moment').waitFor({ state: 'detached', timeout: 3000 });
+  };
+  const report9 = async () => {
+    await p9.evaluate(() => {
+      for (const w of document.querySelectorAll('.window')) w.classList.add('min');
+    });
+    await p9.locator('.icon[data-app="report"]').click();
+    return p9.locator('.window[data-app="report"]');
+  };
+  const shot9 = async (name) => shots && (await p9.screenshot({ path: join(shots, name) }));
+  const solvedFirst9 = async () => assert.equal(await p9.evaluate(() => window.__game.st.submissions.length === 1 && window.__game.st.submissions[0].score.allCorrect), true, 'solved on the first submission');
+  const solved9 = async (rep, next, copy = /남은 제출 2\/2/) => {
+    await submit(rep, copy, p9);
+    await rep.locator('.debrief h2').waitFor({ timeout: 5000 });
+    await solvedFirst9();
+    await rep.locator('.record .rec-senior', { hasText: '숙련자 모드' }).waitFor();
+    await p9.locator('.moment').waitFor({ state: 'detached', timeout: 5000 });
+    if (next) {
+      await rep.locator('.nextcase button').click();
+      await p9.locator('#boot .caselabel', { hasText: next }).waitFor();
+      await p9.locator('#boot button.primary').click();
+      await p9.locator('#briefing[data-step="ring"]').waitFor({ timeout: 10000 });
+      await p9.keyboard.press('Escape');
+      await p9.locator('#briefing').waitFor({ state: 'detached', timeout: 3000 });
+      await p9.locator('.window[data-app="terminal"]').waitFor();
+    }
+  };
+  await p9.goto(`${url}?fresh=1&briefing=0`);
+  await p9.locator('#boot .exp-expert').waitFor();
+  await shot9('expert-01-first-run.png');
+  await p9.locator('#boot .exp-expert').click();
+  await p9.locator('#boot').waitFor({ state: 'detached' });
+  assert.equal(await p9.evaluate(() => localStorage.getItem('no-handover:experience')), 'familiar');
+  assert.equal(await p9.evaluate(() => localStorage.getItem('no-handover:expert')), '1');
+  assert.equal(await p9.evaluate(() => window.__game.expert()), true);
+  await p9.waitForTimeout(1200);
+  assert.equal(await p9.locator('.todo').count(), 0, '숙련자: no checklist');
+  assert.equal(await p9.locator('.icons .icon').count(), 7, '숙련자: every icon from the start');
+  assert.equal(await p9.locator('.tour').count(), 0);
+  await shot9('expert-02-case0-desktop.png');
+  step('숙련자 모드 from the first-run choice: 익숙해요 + the mode saved; Case 0 opens with no checklist, all seven icons, no coach mark');
+  // ❓ shows the setting; 💡 shows that the recap costs too
+  await p9.locator('#taskbar button[data-tour="help"]').click();
+  await p9.locator('.expert-set button[data-expert="1"][aria-pressed="true"]').waitFor();
+  assert.match(await p9.locator('.expert-set').innerText(), /지금 사건: 숙련자 모드/);
+  await p9.locator('#taskbar button[data-tour="help"]').click();
+  await p9.locator('#taskbar button[data-tour="hint"]').click();
+  assert.match(await p9.locator('.popover.hints .hp-record').innerText(), /숙련자 모드: 요약 −5/);
+  assert.match(await p9.locator('.popover.hints section[data-key="cause"] .hp-step[data-rung="summary"] button').innerText(), /−5점/);
+  await p9.locator('#taskbar button[data-tour="hint"]').click();
+  step('❓ shows 숙련자 모드 켜짐 for this case; the 💡 recap is −5 in this mode');
+
+  // Case 0: the journal herring — du and journald.conf rule it out
+  await p9.locator('.window[data-app="terminal"] .tout').click();
+  await run9('df -h');
+  await pin9(/100%\s+\/var/);
+  await run9('du -sh /var/log/*');
+  await p9.locator('.tline', { hasText: /^5\d\dM\s+\/var\/log\/journal/ }).waitFor();
+  await run9('cat /etc/systemd/journald.conf');
+  await p9.locator('.tline', { hasText: /^SystemMaxUse=1G/ }).waitFor();
+  assert.equal(await p9.locator('.tline.clue').count(), 0, '숙련자: no yellow clue lines');
+  await run9('journalctl -u wiki --since "2026-11-09 21:00" --until "2026-11-09 21:20"');
+  await pin9(/21:14:03 .*thumbnail/);
+  const rep90 = await report9();
+  await rep90.locator('input[name="slot-sequence"][value="journal"]').waitFor();
+  await shot9('expert-04-case0-report.png');
+  assert.match(await rep90.locator('.submitbar .primary-btn').innerText(), /2\/2/);
+  await rep90.locator('input[name="slot-cause"][value="disk"]').check();
+  await rep90.locator('input[name="slot-sequence"][value="true"]').check();
+  await rep90.locator('label.citeopt:has(input[name="cite-cause"])', { hasText: /100%\s+\/var/ }).first().locator('input').check();
+  await rep90.locator('label.citeopt:has(input[name="cite-sequence"])', { hasText: /21:14:03 .*thumbnail/ }).first().locator('input').check();
+  await submit(rep90, /남은 제출 2\/2/, p9);
+  await rep90.locator('.debrief h2').waitFor({ timeout: 5000 });
+  await rep90.locator('.scorebox .s.time').waitFor();
+  await solvedFirst9();
+  await p9.locator('.moment').waitFor({ state: 'detached', timeout: 5000 });
+  await shot9('expert-03-case0-debrief.png');
+  assert.ok(await p9.evaluate(() => 'c0x_journal' in window.__game.st.clues));
+  await p9.locator('.moment').waitFor({ state: 'detached', timeout: 5000 });
+  await rep90.locator('.nextcase button').click();
+  await p9.locator('#boot .caselabel', { hasText: 'Case 1' }).waitFor();
+  await p9.locator('#boot button.primary').click();
+  await p9.locator('#briefing[data-step="ring"]').waitFor({ timeout: 10000 });
+  await p9.keyboard.press('Escape');
+  await p9.locator('#briefing').waitFor({ state: 'detached', timeout: 3000 });
+  step('Case 0 (숙련자): the journald herring is in the report, du and journald.conf rule it out; 2 submissions, a 시간 row in the debrief');
+
+  // Case 1: the /bin/sh herring — the shebang and the hourly output rule it out
+  assert.equal(await p9.evaluate(() => window.__game.expert()), true, 'the mode carries to the next case');
+  assert.equal(await p9.locator('.todo').count(), 0);
+  await p9.locator('.window[data-app="terminal"] .tout').click();
+  await run9('crontab -l');
+  await pin9(/^0 \* \* \* \* ~\/bin\/wiki-log-clean\.sh/);
+  await run9('journalctl -u cron --since "2026-11-11 00:50" --until "2026-11-11 01:10"');
+  await pin9(/\(eunjae\) CMD \(~\/bin\/wiki-log-clean/);
+  await run9('cat ~/log/cron-env.txt');
+  await run9('head -12 ~/bin/wiki-log-clean.sh');
+  await p9.locator('.tline', { hasText: '[[ "$SIZE_MB" -lt "$LIMIT_MB"' }).waitFor();
+  await run9('cat ~/wiki-clean.log');
+  await skipAha9();
+  await pin9(/line 15: wikictl: command not found/);
+  const rep91 = await report9();
+  await rep91.locator('input[name="slot-cause"][value="sh-syntax"]').waitFor();
+  await rep91.locator('input[name="slot-cause"][value="cron-path"]').check();
+  await rep91.locator('input[name="slot-sequence"][value="true"]').check();
+  await rep91.locator('label.citeopt:has(input[name="cite-cause"])', { hasText: /line 15: wikictl: command not found/ }).first().locator('input').check();
+  await rep91.locator('label.citeopt:has(input[name="cite-sequence"])', { hasText: /\(eunjae\) CMD \(~\/bin\/wiki-log-clean/ }).first().locator('input').check();
+  await solved9(rep91, 'Case 2');
+  assert.ok(await p9.evaluate(() => window.__game.expert()));
+  step('Case 1 (숙련자): the [[ ]] script and cron\'s SHELL=/bin/sh make the sh herring plausible; #!/bin/bash and line 15 rule it out; solved');
+
+  // Case 2: the mount herring — logshipd's flush line rules it out
+  assert.equal(await p9.locator('.todo').count(), 0);
+  await p9.locator('.window[data-app="terminal"] .tout').click();
+  await run9('df -h');
+  await p9.locator('.tline', { hasText: /tmpfs .*\/data\/collector\/spool/ }).waitFor();
+  await run9('cat /etc/fstab');
+  await run9('journalctl -u logshipd --since "2026-11-11 11:00" --until "2026-11-11 11:10"');
+  await p9.locator('.tline', { hasText: 'spool: flushed 2 buffer file(s) (38M)' }).waitFor();
+  await run9('pgrep -f logshipd');
+  await run9('ls -l /proc/1187/fd | grep deleted');
+  await skipAha9();
+  await pin9(/\(deleted\)/);
+  await run9('journalctl --since "2026-11-11 14:00" --until "2026-11-11 15:00"');
+  await pin9(/COMMAND=\/usr\/bin\/rm pay-api-01\.log/);
+  await run9('cat /etc/logshipd/logshipd.conf');
+  await pin9(/^max_source_bytes = 0/);
+  const rep92 = await report9();
+  await rep92.locator('input[name="slot-cause"][value="mount"]').waitFor();
+  await rep92.locator('input[name="slot-cause"][value="open"]').check();
+  await rep92.locator('input[name="slot-sequence"][value="true"]').check();
+  for (const id of ['no-verify', 'open-rule', 'debug-expiry', 'quota', 'silent-drop']) await rep92.locator(`input[name="slot-responsibility"][value="${id}"]`).check();
+  await rep92.locator('label.citeopt:has(input[name="cite-cause"])', { hasText: /\(deleted\)/ }).first().locator('input').check();
+  await rep92.locator('label.citeopt:has(input[name="cite-sequence"])', { hasText: /COMMAND=\/usr\/bin\/rm pay-api-01\.log/ }).first().locator('input').check();
+  await rep92.locator('label.citeopt:has(input[name="cite-responsibility"])', { hasText: /max_source_bytes = 0/ }).first().locator('input').check();
+  await solved9(rep92, 'Case 3');
+  step('Case 2 (숙련자): a tmpfs over a non-empty spool makes "hidden under a mount" plausible; logshipd\'s flush line rules it out; solved');
+
+  // Case 3: no overlay — the checklist stays, only hint steps cost points
+  assert.equal(await p9.evaluate(() => [window.__game.st.settings.senior, window.__game.expert()]).then(String), 'true,false');
+  assert.equal(await p9.locator('.todo li').count(), 3, 'Case 3 keeps its checklist');
+  await p9.locator('.window[data-app="terminal"] .tout').click();
+  for (const c of ['history | tail -20', 'crontab -l', 'head -5 ~/bin/ledger-backup.sh', 'fds', 'systemctl show payment-api -p LimitNOFILE', 'tail -3 ~/log/backup.log']) await run9(c);
+  await pin9(/^15 3 \* \* 6/);
+  await pin9(/^1947/);
+  await pin9(/^LimitNOFILE=4096/);
+  await pin9(/opened 2,314 segment files/);
+  await run9('journalctl -u payment-api --since "2026-11-14 03:14" --until "2026-11-14 03:18"');
+  await pin9(/03:15:40 .*too many open files/);
+  await p9.locator('.ttab', { hasText: /^pay-cfg$/ }).first().click();
+  await run9('cd /srv/git/pay-config.git');
+  await run9('git log --format=fuller -1');
+  await pin9(/^AuthorDate: Fri Nov 13 18:02:11/);
+  await run9('git branch -a');
+  await pin9(/revert-pool-bump/);
+  await run9('getent group git-admins');
+  await pin9(/^git-admins:x:1050/);
+  await run9('cat hooks/pre-receive');
+  await pin9(/grep -qw git-admins && exit 0/);
+  await p9.locator('.ttab', { hasText: /^bastion$/ }).first().click();
+  await run9('last');
+  await pin9(/^sjkang .*vpn-10\.8\.3\.41/);
+  await p9.locator('.ttab', { hasText: /^review-web$/ }).first().click();
+  await run9('grep sjkang /var/log/nginx/access.log | tail -3');
+  await pin9(/02:10:07 .*approve/);
+  await p9.waitForFunction(() => window.__game.st.live.some((m) => /설마/.test(m.text) && m.deletedAt !== undefined), null, { timeout: 15000 });
+  await p9.evaluate(() => {
+    window.__game.open('notif:E06');
+    window.__game.open('mail:summary');
+  });
+  const rep93 = await report9();
+  await rep93.locator('input[name="slot-cause"][value="fd"]').check();
+  await rep93.locator('input[name="slot-sequence"][value="true"]').check();
+  for (const id of ['git-admins', 'cron', 'oncall', 'account', 'bottleneck', 'cover-seojin', 'cover-jihoon']) await rep93.locator(`input[name="slot-responsibility"][value="${id}"]`).check();
+  await rep93.locator('label.citeopt:has(input[name="cite-cause"])', { hasText: /too many open files/ }).first().locator('input').check();
+  await rep93.locator('label.citeopt:has(input[name="cite-sequence"])', { hasText: /AuthorDate: Fri Nov 13 18:02:11/ }).first().locator('input').check();
+  await rep93.locator('label.citeopt:has(input[name="cite-responsibility"])', { hasText: /git-admins:x:1050/ }).first().locator('input').check();
+  await solved9(rep93, null, /남은 제출 3\/3/);
+  assert.match(await rep93.locator('.scorebox .s').nth(1).innerText(), /330 \/ 330/);
+  assert.equal(await rep93.locator('.scorebox .s.time').count(), 0, 'no time row without an overlay');
+  assert.deepEqual(JSON.parse(await p9.evaluate(() => localStorage.getItem('no-handover:campaign'))).solved, ['case0-wiki', 'case1-cron-env', 'case2-deleted-open', 'friday-1802']);
+  step('Case 3 (숙련자): checklist kept, no time cost; solved 330/330 — Cases 0–3 all solved in 숙련자 모드');
+  await p9.close();
   assert.deepEqual(nativeDialogs, [], 'no browser confirm()/alert() anywhere');
 
   assert.deepEqual(errors, []);

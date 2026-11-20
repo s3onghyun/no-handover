@@ -1,6 +1,7 @@
 // Accusation scoring: 100 per report slot (the case decides which slots exist: case 0 has two,
 // case 3 three), attempt multiplier, evidence bonus, hint cost. The hint cost is only passed in
-// senior mode (`?senior=1`); otherwise hints are a record ("힌트 N회"), see src/engine/record.ts.
+// 숙련자 모드 (`?senior=1`, src/engine/expert.ts), which in Cases 0–2 also takes off play time over
+// par; otherwise hints are a record ("힌트 N회"), see src/engine/record.ts.
 
 import { citeState, type CiteState, type PinLike } from './evidence.ts';
 import type { CaseFile, SlotDef, SlotId } from './types.ts';
@@ -30,6 +31,8 @@ export interface ScoreResult {
   multiplier: number;
   evidenceBonus: number;
   hintCost: number;
+  /** 숙련자 모드 (Cases 0–2): points off for play time over par; absent otherwise. */
+  timeCost?: number;
   /** Hints used before this submission (record; added later, absent in old saves). */
   hints?: number;
   total: number;
@@ -78,7 +81,7 @@ export function missingCites(cs: CaseFile, sub: Submission, pins: PinLike[]): Sl
 export function scoreSubmission(
   cs: CaseFile,
   sub: Submission,
-  ctx: { attempt: number; pinnedKeyClues: number; hintCost: number; pins?: PinLike[] },
+  ctx: { attempt: number; pinnedKeyClues: number; hintCost: number; pins?: PinLike[]; timeCost?: number },
 ): ScoreResult {
   const slots: Partial<Record<SlotId, SlotScore>> = {};
   const blamed: string[] = [];
@@ -98,8 +101,10 @@ export function scoreSubmission(
   }
   const multiplier = ATTEMPT_MULTIPLIER[Math.min(ctx.attempt, ATTEMPT_MULTIPLIER.length) - 1] ?? ATTEMPT_MULTIPLIER[ATTEMPT_MULTIPLIER.length - 1];
   const evidenceBonus = Math.min(EVIDENCE_CAP, ctx.pinnedKeyClues * EVIDENCE_POINTS);
-  const total = Math.max(0, Math.round(base * multiplier) + evidenceBonus - ctx.hintCost);
+  const total = Math.max(0, Math.round(base * multiplier) + evidenceBonus - ctx.hintCost - (ctx.timeCost ?? 0));
+  const timed = ctx.timeCost === undefined ? {} : { timeCost: ctx.timeCost };
   return {
+    ...timed,
     slots,
     allCorrect,
     base,

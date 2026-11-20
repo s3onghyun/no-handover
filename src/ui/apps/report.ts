@@ -46,6 +46,8 @@ function debrief(root: HTMLElement, ctx: UiCtx): void {
         h('div.s', null, `제출 ×${s.multiplier}`, h('b', null, `${g.st.submissions.length}회`)),
         h('div.s', null, t('report.evidence'), h('b', null, `+${s.evidenceBonus}`)),
         senior ? h('div.s', null, t('debrief.steps'), h('b', null, `−${s.hintCost}`)) : h('div.s', null, t('debrief.steps'), h('b', null, `${rec.hints}개`)),
+        // 숙련자 모드 in Cases 0–2: play time over par
+        s.timeCost !== undefined ? h('div.s.time', null, t('debrief.time'), h('b', null, s.timeCost ? `−${s.timeCost}` : '0')) : null,
       ),
       citeList(g, last.sub),
       h(

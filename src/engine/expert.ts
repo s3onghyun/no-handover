@@ -1,0 +1,71 @@
+// 숙련자 모드 — the harder way through Cases 0–2 for players who know a terminal
+// (docs/campaign-ladder.md §숙련자 모드). Chosen on the first-run screen next to 터미널이 익숙해요,
+// or in ❓; off by default and never on for 처음이에요. Stored per profile; a case keeps the mode
+// it was started in (the setting is `settings.senior`, the old `?senior=1` switch).
+//
+// In every case the mode takes hint cost off the score (as `?senior=1` always did). In a case
+// with an `expert` overlay (Cases 0–2) it also:
+//   - folds the "오늘 할 일" checklist from the start: no steps, no rail, no yellow clue lines, every
+//     icon on the desktop;
+//   - sends no colleague nudge unasked (asking still works, and costs ASK_COST);
+//   - charges the 💡 recap (요약) too (SUMMARY_COST), so no hint step is free;
+//   - allows fewer submissions and takes TIME_STEP points off for every TIME_EVERY_MIN minutes of
+//     play over the case's par (at most TIME_CAP);
+//   - adds one red herring: a report option that a world detail makes plausible and one command
+//     rules out (the case file's `expert` block says which).
+
+import type { CaseFile, ExpertDef, FileDef } from './types.ts';
+
+/** Per-profile choice (localStorage), next to the 익숙해요 / 처음이에요 record. */
+export const EXPERT_KEY = 'no-handover:expert';
+export const SUMMARY_COST = 5;
+export const ASK_COST = 5;
+export const TIME_STEP = 5;
+export const TIME_EVERY_MIN = 2;
+export const TIME_CAP = 30;
+
+export function parseExpert(raw: string | null | undefined): boolean {
+  return raw === '1';
+}
+
+/** Points taken off for play time over par: −5 per full 2 minutes over, at most −30. */
+export function timeCost(playMs: number, parMin: number): number {
+  const over = playMs / 60000 - parMin;
+  if (over <= 0) return 0;
+  return Math.min(TIME_CAP, Math.floor(over / TIME_EVERY_MIN) * TIME_STEP);
+}
+
+/**
+ * The case as 숙련자 모드 plays it: a copy with the overlay applied. The input is never changed,
+ * so the default path keeps its own case object.
+ */
+export function applyExpert(cs: CaseFile): CaseFile {
+  const x: ExpertDef | undefined = cs.expert;
+  if (!x) return cs;
+  const hosts = cs.hosts.map((hd) => {
+    const add = (x.files ?? []).filter((f) => f.host === hd.name).map((f) => f.file);
+    const df = x.df?.find((d) => d.host === hd.name)?.lines;
+    if (!add.length && !df) return hd;
+    const files: FileDef[] = hd.files.filter((f) => !add.some((a) => a.path === f.path)).concat(add);
+    return { ...hd, files, df: df ?? hd.df };
+  });
+  const slots = cs.accusation.slots.map((s) => {
+    const extra = (x.options ?? []).filter((o) => o.slot === s.id);
+    if (!extra.length) return s;
+    const options = [...s.options];
+    for (const o of extra) options.splice(o.at ?? options.length, 0, o.option);
+    return { ...s, options };
+  });
+  const opening = cs.opening && x.after ? { ...cs.opening, objectives: { ...cs.opening.objectives, after: x.after } } : cs.opening;
+  return {
+    ...cs,
+    hosts,
+    timeline: [...cs.timeline, ...(x.timeline ?? [])],
+    clues: [...cs.clues, ...(x.clues ?? [])],
+    accusation: { ...cs.accusation, slots, maxSubmissions: x.maxSubmissions, intro: x.intro ?? cs.accusation.intro },
+    goal: x.goalIntro ? { ...cs.goal, intro: x.goalIntro } : cs.goal,
+    opening,
+    // no yellow clue lines: the player greps as in the main cases
+    rail: cs.rail ? { ...cs.rail, highlightClues: false } : cs.rail,
+  };
+}

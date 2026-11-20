@@ -4,6 +4,7 @@
 
 import { buildWorld, type Message, type World } from './build.ts';
 import { evidencePins, uncoveredSlots } from './evidence.ts';
+import { applyExpert, ASK_COST, SUMMARY_COST, timeCost } from './expert.ts';
 import { HintLadder, type LadderState, type PanelRung } from './hints.ts';
 import { buildPanel, openStep, type PanelInput, type PanelSection } from './hintpanel.ts';
 import { playRecord } from './record.ts';
@@ -44,7 +45,10 @@ export interface LogEvent {
 export interface Settings {
   idleMinutes: number;
   clockRate: number;
-  /** Senior mode (`?senior=1`): hints cost points again. Default: hints are only a record. */
+  /**
+   * 숙련자 모드 (`?senior=1`, or the first-run / ❓ choice): hints cost points again, and in a case
+   * with an `expert` overlay the stricter rules of src/engine/expert.ts apply. Default off.
+   */
   senior?: boolean;
 }
 
@@ -100,9 +104,12 @@ const MAX_TAB_LINES = 600;
 export const ASK_BEAT_MS = 600;
 
 export class Game {
-  readonly cs: CaseFile;
-  readonly world: World;
-  readonly shell: Shell;
+  /** The case as played: `base`, or its 숙련자 모드 copy (src/engine/expert.ts). */
+  cs: CaseFile;
+  /** The case file as authored. */
+  readonly base: CaseFile;
+  world: World;
+  shell: Shell;
   readonly start: number;
   ladder: HintLadder;
   objectives: Objectives;
@@ -112,18 +119,21 @@ export class Game {
   private clueRegex = new Map<string, { re: RegExp; host?: string }[]>();
 
   constructor(cs: CaseFile, saved?: SaveState | null, settings?: Partial<Settings>) {
-    this.cs = cs;
-    this.world = buildWorld(cs);
+    const s = saved && saved.v === SAVE_VERSION && saved.caseId === cs.id ? saved : null;
+    // a started case keeps the mode it was started in (its world depends on it)
+    if (s?.unlocked && settings && 'senior' in settings) {
+      settings = { ...settings };
+      delete settings.senior;
+    }
+    const senior = !!(settings?.senior ?? s?.settings.senior);
+    this.base = cs;
+    this.cs = senior ? applyExpert(cs) : cs;
+    this.world = buildWorld(this.cs);
     this.start = parseLocal(cs.clock.start);
     this.shell = new Shell(this.world, () => this.now());
-    for (const c of cs.clues) {
-      this.clueRegex.set(
-        c.id,
-        c.match.flatMap((m) => ('output' in m ? [{ re: new RegExp(m.output, m.cs ? 'mu' : 'imu'), host: m.host }] : [])),
-      );
-    }
-    const s = saved && saved.v === SAVE_VERSION && saved.caseId === cs.id ? saved : null;
-    this.st = s ?? this.fresh(settings);
+    this.compileClues();
+    // a save from the lock screen in the other mode is dropped (nothing was played yet)
+    this.st = s && (s.unlocked || !!s.settings.senior === senior) ? s : this.fresh({ ...s?.settings, ...settings, senior });
     // saves written before the opening existed
     this.st.objectives ??= emptyObjectiveState();
     this.st.briefing ??= { startedAt: null, endedAt: null, skipped: false, watchedMs: 0, replays: 0 };
@@ -141,7 +151,47 @@ export class Game {
     }
   }
 
+  private compileClues(): void {
+    this.clueRegex.clear();
+    for (const c of this.cs.clues) {
+      this.clueRegex.set(
+        c.id,
+        c.match.flatMap((m) => ('output' in m ? [{ re: new RegExp(m.output, m.cs ? 'mu' : 'imu'), host: m.host }] : [])),
+      );
+    }
+  }
+
+  /** 숙련자 모드 with this case's overlay: the stricter rules apply (src/engine/expert.ts). */
+  expert(): boolean {
+    return !!this.st.settings.senior && !!this.base.expert;
+  }
+
+  /**
+   * Switch 숙련자 모드 before the case starts (the first-run choice comes after the page built the
+   * game): a fresh state on the case as that mode plays it. Ignored once the case is unlocked.
+   */
+  setSenior(on: boolean): boolean {
+    if (this.st.unlocked || !!this.st.settings.senior === on) return false;
+    const keep = { campaignAtStart: this.st.campaignAtStart };
+    this.cs = on ? applyExpert(this.base) : this.base;
+    this.world = buildWorld(this.cs);
+    this.shell = new Shell(this.world, () => this.now());
+    this.compileClues();
+    this.st = { ...this.fresh({ ...this.st.settings, senior: on }), ...keep };
+    this.st.rail = { said: [], redirected: [] };
+    this.st.unsend = [];
+    this.objectives = new Objectives(this.cs.opening?.objectives.items ?? [], this.st.objectives);
+    this.st.objectives = this.objectives.state;
+    this.ladder = new HintLadder(this.cs.hints, 0, { idleMs: this.st.settings.idleMinutes * 60000 }, this.st.ladder);
+    this.st.ladder = this.ladder.state;
+    this.log('mode', { senior: on });
+    this.emit('save');
+    return true;
+  }
+
   private fresh(settings?: Partial<Settings>): SaveState {
+    // 숙련자 모드 (Cases 0–2): no checklist steps — the sticky starts folded
+    const folded = !!settings?.senior && !!this.base.expert;
     const tabs = this.cs.terminalTabs.map((t, i) => {
       const session = this.shell.newSession(`tab${i}`, t.host, t.cwd);
       return { label: t.label, session, lines: (t.scrollback ?? []).map((text) => ({ text, cls: 'dim' as const })), input: t.prefill ?? '' };
@@ -169,7 +219,7 @@ export class Game {
       appTime: {},
       focusedApp: null,
       log: [{ t: 0, type: 'start', case: this.cs.id }],
-      objectives: emptyObjectiveState(),
+      objectives: folded ? { ...emptyObjectiveState(), foldedAt: 0 } : emptyObjectiveState(),
       briefing: { startedAt: null, endedAt: null, skipped: false, watchedMs: 0, replays: 0 },
       facilitator: {},
     };
@@ -250,8 +300,8 @@ export class Game {
     for (const tr of this.cs.triggers) {
       if ('afterMin' in tr.when && !this.st.triggersFired.includes(tr.id) && t >= tr.when.afterMin * 60000) this.fire(tr.id);
     }
-    // rung 2 idle nudges
-    if (!this.st.finished) {
+    // rung 2 idle nudges (숙련자 모드: nobody nudges unasked)
+    if (!this.st.finished && !this.expert()) {
       const lastClueAt = Math.max(-Infinity, ...Object.values(this.st.clues).map((c) => c.at));
       const n = this.ladder.tick(t, this.foundSet(), this.causeSolved(), lastClueAt);
       if (n) this.deliverNudge(n, 'idle');
@@ -422,6 +472,7 @@ export class Game {
       this.ladder.progress(now);
     } else {
       nudge = this.ladder.ask(now, this.foundSet());
+      if (this.expert()) this.ladder.state.asked!.at(-1)!.cost = ASK_COST;
       reply = nudge ? { channel: nudge.channel, from: nudge.from, text: nudge.askText ?? nudge.text } : { ...a.none };
     }
     this.pushLive({ channel: reply.channel, from: this.cs.player, text: prompt }, 'ask');
@@ -571,6 +622,7 @@ export class Game {
       ladder: this.ladder,
       objective: open ? this.objectives.current() : null,
       doneObjectives: items.filter((i) => this.objectives.isDone(i.id)),
+      summaryCost: this.expert() ? SUMMARY_COST : 0,
     };
   }
 
@@ -612,8 +664,14 @@ export class Game {
   submit(sub: Submission): ScoreResult | null {
     if (this.st.finished || this.submissionsLeft() <= 0) return null;
     const attempt = this.st.submissions.length + 1;
-    // hints are a record; only senior mode takes their cost off the score
-    const score = scoreSubmission(this.cs, sub, { attempt, pinnedKeyClues: this.pinnedKeyClues(), hintCost: this.st.settings.senior ? this.ladder.totalCost() : 0, pins: this.st.pins });
+    // hints are a record; only 숙련자 모드 takes their cost (and, with an overlay, play time) off the score
+    const score = scoreSubmission(this.cs, sub, {
+      attempt,
+      pinnedKeyClues: this.pinnedKeyClues(),
+      hintCost: this.st.settings.senior ? this.ladder.totalCost() : 0,
+      pins: this.st.pins,
+      timeCost: this.expert() ? timeCost(this.st.playMs, this.base.expert!.parMin) : undefined,
+    });
     score.hints = this.ladder.hintCount();
     this.st.submissions.push({ at: this.st.playMs, sub, score });
     const correct = Object.fromEntries(Object.entries(score.slots).map(([k, v]) => [k, v!.correct]));
