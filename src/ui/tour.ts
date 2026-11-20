@@ -11,7 +11,7 @@
 import { nextTourStep, parseTourState, type TourState } from '../engine/tour.ts';
 import type { TourStep } from '../engine/types.ts';
 import type { Game } from '../engine/game.ts';
-import { h, storage } from './dom.ts';
+import { canRestoreFocus, h, storage } from './dom.ts';
 import { t } from '../i18n.ts';
 
 export const TOUR_SEEN_KEY = 'no-handover:tour';
@@ -59,7 +59,7 @@ export function mountTour(game: Game, opts: { blocked: () => boolean; collapsed?
     el.remove();
     cur = null;
     if (hadFocus) {
-      const to = back?.isConnected ? back : document.querySelector<HTMLElement>('.window.focused:not(.min) .tin input');
+      const to = canRestoreFocus(back) ? back : document.querySelector<HTMLElement>('.window.focused:not(.min) .tin input');
       to?.focus({ preventScroll: true });
     }
     // switched to "익숙해요" while a mark was up: put it away without counting it as seen

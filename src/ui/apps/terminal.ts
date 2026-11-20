@@ -22,11 +22,32 @@ export const terminalApp: AppDef = {
     const out = h('div.tout', { 'aria-live': 'polite' });
     const ps1 = h('span.ps1');
     const input = h('input', { type: 'text', spellcheck: false, autocomplete: 'off', 'aria-label': 'command', autocapitalize: 'off' }) as HTMLInputElement;
-    const term = h('div.term', null, tabsEl, out, h('div.tin', null, ps1, input));
+    // the prompt comes before the output in the document (CSS puts it at the bottom): after a long
+    // output a truncated accessibility snapshot still lists the command textbox
+    const term = h('div.term', null, tabsEl, h('div.tin', null, ps1, input), out);
     body.appendChild(term);
     term.addEventListener('mouseup', () => {
       if (!window.getSelection()?.toString()) input.focus();
     });
+    // a line itself: a tap pins it (touch has no hover to find the 📌); a mouse click that selects
+    // nothing says where the 📌 is, until the first line is pinned
+    let hintAt = -Infinity;
+    out.addEventListener('click', (e: MouseEvent) => {
+      const el = e.target as HTMLElement;
+      const line = el.closest('.tline');
+      const btn = line?.querySelector<HTMLButtonElement>('.pinbtn');
+      if (!btn || el.closest('.pinbtn') || window.getSelection()?.toString()) return;
+      if ((e as PointerEvent).pointerType === 'touch') {
+        btn.click();
+        return;
+      }
+      if (g.st.pins.some((p) => p.kind === 'line') || performance.now() - hintAt < 20000) return;
+      hintAt = performance.now();
+      g.log('pin-how', { text: (line!.textContent ?? '').slice(0, 80) });
+      ctx.toast(`📌 ${t('term.pinHow')}`);
+    });
+    /** Focus the prompt only while the terminal is the front window (a deferred focus must not pull it forward). */
+    const focusPrompt = () => setTimeout(() => ctx.wm.focused === 'terminal' && input.focus(), 0);
 
     const tab = () => g.tab(cur);
     const host = () => g.shell.frame(tab().session).host;
@@ -156,10 +177,10 @@ export const terminalApp: AppDef = {
     renderTabs();
     renderAll();
     renderPrompt();
-    setTimeout(() => input.focus(), 0);
+    focusPrompt();
 
     return {
-      focus: () => setTimeout(() => input.focus(), 0),
+      focus: focusPrompt,
       refresh: (type?: string) => {
         if (type !== 'pins') return;
         // pins changed: update pin markers without re-rendering output

@@ -22,6 +22,10 @@
 // A ninth page picks "익숙해요 · 숙련자 모드로" and solves Cases 0–3 in that mode: no checklist,
 // every icon at once, two submissions, one more red herring per case that a command rules out, a
 // time row in the debrief.
+// A tenth page (1280x800, touch) checks pins and windows as a snapshot-driven tool meets them: a
+// faint 📌 on every line named after it, tap to pin, a hint on a plain click, "already pinned"; a
+// covered window leaves the accessibility tree, focus raises a window, minimized stays minimized,
+// toasts keep off the 📌 columns, and the command textbox precedes a long output in the document.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
@@ -71,6 +75,14 @@ async function pinLine(re) {
   await line.locator('.pinbtn').click();
 }
 
+/**
+ * Close an open window from its ✕. Typing into the terminal (fill) brings it forward, so a window
+ * that opened by itself meanwhile may be behind: its taskbar entry raises it first.
+ */
+async function closeWin(app, pg = page) {
+  if ((await pg.evaluate((a) => document.querySelector('.window.focused')?.dataset.app, app)) !== app) await pg.locator(`#taskbar .task[data-app="${app}"]`).click();
+  await pg.locator(`.window[data-app="${app}"] .titlebar button.close`).click();
+}
 const todoItem = (id) => page.locator(`.todo li[data-id="${id}"]`);
 /** Report submit: the in-game confirm (copy per the case's submission rule), then 제출하기. */
 async function submit(rep, copy, pg = page) {
@@ -236,9 +248,8 @@ try {
   await run('systemctl status wiki');
   await todoItem('service').and(page.locator('.done')).waitFor();
   await mark('dashboard');
-  const notesWin = page.locator('.window[data-app="notes"] .titlebar button.close');
   await page.waitForTimeout(400);
-  if (await notesWin.count()) await notesWin.click(); // the memo scene opened the notebook
+  if (await page.locator('.window[data-app="notes"]').count()) await closeWin('notes'); // the memo scene opened the notebook
   // the "증거 2개" item counts only pins that meet a report slot's evidence kind, and shows the kinds
   await todoItem('pins').locator('.todo-ev').waitFor();
   assert.match(await todoItem('pins').innerText(), /증거 2개 핀 → 보고서 쓰기/);
@@ -553,8 +564,7 @@ try {
   await page.keyboard.press('Escape');
   await todoItem('holder').and(page.locator('.done')).waitFor();
   await page.waitForTimeout(400);
-  const notes2 = page.locator('.window[data-app="notes"] .titlebar button.close');
-  if (await notes2.count()) await notes2.click(); // the memo scene opened the notebook
+  if (await page.locator('.window[data-app="notes"]').count()) await closeWin('notes'); // the memo scene opened the notebook
   await pinLine(/\(deleted\)/);
   // round 3: the nameless file's size is observable — following the fd link (ls -lL) and its fdinfo offset
   await run('ls -lhL /proc/1187/fd/7');
@@ -684,7 +694,7 @@ try {
   assert.ok(fm.objectives.every((o) => o.t !== null) && fm.objectivesFoldedAt !== null);
   assert.ok(fm.firstMeaningfulCommandAt !== null);
   step('box 3 ticks at the third pin; the sticky folds into the notebook ("오늘 할 일 ✓")');
-  await page.locator('.window[data-app="notes"] .titlebar button.close').click();
+  await closeWin('notes');
   await pinLine(/opened 2,314 segment files/);
 
   await page.locator('.window[data-app="terminal"]').click({ position: { x: 300, y: 12 } });
@@ -1650,6 +1660,139 @@ try {
   assert.deepEqual(JSON.parse(await p9.evaluate(() => localStorage.getItem('no-handover:campaign'))).solved, ['case0-wiki', 'case1-cron-env', 'case2-deleted-open', 'friday-1802']);
   step('Case 3 (숙련자): checklist kept, no time cost; solved 330/330 — Cases 0–3 all solved in 숙련자 모드');
   await p9.close();
+
+  // ---- tenth page (1280x800, touch-capable): pins and windows as the playtesters' snapshot tool
+  // meets them. Every 📌 shows (faintly) and is named after its line; a tap on a line pins it, a
+  // plain click says where the 📌 is, pinning twice says so. A window whose controls sit under
+  // another window leaves the accessibility tree (the tool clicks a control's centre, which would
+  // land on the window in front), focus brings a window forward, a minimized window stays
+  // minimized, toasts keep off every 📌 column, and the command textbox stays in the tree, ahead
+  // of a long output in the document.
+  const ctx10 = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, hasTouch: true });
+  const p10 = await ctx10.newPage();
+  p10.on('pageerror', (e) => errors.push(String(e)));
+  p10.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  p10.on('dialog', (d) => (nativeDialogs.push(`p10 ${d.type()}: ${d.message()}`), d.accept()));
+  const pins10 = () => p10.evaluate(() => window.__game.st.pins.length);
+  const front10 = () => p10.evaluate(() => document.querySelector('.window.focused')?.dataset.app);
+  /** Exposed controls (titlebar buttons, tabs, the prompt, desktop icons) whose centre a click would not reach. */
+  const unreachable10 = () =>
+    p10.evaluate(() => {
+      const bad = [];
+      const at = (c) => {
+        const r = c.getBoundingClientRect();
+        return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      };
+      for (const w of document.querySelectorAll('.window:not(.min):not([aria-hidden="true"])')) {
+        for (const c of w.querySelectorAll('.titlebar button, .ttab, .tin input')) {
+          const e = at(c);
+          if (e?.closest('.window') !== w) bad.push(`${w.dataset.app} ${c.getAttribute('aria-label') ?? c.textContent} → ${e?.closest('.window')?.dataset.app ?? e?.className}`);
+        }
+      }
+      for (const i of document.querySelectorAll('.icon:not([aria-hidden="true"])')) if (!at(i)?.closest('.icon')) bad.push(`icon ${i.dataset.app}`);
+      return bad;
+    });
+  const run10 = async (cmd) => {
+    const input = p10.locator('.tin input');
+    await input.fill(cmd);
+    await input.press('Enter');
+    await p10.waitForTimeout(80);
+  };
+  await p10.goto(`${url}?fresh=1&case=case1-cron-env&briefing=0`);
+  await p10.locator('#boot .exp-familiar').click();
+  await p10.locator('#boot').waitFor({ state: 'detached' });
+  const term10 = p10.locator('.window[data-app="terminal"]');
+  if (!(await term10.count())) await p10.locator('.icon[data-app="terminal"]').click();
+  await term10.waitFor();
+  await run10('crontab -l');
+  const cron10 = p10.locator('.tline', { hasText: /^0 \* \* \* \* ~\/bin\/wiki-log-clean\.sh/ }).last();
+  const cronPin10 = cron10.locator('.pinbtn');
+  await p10.mouse.move(8, 700); // the bare desktop: nothing hovered
+  assert.ok(+(await cronPin10.evaluate((b) => getComputedStyle(b).opacity)) >= 0.25, 'the 📌 shows without hovering');
+  assert.match(await cronPin10.getAttribute('aria-label'), /^핀: 0 \* \* \* \* ~\/bin\/wiki-log-clean\.sh/);
+  assert.ok((await cronPin10.getAttribute('aria-label')).length <= 45, 'named after the first 40 characters of its line');
+  await cronPin10.focus();
+  assert.ok(+(await cronPin10.evaluate((b) => getComputedStyle(b).opacity)) >= 0.8, 'keyboard focus shows the 📌 in full');
+  await cron10.click({ position: { x: 40, y: 6 } });
+  await p10.locator('.toast', { hasText: '줄 오른쪽 끝의 📌' }).waitFor({ timeout: 2000 });
+  assert.equal(await pins10(), 0, 'a mouse click on the line itself pins nothing');
+  await cron10.tap({ position: { x: 40, y: 6 } });
+  await p10.locator('.toast.pintoast').waitFor({ timeout: 2000 });
+  assert.equal(await pins10(), 1, 'a tap on the line pins it');
+  assert.equal(await cronPin10.getAttribute('aria-pressed'), 'true');
+  await cronPin10.click();
+  await p10.locator('.toast.pintoast', { hasText: '이미 핀한 줄이에요' }).waitFor({ timeout: 2000 });
+  assert.equal(await pins10(), 1);
+  step('1280x800, touch: every 📌 shows faintly and is named "핀: <its line>"; a click on the line says where the 📌 is, a tap pins it, pinning it again says "이미 핀한 줄이에요"');
+
+  await p10.locator('.icon[data-app="board"]').click();
+  const board10 = p10.locator('.window[data-app="board"]');
+  await board10.waitFor();
+  assert.equal(await front10(), 'board');
+  await p10.waitForTimeout(100);
+  assert.deepEqual(await unreachable10(), [], 'every control the tree exposes is reachable at its centre');
+  assert.equal(await term10.getAttribute('aria-hidden'), 'true', 'the terminal under the board leaves the tree');
+  assert.match(await p10.locator('#taskbar .task[data-app="terminal"]').getAttribute('title'), /다른 창 뒤에 있음/);
+  assert.equal(await board10.locator('.titlebar button[aria-label="minimize"]').getAttribute('title'), '증거 보드 최소화');
+  await p10.locator('.tin input').focus(); // Tab or a tool's fill: focus lands in the terminal behind
+  await p10.waitForFunction(() => document.querySelector('.window.focused')?.dataset.app === 'terminal', null, { timeout: 2000 });
+  await p10.waitForTimeout(100);
+  assert.equal(await term10.getAttribute('aria-hidden'), null);
+  assert.deepEqual(await unreachable10(), []);
+  await term10.locator('.titlebar button[aria-label="minimize"]').click();
+  await p10.locator('.window[data-app="terminal"].min').waitFor({ state: 'attached' });
+  assert.equal(await front10(), 'board');
+  assert.match(await p10.locator('#taskbar .task[data-app="terminal"]').getAttribute('title'), /최소화됨/);
+  await board10.getByRole('button', { name: /보고서 쓰기/ }).first().click();
+  const rep10 = p10.locator('.window[data-app="report"]');
+  await rep10.waitFor();
+  assert.equal(await front10(), 'report');
+  await p10.waitForTimeout(2500);
+  assert.equal(await p10.locator('.window[data-app="terminal"].min').count(), 1, 'minimized stays minimized');
+  await p10.locator('#taskbar .task[data-app="terminal"]').click();
+  await p10.locator('.window[data-app="terminal"]:not(.min)').waitFor();
+  assert.equal(await front10(), 'terminal');
+  await p10.locator('#taskbar .task[data-app="report"]').click();
+  assert.equal(await front10(), 'report', 'the report comes back in front of the terminal');
+  const z10 = (app) => p10.evaluate((app) => +document.querySelector(`.window[data-app="${app}"]`).style.zIndex, app);
+  assert.ok((await z10('report')) > (await z10('terminal')));
+  await p10.waitForTimeout(100);
+  assert.deepEqual(await unreachable10(), []);
+  step('windows: the one opened or focused comes to the front, a covered one leaves the tree and its taskbar entry says so; minimized stays minimized while the report opens');
+
+  for (const app of ['report', 'board']) await p10.locator(`#taskbar .task[data-app="${app}"]`).click();
+  await p10.locator('.icon[data-app="messenger"]').click();
+  const msg10 = p10.locator('.window[data-app="messenger"]');
+  await msg10.locator('.side button.item', { hasText: '강서진' }).click();
+  for (let i = 0; i < 3; i++) {
+    await msg10.locator('.ask-chip').first().click();
+    await p10.waitForTimeout(2600);
+  }
+  assert.ok((await p10.locator('.toast').count()) >= 2, 'toasts stacked');
+  const onColumn10 = await p10.evaluate(() => {
+    const w = document.querySelector('.window[data-app="messenger"]').getBoundingClientRect();
+    const t = document.querySelector('.toasts').getBoundingClientRect();
+    return t.left < w.right && t.right > w.right - 48 && t.top < w.bottom && t.bottom > w.top;
+  });
+  assert.equal(onColumn10, false, 'the toasts keep off the messenger\'s 📌 column');
+  const lastPin10 = msg10.locator('.msg .pinbtn').last();
+  const lb10 = await lastPin10.boundingBox();
+  const before10 = await pins10();
+  await p10.mouse.click(lb10.x + lb10.width / 2, lb10.y + lb10.height / 2);
+  assert.equal(await pins10(), before10 + 1, 'the newest message pins with toasts on screen');
+  step('messenger with toasts stacked: the toasts sit beside the 📌 column, and the newest message pins');
+
+  await p10.locator('.tin input').focus();
+  for (const c of ['history', 'journalctl', 'cat ~/wiki-clean.log', 'history']) await run10(c);
+  assert.ok((await p10.locator('.tline').count()) >= 200, 'a long output');
+  const tb10 = p10.getByRole('textbox', { name: 'command' });
+  assert.equal(await tb10.count(), 1, 'the prompt keeps role textbox and its name after a long output');
+  assert.equal(await p10.evaluate(() => !!(document.querySelector('.tin input').compareDocumentPosition(document.querySelector('.tout .tline')) & Node.DOCUMENT_POSITION_FOLLOWING)), true, 'the prompt comes before the output in the document');
+  const ib10 = await tb10.boundingBox();
+  const ob10 = await p10.locator('.tout').boundingBox();
+  assert.ok(ib10.y >= ob10.y + ob10.height - 2, 'and still sits under it on screen');
+  step('long output: the command textbox keeps its role and name, ahead of the output in the document and under it on screen');
+  await ctx10.close();
   assert.deepEqual(nativeDialogs, [], 'no browser confirm()/alert() anywhere');
 
   assert.deepEqual(errors, []);

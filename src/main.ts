@@ -233,17 +233,28 @@ const ctx: UiCtx = {
     toasts.appendChild(el);
     setTimeout(() => el.remove(), 9000);
     while (toasts.childElementCount > 4) toasts.firstElementChild?.remove();
-    clearOfMarks();
+    placeToasts();
     return el;
   },
   pinBtn(p) {
     const isPinned = () => game.st.pins.some((x) => x.text === p.text && x.source === p.source);
-    const b = h('button.pinbtn', { title: t('pin.add'), 'aria-label': t('pin.add') }, '📌');
-    const sync = () => b.classList.toggle('pinned', isPinned());
+    // named after its line, so a list of buttons (a screen reader, a snapshot tool) tells them apart
+    const line = p.text.replace(/\s+/g, ' ').trim();
+    const b = h('button.pinbtn', { type: 'button', title: t('pin.add'), 'aria-label': t('pin.name', { line: line.length > 40 ? `${line.slice(0, 40)}…` : line }), 'aria-pressed': 'false' }, '📌');
+    const sync = () => {
+      const on = isPinned();
+      b.classList.toggle('pinned', on);
+      b.setAttribute('aria-pressed', String(on));
+    };
     b.addEventListener('sync', sync);
     b.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (isPinned()) return;
+      if (isPinned()) {
+        sync();
+        for (const old of toasts.querySelectorAll('.toast.pintoast')) old.remove();
+        ctx.toast(h('div', null, `📌 ${t('pin.already')}`), () => wm.open('board')).classList.add('pintoast');
+        return;
+      }
       const pin = game.pin(p);
       sync();
       pinToast(pin);
@@ -353,15 +364,47 @@ game.on('clue', (c) => {
   }, 0);
 });
 
-/** Toasts sit bottom-right, as do the tray's coach marks: lift the toasts above a mark they would cover. */
-function clearOfMarks(): void {
+/** Width of the right-hand 📌 column of a window (terminal lines, messages, mail and memo lines). */
+const PIN_COL = 48;
+type Box = { left: number; right: number; top: number; bottom: number };
+const meets = (a: Box, b: Box) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+/**
+ * Toasts sit bottom-right. They keep off every open window's 📌 column (a toast over the newest
+ * message's 📌 took the click: "the pin did nothing"): narrower beside the windows when there is
+ * room, else left of that column. They also lift above a tray coach mark they would cover.
+ */
+function placeToasts(): void {
   toasts.style.bottom = '';
+  toasts.style.right = '';
+  toasts.style.maxWidth = '';
+  if (!toasts.childElementCount) return;
+  const cols = [...desktop.querySelectorAll<HTMLElement>('.window:not(.min)')].map((w) => w.getBoundingClientRect()).map((r) => ({ left: r.right - PIN_COL, right: r.right, top: r.top, bottom: r.bottom }));
+  for (let pass = 0; pass < 2; pass++) {
+    const hits = cols.filter((c) => meets(c, toasts.getBoundingClientRect()));
+    if (!hits.length) break;
+    const room = window.innerWidth - Math.max(...hits.map((c) => c.right)) - 8 - 12;
+    if (room >= 220 && !toasts.style.right) toasts.style.maxWidth = `${room}px`;
+    else {
+      toasts.style.maxWidth = '';
+      toasts.style.right = `${window.innerWidth - Math.min(...hits.map((c) => c.left)) + 8}px`;
+      break;
+    }
+  }
   const mark = document.querySelector<HTMLElement>('.tour');
-  if (!mark || !toasts.childElementCount) return;
+  if (!mark) return;
   const m = mark.getBoundingClientRect();
-  const r = toasts.getBoundingClientRect();
-  if (m.right < r.left || m.left > r.right || m.bottom < r.top || m.top > r.bottom) return;
+  if (!meets(m, toasts.getBoundingClientRect())) return;
   toasts.style.bottom = `${Math.max(52, window.innerHeight - m.top + 8)}px`;
+}
+/** A desktop icon under an open window leaves the accessibility tree (a click at its centre would reach the window). */
+function exposeIcons(): void {
+  const wins = [...desktop.querySelectorAll<HTMLElement>('.window:not(.min)')].map((w) => w.getBoundingClientRect());
+  for (const icon of desktop.querySelectorAll<HTMLElement>('.icon')) {
+    const r = icon.getBoundingClientRect();
+    const [x, y] = [r.left + r.width / 2, r.top + r.height / 2];
+    if (wins.some((w) => x > w.left && x < w.right && y > w.top && y < w.bottom)) icon.setAttribute('aria-hidden', 'true');
+    else icon.removeAttribute('aria-hidden');
+  }
 }
 wm.reserveRight = () => {
   const todo = desktop.querySelector('.todo');
@@ -370,6 +413,11 @@ wm.reserveRight = () => {
   return r.width ? Math.max(0, desktop.getBoundingClientRect().right - r.left) : 0;
 };
 wm.onFocus = (id) => game.focus(id);
+wm.onLayout = () => {
+  placeToasts();
+  exposeIcons();
+};
+window.addEventListener('resize', () => wm.relayout());
 wm.onOpen = () => {
   void audio.play('sfx.window-open');
   objectivesUi?.refresh();
@@ -617,9 +665,11 @@ game.on('change', (ev) => {
     pendingTypes.clear();
     renderIcons();
     for (const ty of types) wm.refreshAll(ty);
+    // every 📌 on screen (messages, mail, memo lines too) follows pins added or removed elsewhere
+    if (types.includes('pins')) for (const b of document.querySelectorAll('.pinbtn')) b.dispatchEvent(new Event('sync'));
     objectivesUi?.refresh();
     tourUi?.refresh();
-    clearOfMarks();
+    wm.relayout();
     // the goal card's "증거 n/N" follows the pins while it is open
     if (types.includes('pins') && pop?.classList.contains('goalpop')) pop.replaceChildren(goalCard(game.cs, game.st.pins));
     renderClock();

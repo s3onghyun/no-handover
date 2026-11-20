@@ -37,6 +37,17 @@ export function append(el: Node, children: Child[]): void {
   }
 }
 
+/**
+ * Where focus may be handed back after an overlay closes: anywhere outside the windows, or inside
+ * the front window. Focus landing in a window behind brings that window forward (src/ui/wm.ts), so
+ * handing it back there would pull a window over the one that opened meanwhile.
+ */
+export function canRestoreFocus(el: Element | null | undefined): el is HTMLElement {
+  if (!el?.isConnected) return false;
+  const w = el.closest('.window');
+  return !w || (w.classList.contains('focused') && !w.classList.contains('min'));
+}
+
 export function clear(el: Element): void {
   while (el.firstChild) el.removeChild(el.firstChild);
 }
