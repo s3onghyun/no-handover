@@ -500,17 +500,19 @@ export interface ObjectiveDef {
   id: string;
   /** Checkbox label on the sticky. */
   text: string;
-  /** Small scaffolding line shown only while this is the current (first unticked) item. */
+  /** Small scaffolding line shown only while this is the current (first unticked) item: a nudge, not the command. */
   hint?: string;
+  /** 💡 panel "방향" for this item (`hints.objectivePanel`): names the tool and what to look at; default: `hint`. */
+  direction?: string;
   /** Any one condition ticks the item. */
   any: ObjectiveCond[];
   /** App window to pulse while this item is current (e.g. 'terminal'). */
   pulse?: string;
   /** Rail (tutorial): the guide's message when this item becomes the current one. */
   say?: string;
-  /** Rail: the exact command named in the off-rail redirect ("그건 나중에요 ㅋㅋ {next} 부터!!"). */
+  /** Rail: what to look at next, named in the off-rail redirect and the ask reply ("{next}부터 봐요"); a nudge, not the command. */
   next?: string;
-  /** 💡 panel "정답" for this item (`hints.objectivePanel`); default: "터미널에 그대로: {next}". */
+  /** 💡 panel "정답" for this item (`hints.objectivePanel`): the exact command; default: "터미널에 그대로 치세요: {next}". */
   answer?: string;
 }
 

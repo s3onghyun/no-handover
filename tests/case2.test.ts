@@ -113,3 +113,17 @@ test('case 2 dashboard panels agree with the journal: 70% at the 19:30 warning, 
   assert.ok(Math.abs(at(pts, '2026-11-12T04:43') - 90) <= 1.5, String(at(pts, '2026-11-12T04:43')));
   assert.equal(at(pts, '2026-11-12T09:30'), 97);
 });
+
+test('case 2 nudges: the README asks "숫자 두 개가 다르면?" and no longer spells out df → du → /proc', () => {
+  const readme = cs.hosts[0].files.find((f) => f.path === '/home/eunjae/README.txt')!.content;
+  assert.match(readme, /숫자 두 개가 다르면\?/);
+  for (const c of ['df -h', 'du -sh', '/proc', 'grep deleted', 'journalctl', '잡고 있으면']) assert.ok(!readme.includes(c), c);
+  const g = new Game(cs);
+  out(g, 'cat ~/README.txt');
+  assert.ok('c2_readme' in g.st.clues, 'the README is still a trace clue');
+  for (const l of cs.opening!.objectives.after) assert.doesNotMatch(l, /journalctl|--since/, l);
+  // the 2024-08 history still shows what Eunjae typed, without the explanation
+  const hist = out(g, 'history');
+  assert.ok(hist.some((l) => l.includes('/fd | grep deleted')));
+  assert.ok(!hist.some((l) => l.includes('아직 열려 있는 파일')));
+});

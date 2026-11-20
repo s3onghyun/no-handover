@@ -58,7 +58,7 @@ test('hint panel: every direction can be opened one by one; multi-slot answer li
   assert.doesNotMatch(ans, /범인이다/, 'blame options are not part of the answer');
 });
 
-test('hint panel (Case 0): the current checklist item comes first, with its hint and command', () => {
+test('hint panel (Case 0): the current checklist item comes first; 방향 names the tool, 정답 the command', () => {
   const g = new Game(c0);
   const first = g.hintPanel()[0];
   assert.equal(first.key, 'obj:history');
@@ -72,8 +72,10 @@ test('hint panel (Case 0): the current checklist item comes first, with its hint
   assert.equal(now.summaryOpen, false, 'fresh steps for the new item');
   g.openHint('obj:df', 'summary');
   assert.deepEqual(g.hintPanel()[0].summary, ['✓ Enter — 은재님 history 보기']);
-  g.openHint('obj:df', 'direction');
-  assert.equal(g.openHint('obj:df', 'answer')!.text, '터미널에 그대로 치세요: df -h', 'default 정답 from `next`');
+  const df = c0.opening!.objectives.items[1];
+  assert.equal(g.openHint('obj:df', 'direction')!.text, df.direction, '방향 is the item\'s own direction, not the checklist nudge');
+  assert.notEqual(df.direction, df.hint);
+  assert.equal(g.openHint('obj:df', 'answer')!.text, '터미널에 그대로 치세요: df -h');
   assert.equal(g.hintCount(), 4);
   assert.equal(g.ladder.totalCost(), 0, 'checklist hints never cost points');
 });
@@ -186,14 +188,14 @@ test('ask: nudges already covered by found clues are skipped; with none left, `a
   assert.equal(g.st.log.filter((e) => e.type === 'rung2').length, 0);
 });
 
-test('ask (Case 0): while the checklist is open, 지훈 names the current command; nothing after the finish', () => {
+test('ask (Case 0): while the checklist is open, 지훈 names the current step and points at history / 💡; nothing after the finish', () => {
   const g = new Game(c0);
   run(g, 'history');
   tickFor(g, 3000);
   const w = g.ask('뭐부터 봐요?')!;
   assert.deepEqual(w, { channel: 'me-dm-jihoon', from: 'jihoon' });
   tickFor(g, 3000);
-  assert.equal(g.st.live.at(-1)?.text, '지금은 df -h 요!! 그대로 쳐 보면 돼요 ㅋㅋ 🙏');
+  assert.equal(g.st.live.at(-1)?.text, '지금은 디스크 차례예요!! 명령은 은재 선배 history 에 있고, 그래도 모르겠으면 💡 ㅋㅋ 🙏');
   g.submit({ cause: 'disk', sequence: 'true', responsibility: [] });
   assert.equal(g.ask('뭐부터 봐요?'), null);
 });
@@ -207,7 +209,7 @@ test('typing indicator: 1–2 s before a nudge or rail line, then the message; t
   const g = new Game(c0);
   let events = 0;
   g.on('typing', () => events++);
-  run(g, 'history'); // the rail queues 지훈's df -h line
+  run(g, 'history'); // the rail queues 지훈's line for the df step
   const text = c0.opening!.objectives.items[1].say!;
   const due = g.st.playMs + 300 + typingMs(text);
   assert.deepEqual(g.typing(), [], 'a short beat first');

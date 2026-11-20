@@ -112,7 +112,7 @@ test('case 0 shell: du sizes, ls -lh, big-file cat, and in-world refusals', () =
   assert.equal(out(g, 'systemctl status').find((l) => l.includes('State:'))?.trim(), 'State: degraded');
 });
 
-test('case 0 rail: Jihoon names the next command at each step and redirects once per step', () => {
+test('case 0 rail: Jihoon names the next step (never the command) and redirects once per step', () => {
   const g = new Game(cs);
   const say = () => g.st.live.filter((m) => m.from === 'jihoon').map((m) => m.text);
   const step = (c: string) => {
@@ -120,16 +120,38 @@ test('case 0 rail: Jihoon names the next command at each step and redirects once
     for (let i = 0; i < 3; i++) g.tick(1000);
   };
   step('history');
-  assert.match(say().at(-1)!, /df -h/);
+  assert.match(say().at(-1)!, /순서/);
   step('ls');
-  assert.equal(say().at(-1), '그건 나중에요 ㅋㅋ df -h 부터!!');
+  assert.equal(say().at(-1), '그건 나중에요 ㅋㅋ 디스크부터 봐요!!');
   const n = say().length;
   step('pwd'); // quiet
   step('cat README.txt'); // second off-rail command on the same step: no second redirect
   assert.equal(say().length, n);
   step('df -h');
-  assert.match(say().at(-1)!, /du -sh \/var\/log\/\*/);
+  assert.match(say().at(-1)!, /누가 채운/);
   assert.ok(g.st.log.some((e) => e.type === 'rail-redirect' && e.item === 'df'));
+});
+
+test('case 0 nudges: checklist, messenger and notes never spell out the command path; 💡 carries it', () => {
+  const items = cs.opening!.objectives.items;
+  // the commands of the lesson (with their arguments) that only Eunjae's records and 💡 may name
+  const cmd = /\b(df -h|du -sh|tail -n|systemctl status|journalctl -u)\b/;
+  const said: string[] = [];
+  // (the pins item names lines already on screen, not a step to type; its wording belongs to the evidence rules)
+  for (const i of items.filter((x) => x.id !== 'pins')) said.push(i.text, i.hint ?? '', i.say ?? '', i.next ?? '');
+  said.push(...cs.opening!.objectives.after, cs.rail!.offRail, cs.rail!.done ?? '', cs.hints.ask!.rail!);
+  for (const n of cs.hints.idle) said.push(n.text);
+  for (const t of cs.triggers) for (const a of t.actions) if ('message' in a) said.push(a.message.text);
+  for (const n of cs.notes) said.push(...n.lines, n.reveal ?? '');
+  for (const t of said) assert.doesNotMatch(t, cmd, t);
+  // one nudge per step, and the ladder behind it: 방향 names the tool, 정답 the command
+  for (const i of items.filter((x) => ['df', 'tail', 'service'].includes(x.id))) {
+    assert.match(i.direction!, cmd, i.id);
+    assert.match(i.answer!, cmd, i.id);
+  }
+  // the exact path stays in Eunjae's records
+  const readme = cs.hosts[0].files.find((f) => f.path === '/home/eunjae/README.txt')!.content;
+  for (const c of ['df -h', 'du -sh', 'tail -n', 'systemctl status', 'journalctl -u']) assert.ok(readme.includes(c), c);
 });
 
 test('case 0 hints: idle nudge after 2 minutes, held while a clue was just found; `hint` opens the panel', () => {

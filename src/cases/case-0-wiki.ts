@@ -7,7 +7,8 @@
 // and leaves their PC open on a read-only investigation session. Eunjae never speaks live
 // (characters.md §8-3): only the mail sent before the meeting, ~/README.txt, and `#` lines in
 // ~/.bash_history. Live voices are Seojin (briefing, idle nudges, reply) and Jihoon, who walks the
-// player along the rail (the next command at each step, one redirect per step when off track).
+// player along the rail (what to look at next, one redirect per step when off track). The exact
+// command path lives only in Eunjae's records (history, README) and the 💡 panel's 정답.
 // The first command is pre-typed and succeeds: `history` (web-escape analysis §9 #1, #7).
 //
 // One cause: the wiki's thumbnail worker retries a broken PDF with no delay and writes the whole
@@ -379,7 +380,7 @@ export const caseZeroWiki: CaseFile = {
     {
       id: 'today', title: '11/10 (화) 위키 502 — 연습!!',
       lines: ['서진님: 원인만 찾기. 고치는 건 서진님. 10:30까지.', '은재님 순서 = history 에 있음 (?)', '1. 무슨 일  2. 언제  3. 왜', '점심: 지훈님 (12시?)'],
-      highlight: 1, reveal: '→ df -h → du → tail → systemctl status. 알았음!',
+      highlight: 1, reveal: '→ 디스크 → 제일 큰 파일 → 그 끝 → 서비스. 알았음!',
     },
     { id: 'runbook', title: '11/05 (목) 서진님 런북 투어', lines: ['런북은 서진님이 다 씀. RB-001부터.', "서진님 말: '문서에 없는 건 없는 거예요.'", '런북은 위키에 있음 → 위키가 죽으면? (?)'] },
     { id: 'ot', title: '11/02 (월) 입사 OT', lines: ['온콜 = 밤에 전화 받는 사람(?)', 'fd = 에프디(?) → 회사 이름 아님'] },
@@ -540,10 +541,10 @@ export const caseZeroWiki: CaseFile = {
   hints: {
     idleMinutes: 2,
     idle: [
-      { id: 'idle-1', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c0_df'], text: '음. 디스크부터 봐요. df -h. Use% 100%인 줄.' },
-      { id: 'idle-2', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c0_du', 'c0_loop'], text: '/var가 찼으면 /var 안에서 제일 큰 것. du -sh /var/log/* 그다음 tail.' },
-      { id: 'idle-3', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c0_status'], text: '서비스도 봐요. systemctl status wiki. 맨 아래 줄에 이유.' },
-      { id: 'idle-4', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c0_start', 'c0_full'], text: '시각 두 개만 적어요. 시작된 시각, 꽉 찬 시각. journalctl -u wiki.' },
+      { id: 'idle-1', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c0_df'], text: '음. 디스크부터 봐요. 100%인 데가 있는지.' },
+      { id: 'idle-2', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c0_du', 'c0_loop'], text: '/var가 찼으면 그 안에서 제일 큰 것. 그리고 그 끝.' },
+      { id: 'idle-3', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c0_status'], text: '서비스도 봐요. 맨 아래 줄에 이유.' },
+      { id: 'idle-4', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c0_start', 'c0_full'], text: '시각 두 개만 적어요. 시작된 시각, 꽉 찬 시각. 서비스 저널에 있어요.' },
     ],
     wrong: {
       jihoon: { id: 'wrong-jihoon', from: 'jihoon', channel: 'me-dm-jihoon', text: '헉 제 회의록 PDF요?? 😂 근데… PDF 하나로 위키가 통째로 죽어요?? 그 PDF가 서버에서 뭘 했는지 로그 한번 봐 주세요 🙏' },
@@ -557,10 +558,10 @@ export const caseZeroWiki: CaseFile = {
     ],
     // the panel also walks the open checklist item (요약 = ticked items, 방향 = its hint, 정답 = its command)
     objectivePanel: true,
-    // "뭐부터 봐요?": 지훈 names the current checklist command; after the checklist, 서진's idle nudges
+    // "뭐부터 봐요?": 지훈 names the current step (not the command); after the checklist, 서진's idle nudges
     ask: {
       prompts: ['뭐부터 봐요?', '막혔어요'],
-      rail: '지금은 {next} 요!! 그대로 쳐 보면 돼요 ㅋㅋ 🙏',
+      rail: '지금은 {next} 차례예요!! 명령은 은재 선배 history 에 있고, 그래도 모르겠으면 💡 ㅋㅋ 🙏',
       none: { from: 'seojin', channel: 'me-dm-seojin', text: '찾은 것부터 보고서에. 원인, 경위. 그래도 막히면 💡.' },
     },
   },
@@ -649,18 +650,24 @@ export const caseZeroWiki: CaseFile = {
           any: [{ cmd: '^\\s*history\\b', host: W }], pulse: 'terminal', next: 'Enter (history)',
           answer: '터미널 창을 한 번 누르고 Enter. history 가 이미 쳐져 있어요.',
         },
+        // each step: one nudge (text + hint); 지훈's line reacts without the command; 💡 방향 names the tool, 💡 정답 the command
         {
-          id: 'df', text: '디스크 확인: df -h', hint: 'df -h 를 치고 Use% 열을 보세요. 100% 인 줄이 있나요? 어디(Mounted on)인가요?', any: [{ clue: 'c0_df' }],
-          say: '오 은재 선배 순서 나왔다 ㅋㅋ 그대로 따라 해 봐요~ df -h !!', next: 'df -h',
+          id: 'df', text: '어디가 찼나 — 디스크부터', hint: '은재님 history 의 # 줄이 순서예요. 첫 번째는 디스크.', any: [{ clue: 'c0_df' }],
+          direction: 'df -h 를 치고 Use% 열을 보세요. 100% 인 줄이 있나요? 어디(Mounted on)인가요?',
+          say: '오 은재 선배 순서 나왔다 ㅋㅋ # 붙은 줄이 선배 메모래요~ 그 순서대로 가 봐요!!', next: '디스크',
+          answer: '터미널에 그대로 치세요: df -h',
         },
         {
-          id: 'tail', text: '가장 큰 로그의 끝 읽기: du, tail', hint: 'du -sh /var/log/* 로 가장 큰 것을 찾고, tail -n 20 <그 안의 파일> 로 끝을 보세요.', any: [{ clue: 'c0_loop' }],
-          say: '/var 100% ㅋㅋㅋ 꽉 찼네요. 누가 채웠는지: du -sh /var/log/* 그다음 tail -n 20 /var/log/wiki/wiki.log 👍', next: 'du -sh /var/log/*',
+          id: 'tail', text: '누가 채웠나 — 제일 큰 파일의 끝', hint: '찬 곳 안에서 제일 큰 것을 찾고, 그 파일의 끝을 읽어 보세요.', any: [{ clue: 'c0_loop' }],
+          direction: 'du -sh /var/log/* 로 가장 큰 것을 찾고, tail -n 20 <그 안의 파일> 로 끝을 보세요.',
+          say: '/var 100% ㅋㅋㅋ 꽉 찼네요. 근데 누가 채운 거예요?? 👍', next: '/var 안에서 제일 큰 것',
           answer: '터미널에 그대로: du -sh /var/log/* → 가장 큰 wiki 폴더 → tail -n 20 /var/log/wiki/wiki.log',
         },
         {
-          id: 'service', text: '서비스 상태 보기: systemctl status wiki', hint: 'Active 줄과 맨 아래 몇 줄을 보세요. 멈춘 이유가 거기 있어요.', any: [{ output: 'Active: failed \\(Result: exit-code\\)', host: W }],
-          say: '같은 줄이 계속 반복… 😂 위키는 살아 있나? systemctl status wiki 🙏', next: 'systemctl status wiki',
+          id: 'service', text: '위키는 살아 있나', hint: '이번엔 로그 말고 서비스 자체. 멈춘 이유는 맨 아래 몇 줄에 있어요.', any: [{ output: 'Active: failed \\(Result: exit-code\\)', host: W }],
+          direction: 'systemctl status wiki — Active 줄과 맨 아래 몇 줄을 보세요.',
+          say: '같은 줄이 계속 반복… 😂 근데 위키 프로그램은 지금 살아 있는 거예요?? 🙏', next: '위키 서비스 상태',
+          answer: '터미널에 그대로 치세요: systemctl status wiki',
         },
         {
           id: 'pins', text: '증거 2개 보드에 올리기 📌', hint: '증거가 되는 줄에 마우스를 올리면 오른쪽에 📌 가 보여요. df -h 의 100% 줄부터.', any: [{ pins: 2 }],
@@ -668,17 +675,17 @@ export const caseZeroWiki: CaseFile = {
           answer: 'df -h 의 "/dev/sdb1 … 100% /var" 줄과 systemctl status 의 "No space left on device" 줄에 마우스를 올리고 오른쪽 📌.',
         },
       ],
-      after: ['다음: 📝 원인 보고서 — 원인과 경위 두 칸', '언제부터였는지: journalctl -u wiki', '막히면: history, ~/README.txt'],
+      after: ['다음: 📝 원인 보고서 — 원인과 경위 두 칸', '언제부터였는지: 은재님 순서의 마지막 줄', '막히면: history, ~/README.txt, 💡'],
     },
   },
 
-  // ------------------------------------------------------------------ the rail (Jihoon walks along)
+  // ------------------------------------------------------------------ the rail (Jihoon walks along; names the step, never the command)
   rail: {
     from: 'jihoon',
     channel: 'me-dm-jihoon',
-    offRail: '그건 나중에요 ㅋㅋ {next} 부터!!',
+    offRail: '그건 나중에요 ㅋㅋ {next}부터 봐요!!',
     quiet: ['help', 'man', 'hint', 'clear', 'pwd'],
-    done: '완벽 ㅋㅋ 시각까지 보려면 journalctl -u wiki 그다음 📝 보고서!! 저는 점심 메뉴 고르러 갑니다 🍕',
+    done: '완벽 ㅋㅋ 시각은 은재 선배 순서 마지막 줄에 있대요~ 그다음 📝 보고서!! 저는 점심 메뉴 고르러 갑니다 🍕',
     highlightClues: true,
   },
 

@@ -98,12 +98,10 @@ const README = `logs-01 — 로그 수집 서버 (남은재, 2023-09 처음 씀 
   raw/<서버>.log  /data/collector/raw         이번 주. logshipd 가 열어 둔 채 계속 씀
   archive/        /data/collector/archive     지난주들. 일요일 00:00 logrotate 가 압축해서 옮김
 
-디스크가 차면 제 순서:
-  1. df -h                         /data 가 몇 % 인가?
-  2. du -sh /data/collector/*      파일을 다 더하면 몇 G 인가? df 랑 같나?
-  3. 다르면… 지운 로그도 누가 잡고 있으면 안 지워진 거예요.
-     ls -l /proc/<PID>/fd | grep deleted    (이 서버엔 lsof 가 없어요)
-  4. 언제 누가 지웠는지는 저널에. journalctl --since … --until …
+디스크가 차면:
+  - 숫자 두 개를 나란히 놓아 봐요. 디스크가 쓴 양, 파일을 다 더한 양.
+  - 숫자 두 개가 다르면? 거기서부터예요. (이 서버엔 lsof 가 없어요)
+  - 언제 누가 무엇을 했는지는 저널에.
 
 raw 파일은 rm 하지 마세요. (2024-08에 제가 그랬다가 반나절을 헤맸어요…)
 조사할 때는 아무것도 지우지 마세요. 고치는 건 원인을 적고 나서. :)`;
@@ -374,7 +372,7 @@ export const caseTwoDeleted: CaseFile = {
     { at: '2024-08-21T10:05:12', emits: [hist('# df 92% / du 51%. 숫자가 안 맞음. 숨은 게 있다.')] },
     { at: '2024-08-21T10:31:05', emits: [hist('ls -la /data/collector/raw')] },
     { at: '2024-08-21T10:40:22', emits: [hist('ls -l /proc/$(pgrep -f logshipd)/fd | grep deleted')] },
-    { at: '2024-08-21T10:41:30', emits: [hist("# 범인은 rm 이 아니라 '아직 열려 있는 파일'. 내가 아침에 지운 그 파일.")] },
+    { at: '2024-08-21T10:41:30', emits: [hist('# 찾았다. 내가 아침에 지운 그 파일.')] },
     { at: '2024-08-21T10:44:02', emits: [hist('sudo systemctl kill -s HUP logshipd')] },
     { at: '2024-08-21T10:45:10', emits: [hist('df -h')] },
     { at: '2024-08-21T10:45:40', emits: [hist('# 92% → 51%. README 에 적어 둠. 지운 다음엔 꼭 df 🌱')] },
@@ -421,7 +419,7 @@ export const caseTwoDeleted: CaseFile = {
     { at: '2026-11-12T04:51:30', emits: [msg('pc-logs', 'seojin', '확인. 증가 3.9G/h. 08:30에 봐요.')] },
     { at: '2026-11-12T08:41:12', emits: [msg('pc-logs', 'seojin', '97%. 지훈님 어제 지운 파일이 뭐였어요?')] },
     { at: '2026-11-12T08:47:50', emits: [msg('pc-logs', 'jihoon', '네넵 raw/pay-api-01.log 요!! 20G 넘던 거 ㅋㅋ 지웠는데 왜 안 줄었지 😂')] },
-    { at: '2026-11-12T09:02:30', emits: [msg('pc-logs', 'eunjae', '음… 그거 예전에 저도 한 번 했어요. README 4번째 줄쯤에 있어요 🌱')] },
+    { at: '2026-11-12T09:02:30', emits: [msg('pc-logs', 'eunjae', '음… 그거 예전에 저도 한 번 했어요. README 에 적어 뒀어요 🌱')] },
     { at: '2026-11-12T09:20:11', emits: [msg('me-dm-seojin', 'seojin', '도윤님. logs-01. 은재 선배 세션으로 봐요. 세 칸.')] },
     { at: '2026-11-12T09:21:40', emits: [msg('me-dm-seojin', 'doyun', '넵! 확인해보겠습니다. 혹시 지훈님이 지운 파일이 아직 어딘가 남아 있을 수도 있을까요? (메모했습니다)')] },
     { at: '2026-11-12T09:22:05', emits: [msg('me-dm-seojin', 'seojin', '그걸 찾는 거예요.')] },
@@ -555,8 +553,8 @@ export const caseTwoDeleted: CaseFile = {
     },
     { id: 'c2_deleted', label: '/proc/1187/fd/7 -> /data/collector/raw/pay-api-01.log (deleted)', slot: 'cause', key: true, aha: '(deleted) — 이름만 지워졌다. 파일은 아직 열려 있다.', match: [{ output: '7 -> /data/collector/raw/pay-api-01\\.log \\(deleted\\)', host: L }] },
     { id: 'c2_reopen', label: '마지막으로 파일을 다시 연 것: 수 11:02 (rm 보다 앞) — 그 뒤로 HUP 없음', slot: 'cause', match: [{ output: 'SIGHUP: reopened 4 file\\(s\\)', host: L }, { output: 'ExecMainStartTimestamp=Mon 2026-11-02', host: L }] },
-    { id: 'c2_readme', label: '은재 README: "지운 로그도 누가 잡고 있으면 안 지워진 거예요"', slot: 'cause', trace: true, match: [{ output: '지운 로그도 누가 잡고 있으면 안 지워진 거예요', host: L }] },
-    { id: 'c2_hist', label: '은재 history 2024-08: "df 92% / du 51%. 숫자가 안 맞음" → /proc/…/fd | grep deleted', slot: 'cause', trace: true, match: [{ output: 'df 92% / du 51%', host: L }, { output: "범인은 rm 이 아니라 '아직 열려 있는 파일'", host: L }] },
+    { id: 'c2_readme', label: '은재 README: "숫자 두 개가 다르면? 거기서부터예요"', slot: 'cause', trace: true, match: [{ output: '숫자 두 개가 다르면\\? 거기서부터예요', host: L }] },
+    { id: 'c2_hist', label: '은재 history 2024-08: "df 92% / du 51%. 숫자가 안 맞음" → /proc/…/fd | grep deleted', slot: 'cause', trace: true, match: [{ output: 'df 92% / du 51%', host: L }, { output: '# 찾았다\\. 내가 아침에 지운 그 파일', host: L }] },
     { id: 'c2_alias', label: '~/.bashrc 별칭: 숨은거', slot: 'cause', trace: true, match: [{ output: "^alias 숨은거=", host: L }] },
 
     { id: 'c2_rm', label: '수 14:28:41 sudo: jhpark COMMAND=/usr/bin/rm pay-api-01.log', slot: 'sequence', key: true, match: [{ output: 'jhpark : TTY=pts/1 ; PWD=/data/collector/raw ; USER=root ; COMMAND=/usr/bin/rm pay-api-01\\.log', host: L }] },
@@ -628,7 +626,7 @@ export const caseTwoDeleted: CaseFile = {
     idleMinutes: 6,
     idle: [
       { id: 'idle-1', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c2_df', 'c2_du'], text: '음. df 하고 du, 둘 다요. 숫자가 같아야 해요.' },
-      { id: 'idle-2', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c2_deleted'], text: '이름은 없어졌는데 공간은 남았다. 그럼 누가 아직 잡고 있는지. 은재 선배 README 3번.' },
+      { id: 'idle-2', from: 'seojin', channel: 'me-dm-seojin', unlessClues: ['c2_deleted'], text: '이름은 없어졌는데 공간은 남았다. 그럼 누가 아직 잡고 있는지. 은재 선배 history 2024-08.' },
       {
         id: 'idle-3', from: 'jihoon', channel: 'me-dm-jihoon', unlessClues: ['c2_debug'],
         text: 'ㅋㅋ 도윤님 혹시… 그 로그 제가 어제 디버그 켜서 커진 거라… pay-api-01 저널 한번 봐 주실래요?? ssh pay-api-01 하면 돼요 🙏',
@@ -691,7 +689,7 @@ export const caseTwoDeleted: CaseFile = {
   debrief: {
     headline: '지운 파일도 열려 있으면 공간을 차지한다. 고쳤다고 믿은 조치는, 확인해야 조치다.',
     story: [
-      { at: '2024-08', text: '은재가 같은 일을 겪는다. 아침에 raw 파일을 rm 했는데 df 92%, du 51%. 반나절 뒤 /proc/<PID>/fd 에서 "(deleted)" 를 찾고, logshipd 에 HUP 를 보내 공간을 돌려받는다. README 에 순서를 적는다.' },
+      { at: '2024-08', text: '은재가 같은 일을 겪는다. 아침에 raw 파일을 rm 했는데 df 92%, du 51%. 반나절 뒤 /proc/<PID>/fd 에서 "(deleted)" 를 찾고, logshipd 에 HUP 를 보내 공간을 돌려받는다. README 에 한 줄 남긴다: "숫자 두 개가 다르면?"' },
       { at: '수 11:02', text: '서진이 wiki-01 을 새 소스로 붙이고 logshipd 를 reload(HUP) 한다. logshipd 가 파일을 다시 연 마지막 순간이다.' },
       { at: '수 14:22', text: '지훈이 p99 를 보려고 pay-api-01 의 payment-api 로그 레벨을 debug 로 바꾼다. 재시작 없이, 끌 때까지. 로그가 시간당 0.23G 에서 3.7G 로.' },
       { at: '수 14:28', text: '"디버그가 많이 쌓일 테니 미리 공간을." 지훈이 logs-01 에서 sudo rm raw/pay-api-01.log (20G). 1분 뒤 접속을 끊는다. df 는 보지 않았다.' },
@@ -755,7 +753,7 @@ export const caseTwoDeleted: CaseFile = {
         { id: 'holder', text: '지운 파일은 어디로 갔나', any: [{ clue: 'c2_deleted' }] },
         { id: 'pins', text: '증거 3개 보드에 올리기 📌', any: [{ pins: 3 }] },
       ],
-      after: ['다음: 📝 보고서 — 원인, 경위, 재발 방지 세 칸 (제출 4번)', '언제부터: journalctl --since/--until, 그리고 pay-api-01', '막히면: ~/README.txt, history, 💡'],
+      after: ['다음: 📝 보고서 — 원인, 경위, 재발 방지 세 칸 (제출 4번)', '언제부터: 지운 시각, 그리고 로그를 보낸 쪽 서버', '막히면: ~/README.txt, history, 💡'],
     },
   },
 
