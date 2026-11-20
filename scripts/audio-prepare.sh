@@ -17,6 +17,8 @@ OUT="${2:-$ROOT/public/audio}"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/nh-audio-prepare.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 FF=(ffmpeg -hide_banner -nostdin -loglevel error -y)
+# soxr when this ffmpeg has it (the 2026-11-17 files), else swr at high quality (e.g. Homebrew ffmpeg 9)
+if ffmpeg -hide_banner -buildconf 2>/dev/null | grep -q soxr; then RS="resampler=soxr:precision=28"; else RS="resampler=swr:filter_size=64:phase_shift=10:cutoff=0.97"; fi
 
 for f in amb.office.mp3 music.briefing.mp3 voice.briefing-jihun.wav; do
   [ -f "$IN/$f" ] || { echo "missing original: $IN/$f" >&2; exit 1; }
@@ -29,10 +31,10 @@ mkdir -p "$OUT/music" "$OUT/voice"
 loudnorm_2pass() {
   local in="$1" out="$2" I="$3" ch="$4" m
   m="$(ffmpeg -hide_banner -nostdin -nostats -i "$in" -af "loudnorm=I=$I:TP=-1.5:LRA=20:print_format=json" -f null - 2>&1 |
-    python3 -c 'import sys,json,re; t=sys.stdin.read(); d=json.loads(t[t.rindex("{"):]); print(":".join(f"{k}={d[v]}" for k,v in [("measured_I","input_i"),("measured_TP","input_tp"),("measured_LRA","input_lra"),("measured_thresh","input_thresh"),("offset","target_offset")]))')"
+    python3 -c 'import sys,json,re; t=sys.stdin.read(); d=json.loads(t[t.rindex("{"):t.rindex("}")+1]); print(":".join(f"{k}={d[v]}" for k,v in [("measured_I","input_i"),("measured_TP","input_tp"),("measured_LRA","input_lra"),("measured_thresh","input_thresh"),("offset","target_offset")]))')"
   local log
   log="$(ffmpeg -hide_banner -nostdin -nostats -y -i "$in" \
-    -af "loudnorm=I=$I:TP=-1.5:LRA=20:$m:linear=true:print_format=json,aresample=48000:resampler=soxr:precision=28" \
+    -af "loudnorm=I=$I:TP=-1.5:LRA=20:$m:linear=true:print_format=json,aresample=48000:$RS" \
     -ar 48000 -ac "$ch" -c:a pcm_f32le "$out" 2>&1)"
   grep -q '"normalization_type" : "linear"' <<<"$log" || { echo "loudnorm fell back to dynamic mode for $in" >&2; exit 1; }
 }
@@ -47,7 +49,7 @@ loudnorm_2pass() {
 # and the 6 s crossfade blends the same musical moment one period apart.
 A0=30.0; P=78.9; XF=6
 "${FF[@]}" -i "$IN/amb.office.mp3" \
-  -af "aresample=48000:resampler=soxr:precision=28,atrim=start=$A0:duration=$(python3 -c "print($P+$XF)"),asetpts=PTS-STARTPTS" \
+  -af "aresample=48000:$RS,atrim=start=$A0:duration=$(python3 -c "print($P+$XF)"),asetpts=PTS-STARTPTS" \
   -c:a pcm_f32le "$WORK/amb.x.wav"
 # (one input per branch: an asplit -> amix -> concat graph trips ffmpeg 6.1 with "Invalid data")
 "${FF[@]}" -i "$WORK/amb.x.wav" -i "$WORK/amb.x.wav" -i "$WORK/amb.x.wav" -filter_complex "
@@ -63,38 +65,63 @@ loudnorm_2pass "$WORK/amb.loop.wav" "$WORK/amb.office.wav" -24 2
 # on their own to about -41 dBFS at 12.4-12.6 s, just before the full-band hit at 12.8 s. Cut there,
 # with a 1.5 s fade to smooth the decay to digital silence and a 20 ms fade-in against a click.
 "${FF[@]}" -i "$IN/music.briefing.mp3" \
-  -af "aresample=48000:resampler=soxr:precision=28,atrim=start=0:end=12.7,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.02,afade=t=out:st=11.2:d=1.5" \
+  -af "aresample=48000:$RS,atrim=start=0:end=12.7,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.02,afade=t=out:st=11.2:d=1.5" \
   -c:a pcm_f32le "$WORK/sting.wav"
 loudnorm_2pass "$WORK/sting.wav" "$WORK/music.briefing.wav" -18 2
 
-# ---------------------------------------------------------------- voice.briefing-jihun: mono, trimmed
-# From the 24 kHz mono WAV (not the mp3): trim the 0.23 s lead-in and 0.18 s tail silence (keeping
-# 50 ms of air at each end), 80 Hz high-pass (2nd order), -16 LUFS. The TTS file peaks at -0.9 dBTP
-# while its loudness is already -16.5 LUFS, so a pure gain to -16 LUFS cannot keep <= -1 dBTP: a
-# transparent peak limiter at -3.1 dBFS (only the odd plosive is touched) leaves room for the linear
-# loudnorm gain. Without it loudnorm drops to dynamic mode (and hangs on this file in ffmpeg 6.1).
-"${FF[@]}" -i "$IN/voice.briefing-jihun.wav" \
-  -af "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05,areverse,silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05,areverse,highpass=f=80:poles=2,aresample=48000:resampler=soxr:precision=28,alimiter=limit=0.7:attack=1:release=50:level=0" \
-  -ar 48000 -ac 1 -c:a pcm_f32le "$WORK/voice.wav"
-loudnorm_2pass "$WORK/voice.wav" "$WORK/voice.briefing-jihun.wav" -16 1
-
 # ---------------------------------------------------------------- encode: Opus (.ogg) + MP3 fallback
-#   enc <id> <folder> <opus kbps> <mp3 kbps>
+#   enc <id> <folder> <opus kbps> <mp3 kbps> [mp3 sample rate, default 48000]
 enc() {
-  local id="$1" dir="$2" ok="$3" mk="$4"
+  local id="$1" dir="$2" ok="$3" mk="$4" mr="${5:-48000}"
   "${FF[@]}" -i "$WORK/$id.wav" -c:a libopus -b:a "${ok}k" -vbr on -compression_level 10 -application audio -ar 48000 -map_metadata -1 "$OUT/$dir/$id.ogg"
-  "${FF[@]}" -i "$WORK/$id.wav" -c:a libmp3lame -b:a "${mk}k" -ar 48000 -map_metadata -1 -write_xing 1 "$OUT/$dir/$id.mp3"
+  "${FF[@]}" -i "$WORK/$id.wav" -c:a libmp3lame -b:a "${mk}k" -ar "$mr" -map_metadata -1 -write_xing 1 "$OUT/$dir/$id.mp3"
 }
+# true peak (dBTP) of a file
+tp() { ffmpeg -hide_banner -nostdin -nostats -i "$1" -af loudnorm=print_format=json -f null - 2>&1 | python3 -c 'import sys,json; t=sys.stdin.read(); print(json.loads(t[t.rindex("{"):t.rindex("}")+1])["input_tp"])'; }
 enc amb.office music 80 96
 enc music.briefing music 96 128
-enc voice.briefing-jihun voice 48 64
+
+# ---------------------------------------------------------------- voices: mono, trimmed
+# Every voice.*.wav in the originals (24 kHz mono Gemini TTS): trim the lead-in and tail silence
+# (keeping 50 ms of air at each end), 80 Hz high-pass (2nd order), -16 LUFS. TTS files peak near
+# 0 dBTP, so a pure gain to -16 LUFS cannot keep <= -1 dBTP: a transparent peak limiter first
+# (only the odd plosive is touched) leaves room for the linear loudnorm gain. Without it loudnorm
+# drops to dynamic mode (and hangs on voice.briefing-jihun in ffmpeg 6.1).
+# voice.briefing-jihun keeps its original -3.1 dBFS (0.7) limit and 48/64 kbps. Every other line
+# (Case 1-2 briefings, nudges) is encoded at speech rates that keep the whole set under 4 MB, Opus
+# 20 kbps + MP3 24 kbps at 24 kHz (the TTS rate; MP3 below 32 kbps needs an MPEG-2 sample rate).
+# Its limit starts where the peaks land at -3 dBFS after the gain (gain from a first loudness
+# reading) and steps down 1 dB until loudnorm stays linear and both encodes are <= -1 dBTP: some
+# TTS lines arrive clipped, and clipped speech overshoots after low-bitrate encoding.
+TRIM="silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05,areverse,silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05,areverse,highpass=f=80:poles=2,aresample=48000:$RS"
+for src in "$IN"/voice.*.wav; do
+  id="$(basename "$src" .wav)"
+  if [ "$id" = voice.briefing-jihun ]; then
+    "${FF[@]}" -i "$src" -af "$TRIM,alimiter=limit=0.7:attack=1:release=50:level=0" -ar 48000 -ac 1 -c:a pcm_f32le "$WORK/voice.wav"
+    loudnorm_2pass "$WORK/voice.wav" "$WORK/$id.wav" -16 1
+    enc "$id" voice 48 64
+    continue
+  fi
+  i="$(ffmpeg -hide_banner -nostdin -nostats -i "$src" -af "$TRIM,loudnorm=print_format=json" -f null - 2>&1 | python3 -c 'import sys,json; t=sys.stdin.read(); print(json.loads(t[t.rindex("{"):t.rindex("}")+1])["input_i"])')"
+  head=3; ok=
+  while [ "$head" -le 9 ]; do
+    lim="$(python3 -c "print(min(1.0, 10 ** ((-$head - (-16 - $i)) / 20)))")"
+    "${FF[@]}" -i "$src" -af "$TRIM,alimiter=limit=$lim:attack=1:release=50:level=0" -ar 48000 -ac 1 -c:a pcm_f32le "$WORK/voice.wav"
+    if (loudnorm_2pass "$WORK/voice.wav" "$WORK/$id.wav" -16 1) 2>/dev/null; then
+      enc "$id" voice 20 24 24000
+      if python3 -c "import sys; sys.exit(0 if max($(tp "$OUT/voice/$id.ogg"), $(tp "$OUT/voice/$id.mp3")) <= -1.0 else 1)"; then ok=1; break; fi
+    fi
+    head=$((head + 1))
+  done
+  [ -n "$ok" ] || { echo "$id: no limit keeps loudnorm linear and the encodes <= -1 dBTP" >&2; exit 1; }
+done
 
 # ---------------------------------------------------------------- report
 total=0
-for f in "$OUT"/music/amb.office.{ogg,mp3} "$OUT"/music/music.briefing.{ogg,mp3} "$OUT"/voice/voice.briefing-jihun.{ogg,mp3}; do
-  s=$(stat -c %s "$f"); total=$((total + s))
+for f in "$OUT"/music/amb.office.{ogg,mp3} "$OUT"/music/music.briefing.{ogg,mp3} "$OUT"/voice/voice.*.{ogg,mp3}; do
+  s=$(wc -c <"$f" | tr -d " "); total=$((total + s))
   d=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$f")
-  l=$(ffmpeg -hide_banner -nostdin -nostats -i "$f" -af loudnorm=print_format=json -f null - 2>&1 | python3 -c 'import sys; t=sys.stdin.read(); import json; d=json.loads(t[t.rindex("{"):]); print(d["input_i"], "LUFS", d["input_tp"], "dBTP")')
+  l=$(ffmpeg -hide_banner -nostdin -nostats -i "$f" -af loudnorm=print_format=json -f null - 2>&1 | python3 -c 'import sys; t=sys.stdin.read(); import json; d=json.loads(t[t.rindex("{"):t.rindex("}")+1]); print(d["input_i"], "LUFS", d["input_tp"], "dBTP")')
   printf '%-44s %8d B  %7.2f s  %s\n' "${f#"$OUT"/}" "$s" "$d" "$l"
 done
 printf 'total %d B (%.2f MB, budget 4 MB)\n' "$total" "$(python3 -c "print($total/1e6)")"
