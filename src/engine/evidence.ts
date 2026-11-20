@@ -49,3 +49,31 @@ export function citeState(slot: SlotDef, cited: string[] | undefined, pins: PinL
   if (!chosen.length) return 'missing';
   return chosen.some((p) => supports(slot, p)) ? 'ok' : 'unsupported';
 }
+
+export interface SlotProgress {
+  slot: SlotDef;
+  kinds: KindStatus[];
+  /** Kinds with at least one pin. */
+  met: number;
+  /** Some pin meets one of the slot's kinds: the slot can be cited. */
+  ready: boolean;
+}
+
+/**
+ * Per report slot with evidence kinds: which kinds have a pin ("원인 증거 1/2") and whether the
+ * slot can be cited yet. Kinds are neutral types, so this is progress without the answer.
+ */
+export function slotProgress(cs: CaseFile, pins: PinLike[]): SlotProgress[] {
+  return cs.accusation.slots
+    .filter((s) => s.evidence?.length)
+    .map((slot) => {
+      const kinds = kindsFor(slot, pins);
+      const met = kinds.filter((k) => k.pins.length).length;
+      return { slot, kinds, met, ready: met > 0 };
+    });
+}
+
+/** Slots with evidence kinds that no pin meets yet (0 when the case defines no kinds). */
+export function uncoveredSlots(cs: CaseFile, pins: PinLike[]): number {
+  return slotProgress(cs, pins).filter((p) => !p.ready).length;
+}

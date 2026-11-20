@@ -685,7 +685,7 @@ export const caseZeroWiki: CaseFile = {
           answer: '터미널에 그대로 치세요: systemctl status wiki',
         },
         {
-          id: 'pins', text: '증거 2개 보드에 올리기 📌', hint: '증거가 되는 줄에 마우스를 올리면 오른쪽에 📌 가 보여요. df -h 의 100% 줄부터.', any: [{ pins: 2 }],
+          id: 'pins', text: '증거 2개 보드에 올리기 (칸마다 하나 이상) 📌', hint: '증거가 되는 줄에 마우스를 올리면 오른쪽에 📌 가 보여요. df -h 의 100% 줄부터.', any: [{ pins: 2 }],
           say: '찾았다!! 노란 줄 옆 📌 눌러서 증거 두 개만 보드에 올려 봐요~',
           answer: 'df -h 의 "/dev/sdb1 … 100% /var" 줄과 systemctl status 의 "No space left on device" 줄에 마우스를 올리고 오른쪽 📌.',
         },

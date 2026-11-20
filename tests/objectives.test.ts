@@ -27,6 +27,7 @@ test('objectives: each condition kind ticks only its item, once', () => {
   assert.equal(o.allDone(), false);
   assert.equal(o.fold(7), false, 'cannot fold before all are done');
   assert.deepEqual(o.observe({ type: 'cmd', host: 'pay-api-01', line: 'history', output: [' 4996  2026-11-13 17:52:31 # 갔다 와서 마저.'] }, 8), ['last']);
+  assert.deepEqual(o.observe({ type: 'pins', count: 4, uncovered: 1 }, 9), [], 'enough pins, but a report field has none');
   assert.deepEqual(o.observe({ type: 'pins', count: 3 }, 9), ['pins']);
   assert.ok(o.allDone());
   assert.deepEqual(o.state.done, { terminal: 2, last: 8, pins: 9 });
@@ -92,6 +93,9 @@ test('game: objectives tick from real commands, pins and window interaction; fol
   assert.equal(g.evidencePins().length, 0);
   for (const text of ['Nov 14 03:15:40 pay-api-01 payment-api[2211]: accept: too many open files', 'LimitNOFILE=4096', '  revert-pool-bump']) g.pin({ kind: 'line', text, source: 'pay-api-01' });
   assert.equal(g.evidencePins().length, 3);
+  // three that count, but 책임·은폐 has none yet: the report would ask for one, so the item waits
+  assert.deepEqual(ticks, ['terminal', 'last-command']);
+  g.pin({ kind: 'line', text: 'git-admins:x:1050:eunjae,jhpark', source: 'bastion' });
   assert.deepEqual(ticks, ['terminal', 'last-command', 'pins']);
   assert.ok(g.foldObjectives());
   assert.ok(g.st.log.some((e) => e.type === 'objectives-folded'));
@@ -136,4 +140,16 @@ test('game: saves from before the opening load with empty objectives', () => {
   g2.interact('terminal');
   assert.ok(g2.objectives.isDone('terminal'));
   assert.ok('terminal' in g2.st.objectives.done, 'state object is shared with the save');
+});
+
+test('evidence progress: per report field, the kinds met and whether it can be cited', async () => {
+  const { slotProgress, uncoveredSlots } = await import('../src/engine/evidence.ts');
+  const g = new Game(cs);
+  assert.equal(uncoveredSlots(cs, g.st.pins), 3);
+  g.pin({ kind: 'line', text: 'Nov 14 03:15:40 pay-api-01 payment-api[2211]: accept: too many open files', source: 'pay-api-01' });
+  const p = slotProgress(cs, g.st.pins);
+  // the 03:15:40 line backs both 원인 and 경위; 책임·은폐 has nothing yet
+  assert.deepEqual(p.map((x) => [x.slot.id, x.met, x.ready]), [['cause', 1, true], ['sequence', 1, true], ['responsibility', 0, false]]);
+  assert.equal(p[2].kinds.length, 4);
+  assert.equal(uncoveredSlots(cs, g.st.pins), 1);
 });

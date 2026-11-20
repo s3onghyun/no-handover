@@ -3,9 +3,9 @@ import { t } from '../../i18n.ts';
 import type { AppDef, UiCtx } from '../wm.ts';
 import type { Submission } from '../../engine/scoring.ts';
 import { complete, grade, missingCites, slotName, wrongReply } from '../../engine/scoring.ts';
-import { kindsOf } from '../../engine/evidence.ts';
+import { citeState, kindsFor, kindsOf } from '../../engine/evidence.ts';
 import type { Game, Pin } from '../../engine/game.ts';
-import type { SlotId } from '../../engine/types.ts';
+import type { SlotDef } from '../../engine/types.ts';
 import { playRecord, recordLine, resultCard } from '../../engine/record.ts';
 import { openedFor } from '../hintpanel.ts';
 import { drawResultCard, downloadResultCard } from '../resultcard.ts';
@@ -178,12 +178,35 @@ export const reportApp: AppDef = {
 
     const save = () => storage.set(key, JSON.stringify(sub));
 
-    // per slot: which pinned items back it (the engine checks them against the slot's kinds)
-    const citeBox = (slotId: SlotId, kinds: string[]) => {
+    // per slot: the kinds it accepts (✓ a pin on the board meets it, ○ none yet), and which pinned
+    // items back it — whether the cited ones count is said here, before submitting
+    const citeBox = (slot: SlotDef) => {
+      const slotId = slot.id;
+      const kinds = kindsFor(slot, g.st.pins);
+      const ready = kinds.some((k) => k.pins.length);
+      const state = h('p.cite-state', { 'aria-live': 'polite' });
+      const syncState = () => {
+        const s = citeState(slot, sub.cites?.[slotId], g.st.pins);
+        state.className = `cite-state ${s}`;
+        state.textContent = s === 'ok' ? `✓ ${t('report.citeOk')}` : s === 'unsupported' ? `△ ${t('report.citeUnsupported')}` : '';
+      };
       const box = h(
         'div.cite',
-        null,
-        h('div.cite-h', null, h('b', null, `📌 ${t('report.cite')}`), ` (${t('report.citeNeed')}) · ${t('report.citeKinds')}: ${kinds.join(' · ')}`),
+        { dataset: { slot: slotId } },
+        h('div.cite-h', null, h('b', null, `📌 ${t('report.cite')}`), ` (${t('report.citeNeed')}) · ${t('report.citeKinds')}:`),
+        h(
+          'div.cite-kinds',
+          null,
+          ...kinds.map(({ kind, pins }) =>
+            h(
+              `span.crit.${pins.length ? 'met' : 'miss'}`,
+              { dataset: { kind: kind.id }, 'aria-label': `${kind.label}: ${pins.length ? t('board.met') : t('board.missing')}` },
+              h('span', { 'aria-hidden': 'true' }, pins.length ? '✓ ' : '○ '),
+              kind.label,
+            ),
+          ),
+          h(`span.cite-need${ready ? '.met' : ''}`, null, ready ? `✓ ${t('report.citeReady')}` : t('report.citeMissing')),
+        ),
       );
       if (!g.st.pins.length) {
         box.appendChild(h('p.muted', null, t('report.noPins')));
@@ -203,11 +226,13 @@ export const reportApp: AppDef = {
             else cur.delete(p.id);
             sub.cites = { ...sub.cites, [slotId]: [...cur] };
             save();
+            syncState();
           },
         });
         list.appendChild(h('label.citeopt', { title: p.text }, inp, h('span', null, pinLabel(p))));
       }
-      box.appendChild(list);
+      box.append(list, state);
+      syncState();
       return box;
     };
 
@@ -250,7 +275,7 @@ export const reportApp: AppDef = {
           box.appendChild(h('label.opt', null, inp, h('span', null, o.text)));
         }
         if (shown.length < slot.options.length) box.appendChild(h('p.muted.more-opts', null, t('report.moreOptions')));
-        if (slot.evidence?.length) box.appendChild(citeBox(slot.id, slot.evidence.map((k) => k.label)));
+        if (slot.evidence?.length) box.appendChild(citeBox(slot));
         for (const ht of hints) box.appendChild(h('div.hintbox', null, `💡 ${ht}`));
         root.appendChild(box);
       }

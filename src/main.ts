@@ -1,7 +1,8 @@
 import './ui/style.css';
 import { CAMPAIGN } from './cases/index.ts';
 import { Campaign, parseProgress, type CampaignEntry, type Progress } from './engine/campaign.ts';
-import { Game, type SaveState } from './engine/game.ts';
+import { Game, type Pin, type SaveState } from './engine/game.ts';
+import { evidencePins, hasEvidence, slotProgress, uncoveredSlots } from './engine/evidence.ts';
 import { fmtHM, fmtKoShort, parseLocal } from './engine/time.ts';
 import { getLang, setLang, t, type Lang } from './i18n.ts';
 import { clear, h, storage } from './ui/dom.ts';
@@ -206,6 +207,8 @@ const ctx: UiCtx = {
     toasts.appendChild(el);
     setTimeout(() => el.remove(), 9000);
     while (toasts.childElementCount > 4) toasts.firstElementChild?.remove();
+    clearOfMarks();
+    return el;
   },
   pinBtn(p) {
     const isPinned = () => game.st.pins.some((x) => x.text === p.text && x.source === p.source);
@@ -215,9 +218,9 @@ const ctx: UiCtx = {
     b.addEventListener('click', (e) => {
       e.stopPropagation();
       if (isPinned()) return;
-      game.pin(p);
+      const pin = game.pin(p);
       sync();
-      ctx.toast(`📌 ${t('pin.added')}`, () => wm.open('board'));
+      pinToast(pin);
     });
     sync();
     return b;
@@ -245,6 +248,42 @@ const ctx: UiCtx = {
   caseLabel: caseLabel(ENTRY),
 };
 wm.ctx = ctx;
+
+/** "증거 N개": the checklist's pins goal, else one per report field with evidence kinds. */
+const pinsGoal = (): number => {
+  const goal = (game.cs.opening?.objectives.items ?? []).flatMap((it) => it.any).reduce((n, c) => ('pins' in c ? Math.max(n, c.pins) : n), 0);
+  return goal || slotProgress(game.cs, game.st.pins).length || 1;
+};
+/**
+ * After a pin: one short toast (it replaces the previous pin toast) with the count that matters,
+ * the pinned line, and a click that brings the board to the front.
+ */
+function pinToast(pin: Pin): void {
+  for (const old of toasts.querySelectorAll('.toast.pintoast')) old.remove();
+  const counts = evidencePins(game.cs, [pin]).length > 0;
+  const n = game.evidencePins().length;
+  const goal = pinsGoal();
+  const ready = hasEvidence(game.cs) && n >= goal && uncoveredSlots(game.cs, game.st.pins) === 0;
+  const head = !counts
+    ? t('pin.toastOther')
+    : t(ready ? 'pin.toastReady' : 'pin.toast', { n: n > goal ? t('pin.nth', { n: String(n) }) : `${n}/${goal}` });
+  const text = pin.text.replace(/\s+/g, ' ').trim();
+  const el = ctx.toast(
+    h('div', null, h(`div.pintoast-head${ready ? '.ready' : ''}`, null, `📌 ${head}`), h('div.pintoast-line', { title: text }, text.length > 90 ? `${text.slice(0, 89)}…` : text)),
+    () => wm.open('board'),
+  );
+  el.classList.add('pintoast');
+}
+/** Toasts sit bottom-right, as do the tray's coach marks: lift the toasts above a mark they would cover. */
+function clearOfMarks(): void {
+  toasts.style.bottom = '';
+  const mark = document.querySelector<HTMLElement>('.tour');
+  if (!mark || !toasts.childElementCount) return;
+  const m = mark.getBoundingClientRect();
+  const r = toasts.getBoundingClientRect();
+  if (m.right < r.left || m.left > r.right || m.bottom < r.top || m.top > r.bottom) return;
+  toasts.style.bottom = `${Math.max(52, window.innerHeight - m.top + 8)}px`;
+}
 wm.reserveRight = () => {
   const todo = desktop.querySelector('.todo');
   if (!todo) return 0;
@@ -271,6 +310,8 @@ const interact = (e: Event) => {
 desktop.addEventListener('pointerdown', interact, true);
 desktop.addEventListener('keydown', interact, true);
 for (const app of [terminalApp, messengerApp, mailApp, notesApp, boardApp, reportApp, dashboardApp, playtestApp]) wm.register(app);
+/** The evidence board stays one click away in the taskbar, even under a maximized window (shown once its icon is). */
+const boardTask = wm.pinTask('board')!;
 
 // ------------------------------------------------------------------ desktop icons + stickies + wallpaper
 const BADGES: Record<string, () => number> = {
@@ -311,6 +352,14 @@ const renderIcons = () => {
     else if (!badge) glyph.appendChild(h('span.badge', null, text));
     else if (badge.textContent !== text) badge.textContent = text;
   });
+  const board = ICONS.find((i) => i.app === 'board');
+  boardTask.hidden = !board || !iconVisible(board);
+  const n = game.st.pins.length;
+  const text = n ? (n > 99 ? '99+' : String(n)) : '';
+  let tb = boardTask.querySelector('.badge');
+  if (!text) tb?.remove();
+  else if (!tb) boardTask.appendChild((tb = h('span.badge', { 'aria-label': t('pin.count', { n: String(n) }) }, text)));
+  else if (tb.textContent !== text) tb.textContent = text;
 };
 
 const chair = `<svg id="wallpaper-chair" viewBox="0 0 200 260" aria-hidden="true"><g fill="none" stroke="#e9dcc3" stroke-width="7" stroke-linecap="round"><path d="M50 20 L50 150"/><path d="M150 20 L150 150"/><path d="M50 40 L150 40"/><path d="M50 75 L150 75"/><path d="M38 150 L162 150"/><path d="M50 150 L44 250"/><path d="M150 150 L158 250"/><path d="M60 150 L64 238"/><path d="M140 150 L136 238"/><path d="M46 205 L156 205"/></g></svg>`;
@@ -384,7 +433,7 @@ ptBtn.onclick = () => wm.open('playtest');
 function openGoal(): void {
   closePop();
   game.log('goal');
-  pop = h('div.popover.goalpop', { role: 'dialog', 'aria-label': t('goal.title') }, goalCard(game.cs));
+  pop = h('div.popover.goalpop', { role: 'dialog', 'aria-label': t('goal.title') }, goalCard(game.cs, game.st.pins));
   document.body.appendChild(pop);
 }
 goalBtn.onclick = () => (pop?.classList.contains('goalpop') ? closePop() : openGoal());
@@ -393,7 +442,7 @@ document.addEventListener('nh-goal', openGoal);
 helpBtn.onclick = () => {
   if (pop) return closePop();
   game.log('help');
-  pop = h('div.popover', { role: 'dialog' }, h('h3', null, `❓ ${t('help.title')}`), goalCard(game.cs));
+  pop = h('div.popover', { role: 'dialog' }, h('h3', null, `❓ ${t('help.title')}`), goalCard(game.cs, game.st.pins));
   if (game.cs.opening) {
     pop.appendChild(
       h(
@@ -471,6 +520,9 @@ game.on('change', (ev) => {
     for (const ty of types) wm.refreshAll(ty);
     objectivesUi?.refresh();
     tourUi?.refresh();
+    clearOfMarks();
+    // the goal card's "증거 n/N" follows the pins while it is open
+    if (types.includes('pins') && pop?.classList.contains('goalpop')) pop.replaceChildren(goalCard(game.cs, game.st.pins));
     renderClock();
   });
 });

@@ -84,6 +84,15 @@ test('case 2: scripted solve, three slots (max 330), wrong reports nudge in the 
   assert.ok(g.st.notesRevealed.includes('today'));
   assert.ok(g.st.live.some((m) => m.from === 'seojin' && m.text.startsWith('그거예요. 이름 없는 85G')));
   for (const l of g.tab(0).lines) if (g.cluesFor(l.text).some((c) => g.clue(c)?.key)) g.pin({ kind: 'line', text: l.text, source: 'logs-01' });
+  // five 원인 pins: "증거 3개" waits until 경위 and 재발 방지 have one each
+  assert.ok(g.evidencePins().length >= 3);
+  assert.equal(g.objectives.isDone('pins'), false);
+  const line = (re: RegExp) => g.tab(0).lines.find((l) => re.test(l.text))!.text;
+  out(g, 'journalctl --since "2026-11-11 14:00" --until "2026-11-11 15:00"');
+  g.pin({ kind: 'line', text: line(/COMMAND=\/usr\/bin\/rm pay-api-01\.log/), source: 'logs-01' });
+  assert.equal(g.objectives.isDone('pins'), false);
+  out(g, 'cat /etc/logshipd/logshipd.conf');
+  g.pin({ kind: 'line', text: line(/^max_source_bytes = 0/), source: 'logs-01' });
   assert.ok(g.objectives.allDone(), JSON.stringify(g.st.objectives.done));
   const w = g.submit(cited(g, { cause: 'rotate', sequence: 'freed-then', responsibility: ['blame-seojin'] }))!;
   assert.equal(w.max, 330);

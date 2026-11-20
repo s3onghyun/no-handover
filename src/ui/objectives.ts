@@ -8,7 +8,7 @@ import { t } from '../i18n.ts';
 import type { AudioManager } from '../audio/audio.ts';
 import type { UiCtx } from './wm.ts';
 import type { ObjectiveDef } from '../engine/types.ts';
-import { hasEvidence, kindsFor } from '../engine/evidence.ts';
+import { hasEvidence, kindsFor, uncoveredSlots } from '../engine/evidence.ts';
 import { slotName } from '../engine/scoring.ts';
 
 export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioManager): { refresh(): void; show(): void } {
@@ -76,7 +76,10 @@ export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioMa
     def.items.forEach((it, i) => {
       const done = g.objectives.isDone(it.id);
       const goal = pinsGoal(it);
-      const counted = goal && !done ? h('span.todo-count', null, ` (${Math.min(goal, g.evidencePins().length)}/${goal})`) : null;
+      // enough pins but a field with none: say so (the report asks every field for one)
+      const open = goal && !done ? uncoveredSlots(g.cs, g.st.pins) : 0;
+      const n = g.evidencePins().length;
+      const counted = goal && !done ? h('span.todo-count', null, ` (${Math.min(goal, n)}/${goal}${n >= goal && open ? ` · ${t('obj.uncovered', { n: String(open) })}` : ''})`) : null;
       ol.appendChild(
         h(
           `li${done ? '.done' : ''}${fresh.has(it.id) ? '.just' : ''}${cur === it ? '.cur' : ''}`,
