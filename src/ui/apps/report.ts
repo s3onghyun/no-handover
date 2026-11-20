@@ -31,6 +31,7 @@ function debrief(root: HTMLElement, ctx: UiCtx): void {
         h('span.rec-line', null, recordLine(rec)),
         rec.solved && rec.hints === 0 ? h('span.badge-nohint', null, `💡 ${t('debrief.badge')}`) : null,
         senior ? h('span.rec-senior', null, t('debrief.senior')) : null,
+        rec.panelOpens ? h('span.rec-panel', null, t('debrief.panelNote', { n: rec.panelOpens })) : null,
       ),
       h(
         'div.scorebox',
@@ -40,7 +41,7 @@ function debrief(root: HTMLElement, ctx: UiCtx): void {
         ...g.cs.accusation.slots.map((slot) => h('div.s', null, slot.title.split(' ')[0], h('b', null, `${s.slots[slot.id]?.correct ? '✓' : '✗'} ${s.slots[slot.id]?.points ?? 0}`))),
         h('div.s', null, `제출 ×${s.multiplier}`, h('b', null, `${g.st.submissions.length}회`)),
         h('div.s', null, t('report.evidence'), h('b', null, `+${s.evidenceBonus}`)),
-        senior ? h('div.s', null, '힌트', h('b', null, `−${s.hintCost}`)) : h('div.s', null, '힌트', h('b', null, `${rec.hints}회`)),
+        senior ? h('div.s', null, t('debrief.steps'), h('b', null, `−${s.hintCost}`)) : h('div.s', null, t('debrief.steps'), h('b', null, `${rec.hints}개`)),
       ),
       h(
         'div.cardbox',
@@ -205,7 +206,7 @@ export const reportApp: AppDef = {
             },
             `${t('report.submit')} (${leftText})`,
           ),
-          h('span.muted', null, `★ ${t('report.evidence')}: +${Math.min(30, g.pinnedKeyClues() * 5)} · ${g.st.settings.senior ? `힌트 −${g.ladder.totalCost()}` : t('report.hints', { n: g.hintCount() })}`),
+          h('span.muted', null, `★ ${t('report.evidence')}: +${Math.min(30, g.pinnedKeyClues() * 5)} · ${g.st.settings.senior ? t('report.hintsSenior', { n: g.ladder.totalCost() }) : t('report.hints', { n: g.hintCount() })}`),
         ),
       );
       if (lastReply) root.appendChild(h('div.reply', null, lastReply));

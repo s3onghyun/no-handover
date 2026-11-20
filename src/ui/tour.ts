@@ -4,6 +4,9 @@
 // record (no-handover:tour), so a tool introduced in Case 0 is not introduced again in Case 1.
 // Esc or "알겠어요" dismisses the current mark, "투어 건너뛰기" ends the tour for this case
 // (no-handover:tour:<case id>).
+//
+// A player who chose "터미널이 익숙해요" (src/engine/experience.ts) gets no coach marks: the tour
+// collapses into a small "도구 안내 보기" entry (toolGuide below) that lists the same lines on demand.
 
 import { nextTourStep, parseTourState, type TourState } from '../engine/tour.ts';
 import type { TourStep } from '../engine/types.ts';
@@ -15,7 +18,7 @@ export const TOUR_SEEN_KEY = 'no-handover:tour';
 export const tourKey = (caseId: string) => `no-handover:tour:${caseId}`;
 const AUTO_HIDE_MS = 15000;
 
-export function mountTour(game: Game, opts: { blocked: () => boolean }): { refresh(): void } | null {
+export function mountTour(game: Game, opts: { blocked: () => boolean; collapsed?: () => boolean }): { refresh(): void } | null {
   const steps = game.cs.tour?.steps;
   if (!steps?.length) return null;
   const key = tourKey(game.cs.id);
@@ -28,11 +31,6 @@ export function mountTour(game: Game, opts: { blocked: () => boolean }): { refre
     storage.set(key, JSON.stringify({ skipped: st.skipped }));
   };
   let cur: { step: TourStep; el: HTMLElement; timer: number; back: HTMLElement | null } | null = null;
-
-  const anchor = (app: string): HTMLElement | null =>
-    (document.querySelector(`.window[data-app="${app}"]:not(.min)`) as HTMLElement | null) ??
-    (document.querySelector(`.icon[data-app="${app}"]`) as HTMLElement | null) ??
-    (document.querySelector(`[data-tour="${app}"]`) as HTMLElement | null);
 
   const place = (el: HTMLElement, a: HTMLElement) => {
     const r = a.getBoundingClientRect();
@@ -52,7 +50,7 @@ export function mountTour(game: Game, opts: { blocked: () => boolean }): { refre
     el.style.top = `${y}px`;
   };
 
-  const close = (how: 'ok' | 'skip' | 'auto') => {
+  const close = (how: 'ok' | 'skip' | 'auto' | 'collapsed') => {
     if (!cur) return;
     const { step, el, timer, back } = cur;
     clearTimeout(timer);
@@ -64,6 +62,8 @@ export function mountTour(game: Game, opts: { blocked: () => boolean }): { refre
       const to = back?.isConnected ? back : document.querySelector<HTMLElement>('.window.focused:not(.min) .tin input');
       to?.focus({ preventScroll: true });
     }
+    // switched to "익숙해요" while a mark was up: put it away without counting it as seen
+    if (how === 'collapsed') return;
     if (!st.seen.includes(step.id)) st.seen.push(step.id);
     if (how === 'skip') st.skipped = true;
     save();
@@ -93,6 +93,7 @@ export function mountTour(game: Game, opts: { blocked: () => boolean }): { refre
   };
 
   function refresh(): void {
+    if (opts.collapsed?.()) return close('collapsed');
     if (cur) {
       // keep the mark next to its anchor while windows move
       const a = anchor(cur.step.app);
@@ -110,4 +111,41 @@ export function mountTour(game: Game, opts: { blocked: () => boolean }): { refre
     if (e.key === 'Escape' && cur && !opts.blocked()) close('ok');
   });
   return { refresh };
+}
+
+/** A tour anchor: the open window, else the desktop icon, else a tray control with data-tour. */
+export function anchor(app: string): HTMLElement | null {
+  return (
+    (document.querySelector(`.window[data-app="${app}"]:not(.min)`) as HTMLElement | null) ??
+    (document.querySelector(`.icon[data-app="${app}"]`) as HTMLElement | null) ??
+    (document.querySelector(`[data-tour="${app}"]`) as HTMLElement | null)
+  );
+}
+
+/**
+ * "도구 안내": the coach-mark lines as one list, for players who collapsed the tour. Tools already
+ * on screen come first and flash their anchor when picked; tools still locked are listed as such.
+ */
+export function toolGuide(steps: TourStep[], onPick: (step: TourStep) => void): HTMLElement {
+  const shown = steps.filter((s) => anchor(s.app));
+  const later = steps.filter((s) => !anchor(s.app));
+  const item = (s: TourStep, on: boolean) =>
+    h(
+      `li${on ? '' : '.later'}`,
+      { dataset: { step: s.id } },
+      on
+        ? h('button.tg-pick', { type: 'button', onclick: () => onPick(s) }, h('b', null, s.title), h('span', null, s.text))
+        : h('div.tg-pick', null, h('b', null, s.title), h('span', null, `${t('guide.later')} · ${s.text}`)),
+    );
+  return h('ul.toolguide', null, ...shown.map((s) => item(s, true)), ...later.map((s) => item(s, false)));
+}
+
+/** Briefly outline a tour anchor (used by the 도구 안내 list). */
+export function flashAnchor(app: string): void {
+  const a = anchor(app);
+  if (!a) return;
+  a.classList.remove('tour-target');
+  void a.offsetWidth;
+  a.classList.add('tour-target');
+  setTimeout(() => a.classList.remove('tour-target'), 1600);
 }

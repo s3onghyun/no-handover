@@ -1,5 +1,5 @@
 // Shareable result card (web-escape analysis §9 item 14): a 1200×630 PNG drawn on a canvas in the
-// browser — game title, case, time, commands, hints and the "힌트 0회" badge. No cause, no
+// browser — game title, case, time, commands, hint steps and the "힌트 단계 0" badge. No cause, no
 // answers, no clue text (the model in src/engine/record.ts is the only input).
 
 import type { ResultCard } from '../engine/record.ts';
@@ -77,13 +77,14 @@ export function drawResultCard(canvas: HTMLCanvasElement, card: ResultCard): voi
     c.save();
     c.translate(x + 4 * 190 + 30, 330);
     c.rotate(-0.12);
-    roundRect(c, 0, 0, 200, 70, 35);
+    c.font = `800 30px ${SANS}`;
+    const bw = Math.max(200, Math.ceil(c.measureText(`💡 ${card.badge}`).width) + 44);
+    roundRect(c, 0, 0, bw, 70, 35);
     c.fillStyle = '#f2d94e';
     c.fill();
     c.fillStyle = '#23262b';
-    c.font = `800 30px ${SANS}`;
     c.textAlign = 'center';
-    c.fillText(`💡 ${card.badge}`, 100, 46);
+    c.fillText(`💡 ${card.badge}`, bw / 2, 46);
     c.restore();
   }
   if (card.mode) {

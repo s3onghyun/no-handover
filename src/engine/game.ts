@@ -740,6 +740,8 @@ export class Game {
         asks: L.filter((e) => e.type === 'ask').map((e) => ({ t: e.t, prompt: e.prompt, from: e.from, nudge: e.nudge })),
         hintSummaries: L.filter((e) => e.type === 'hint-summary').map((e) => ({ t: e.t, key: e.key })),
         record: playRecord(this),
+        // the lock-screen choice "터미널이 익숙해요 / 처음이에요" as it stood last (src/engine/experience.ts)
+        experience: L.filter((e) => e.type === 'experience').at(-1)?.choice ?? null,
         cluesFound: Object.entries(this.st.clues).map(([id, v]) => ({ id, t: v.at, via: v.via })).sort((a, b) => a.t - b.t),
         keyCluesTotal: this.cs.clues.filter((c) => c.key).length,
         pins: this.st.pins.length,
