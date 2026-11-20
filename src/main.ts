@@ -205,6 +205,12 @@ const ctx: UiCtx = {
   caseLabel: caseLabel(ENTRY),
 };
 wm.ctx = ctx;
+wm.reserveRight = () => {
+  const todo = desktop.querySelector('.todo');
+  if (!todo) return 0;
+  const r = todo.getBoundingClientRect();
+  return r.width ? Math.max(0, desktop.getBoundingClientRect().right - r.left) : 0;
+};
 wm.onFocus = (id) => game.focus(id);
 wm.onOpen = () => {
   void audio.play('sfx.window-open');
@@ -237,21 +243,35 @@ const ICONS = (game.cs.desktop?.icons ?? ['terminal', 'messenger', 'mail', 'note
 const iconVisible = (i: { after?: string }) => !i.after || game.objectives.isDone(i.after) || game.objectives.folded();
 const shownIcons = new Set<string>();
 const iconsEl = h('div.icons');
+/** Icon buttons by app, kept across renders: a re-render on every game change replaced them, which dropped keyboard focus and could swallow a click. */
+const iconEls = new Map<string, HTMLElement>();
 const renderIcons = () => {
-  clear(iconsEl);
-  for (const i of ICONS.filter(iconVisible)) {
-    const isNew = shownIcons.size > 0 && !shownIcons.has(i.app);
-    shownIcons.add(i.app);
-    const def = wm.apps.get(i.app)!;
-    const n = i.badge?.() ?? 0;
-    iconsEl.appendChild(h(`button.icon${isNew ? '.unlocked' : ''}`, { ondblclick: () => wm.open(i.app), onclick: (e: MouseEvent) => e.detail === 0 && wm.open(i.app), onkeydown: (e: KeyboardEvent) => e.key === 'Enter' && wm.open(i.app), dataset: { app: i.app } }, h('span.glyph', null, def.icon, n ? h('span.badge', null, n > 99 ? '99+' : n) : null), def.title()));
+  const visible = ICONS.filter(iconVisible);
+  for (const [app, el] of iconEls) {
+    if (visible.some((i) => i.app === app)) continue;
+    el.remove();
+    iconEls.delete(app);
   }
+  visible.forEach((i, idx) => {
+    const def = wm.apps.get(i.app)!;
+    let el = iconEls.get(i.app);
+    if (!el) {
+      const isNew = shownIcons.size > 0 && !shownIcons.has(i.app);
+      shownIcons.add(i.app);
+      // one click (mouse, touch, or Enter/Space on the focused button) opens the app
+      el = h(`button.icon${isNew ? '.unlocked' : ''}`, { type: 'button', onclick: () => wm.open(i.app), dataset: { app: i.app } }, h('span.glyph', null, def.icon), def.title());
+      iconEls.set(i.app, el);
+    }
+    if (iconsEl.children[idx] !== el) iconsEl.insertBefore(el, iconsEl.children[idx] ?? null);
+    const n = i.badge?.() ?? 0;
+    const text = n ? (n > 99 ? '99+' : String(n)) : '';
+    const glyph = el.querySelector('.glyph')!;
+    let badge = glyph.querySelector('.badge');
+    if (!text) badge?.remove();
+    else if (!badge) glyph.appendChild(h('span.badge', null, text));
+    else if (badge.textContent !== text) badge.textContent = text;
+  });
 };
-// single click also opens on touch devices
-iconsEl.addEventListener('click', (e) => {
-  const b = (e.target as HTMLElement).closest('.icon') as HTMLElement | null;
-  if (b && matchMedia('(pointer: coarse)').matches) wm.open(b.dataset.app!);
-});
 
 const chair = `<svg id="wallpaper-chair" viewBox="0 0 200 260" aria-hidden="true"><g fill="none" stroke="#e9dcc3" stroke-width="7" stroke-linecap="round"><path d="M50 20 L50 150"/><path d="M150 20 L150 150"/><path d="M50 40 L150 40"/><path d="M50 75 L150 75"/><path d="M38 150 L162 150"/><path d="M50 150 L44 250"/><path d="M150 150 L158 250"/><path d="M60 150 L64 238"/><path d="M140 150 L136 238"/><path d="M46 205 L156 205"/></g></svg>`;
 desktop.insertAdjacentHTML('beforeend', chair);
@@ -398,6 +418,8 @@ const memoNote = game.cs.notes.find((n) => n.highlight !== undefined)?.id;
 game.on('toast', (text) => ctx.toast(h('div', null, String(text)), () => wm.open('notes', memoNote)));
 game.on('note', (id) => {
   wm.open('notes', id);
+  // the memo pops up by itself while the player works in the terminal: keep its 📌 column uncovered
+  wm.keepClearOf('notes', 'terminal');
 });
 game.on('friction', () => void audio.play('sfx.error'));
 game.on('hint-panel', () => {
@@ -437,9 +459,14 @@ document.addEventListener('nh-reset', () => {
 });
 
 // ------------------------------------------------------------------ clock + loop
+let clockSig = '';
 function renderClock() {
   const now = game.now();
   const over = now > game.deadline();
+  // rewrite only when the shown minute changes: a DOM change every second made snapshot-based tools (and their refs) go stale
+  const sig = `${fmtKoShort(now)}|${over}`;
+  if (sig === clockSig) return;
+  clockSig = sig;
   clear(clock);
   clock.append(h('div', null, fmtKoShort(now)), h(`div.due${over ? '.over' : ''}`, null, over ? t('tb.overdue') : `${t('tb.deadline')} ${fmtHM(game.deadline())}`));
 }
@@ -469,6 +496,7 @@ function revealDesktop(first: boolean) {
   renderIcons();
   renderClock();
   objectivesUi = mountObjectives(desktop, ctx, audio);
+  objectivesUi.refresh(); // the sticky is on the desktop before the first windows size themselves around it
   if (first && !game.cs.opening) wm.open('mail', 'brief');
   wm.open('terminal');
   objectivesUi.refresh();

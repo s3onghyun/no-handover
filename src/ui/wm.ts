@@ -52,6 +52,8 @@ export class WM {
   /** Window opened / closed (sound cues, onboarding pulse). */
   onOpen: (id: string) => void = () => {};
   onClose: (id: string) => void = () => {};
+  /** Width at the desktop's right edge that new windows keep clear of (the "오늘 할 일" sticky, which sits above every window). */
+  reserveRight: () => number = () => 0;
   readonly root: HTMLElement;
   readonly tasks: HTMLElement;
 
@@ -80,9 +82,12 @@ export class WM {
     if (!def) return null;
     const vw = this.root.clientWidth || window.innerWidth;
     const vh = this.root.clientHeight || window.innerHeight - 40;
-    const w = Math.min(def.w, vw - 16);
+    let w = Math.min(def.w, vw - 16);
     const hh = Math.min(def.h, vh - 16);
     const x = def.x ?? Math.max(8, Math.min(vw - w - 8, 120 + (this.cascade % 6) * 28));
+    // stop short of the sticky so the right edge (pin buttons, ✕) stays clickable, unless that leaves a sliver
+    const limit = vw - this.reserveRight() - 8;
+    if (x + w > limit && limit - x >= Math.min(def.w, 480)) w = limit - x;
     const y = def.y ?? Math.max(8, Math.min(vh - hh - 8, 20 + (this.cascade % 6) * 24));
     this.cascade++;
     const title = h('span.title', null, def.title());
@@ -112,6 +117,25 @@ export class WM {
     if (arg !== undefined) inst.open?.(arg);
     this.onOpen(id);
     return inst;
+  }
+
+  /**
+   * Move window `id` sideways so it does not cover the right-hand column of window `of` (where
+   * the terminal's 📌 buttons sit): beside it when there is room, otherwise left of that column.
+   */
+  keepClearOf(id: string, of: string, column = 48): void {
+    const a = this.wins.get(id)?.el;
+    const b = this.wins.get(of)?.el;
+    if (!a || !b || b.classList.contains('min') || a.classList.contains('max') || b.classList.contains('max')) return;
+    const bRight = b.offsetLeft + b.offsetWidth;
+    const colLeft = bRight - column;
+    const covers =
+      a.offsetTop < b.offsetTop + b.offsetHeight && a.offsetTop + a.offsetHeight > b.offsetTop &&
+      a.offsetLeft < bRight && a.offsetLeft + a.offsetWidth > colLeft;
+    if (!covers) return;
+    const limit = (this.root.clientWidth || window.innerWidth) - this.reserveRight() - 8;
+    const x = limit - bRight - 8 >= a.offsetWidth ? bRight + 8 : colLeft - 8 - a.offsetWidth;
+    if (x >= 8) a.style.left = `${x}px`;
   }
 
   private taskClick(id: string): void {

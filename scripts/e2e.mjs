@@ -9,7 +9,9 @@
 // departed senior's history line, then checks the skip path, the help-menu replay and the
 // persisted mute toggle in a second page, the board/dashboard once more with reduced motion, and a
 // fourth page with reduced motion where the tour, the aha moment and typing never block each other,
-// and "투어 건너뛰기" ends Case 0's tour.
+// and "투어 건너뛰기" ends Case 0's tour. A fifth page plays Case 0 at 1280x800 with single mouse
+// clicks at element centres (the blind playtester's tool): board icon, taskbar, Enter, and pins
+// with the memo and the checklist on screen.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
@@ -739,6 +741,74 @@ try {
   assert.deepEqual(JSON.parse(await p4.evaluate(() => localStorage.getItem('no-handover:tour:case0-wiki'))), { skipped: true });
   step('Case 0 tour: "투어 건너뛰기" (keyboard) ends it for the case; the 💡 mark does not follow; skip is saved');
   await p4.close();
+
+  // ---- fifth page: a 1280x800 laptop, clicked the way the blind playtester's tool clicks — one
+  // mouse click at an element's centre, no hover first, no window closed out of the way
+  const p5 = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+  p5.on('pageerror', (e) => errors.push(String(e)));
+  p5.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  p5.on('dialog', (d) => d.accept());
+  const clickCentre = async (loc, what) => {
+    await loc.scrollIntoViewIfNeeded();
+    const b = await loc.boundingBox();
+    const [x, y] = [b.x + b.width / 2, b.y + b.height / 2];
+    const hit = await p5.evaluate(([x, y, sel]) => { const e = document.elementFromPoint(x, y); return e?.closest(sel) ? 'self' : `${e?.className} in ${e?.closest('.window,.todo,.tour,.toasts')?.className ?? '-'}`; }, [x, y, what]);
+    assert.equal(hit, 'self', `${what} is the topmost element at its centre`);
+    await p5.mouse.click(x, y);
+  };
+  const run5 = async (cmd) => {
+    await p5.keyboard.type(cmd);
+    await p5.keyboard.press('Enter');
+    await p5.waitForTimeout(120);
+  };
+  await p5.goto(`${url}?fresh=1&briefing=0`);
+  await p5.locator('#boot button.primary').click();
+  const tin5 = p5.locator('.tin input');
+  await p5.locator('.tour[data-step="terminal"]').waitFor({ timeout: 5000 });
+  await tin5.click();
+  await clickCentre(p5.locator('.tour .tour-ok'), '.tour-ok');
+  await p5.locator('.tour[data-step="terminal"]').waitFor({ state: 'detached' });
+  assert.equal(await p5.evaluate(() => document.activeElement === document.querySelector('.tin input')), true, '"알겠어요" hands focus back to the prompt');
+  await p5.keyboard.press('Enter'); // the pre-typed history
+  await p5.locator('.todo li[data-id="history"].done').waitFor();
+  const termBox = await p5.locator('.window[data-app="terminal"]').boundingBox();
+  const todoBox = await p5.locator('.todo').boundingBox();
+  assert.ok(termBox.x + termBox.width <= todoBox.x, `the terminal (right ${termBox.x + termBox.width}) stops short of the checklist (left ${todoBox.x})`);
+  for (const c of ['df -h', 'du -sh /var/log/*', 'tail -n 20 /var/log/wiki/wiki.log']) {
+    await tin5.focus();
+    await run5(c);
+  }
+  await p5.locator('.icon[data-app="board"]').waitFor();
+  await p5.locator('.tour').waitFor({ timeout: 5000 });
+  // B1: one mouse click on the 📌 icon opens the board, with a coach mark on screen
+  await clickCentre(p5.locator('.icon[data-app="board"]'), '.icon[data-app="board"]');
+  const board5 = p5.locator('.window[data-app="board"]:not(.min)');
+  await board5.waitFor({ timeout: 2000 });
+  // the taskbar button minimizes and restores it
+  const task5 = p5.locator('#taskbar .task', { hasText: '증거 보드' });
+  await clickCentre(task5, '.task');
+  await p5.locator('.window[data-app="board"].min').waitFor({ state: 'attached' });
+  await clickCentre(task5, '.task');
+  await board5.waitFor();
+  assert.equal(await p5.evaluate(() => document.querySelector('.window.focused')?.dataset.app), 'board');
+  await clickCentre(board5.locator('.titlebar button.close'), 'button.close');
+  await board5.waitFor({ state: 'detached' });
+  // ... and Enter on the focused icon opens it too
+  await p5.locator('.icon[data-app="board"]').focus();
+  await p5.keyboard.press('Enter');
+  await board5.waitFor({ timeout: 2000 });
+  assert.equal(await p5.locator('.window[data-app="board"]').count(), 1);
+  await clickCentre(board5.locator('.titlebar button.close'), 'button.close');
+  await tin5.focus();
+  await run5('systemctl status wiki');
+  await p5.locator('.todo li[data-id="service"].done').waitFor();
+  await p5.locator('.window[data-app="notes"]').waitFor({ timeout: 3000 }); // the memo scene pops the notebook up, and it stays open
+  // B2: pin the two lines the tester picked by clicking straight on their 📌
+  for (const re of [/100%\s+\/var/, /ERROR session save failed/]) await clickCentre(p5.locator('.tline', { hasText: re }).last().locator('.pinbtn'), '.pinbtn');
+  assert.equal(await p5.evaluate(() => window.__game.st.pins.length), 2);
+  await p5.locator('.todo li[data-id="pins"].done').waitFor({ timeout: 2000 });
+  step('1280x800, clicked like the playtester: "알겠어요" returns focus to the prompt; one click on the 📌 icon opens the board with a coach mark up, the taskbar minimizes/restores it, Enter opens it; the terminal clears the checklist and the memo clears its 📌 column, so both pins land and box 5 ticks');
+  await p5.close();
 
   assert.deepEqual(errors, []);
   console.log('e2e passed');
