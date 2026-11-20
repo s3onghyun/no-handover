@@ -13,9 +13,14 @@
 //   - allows fewer submissions and takes TIME_STEP points off for every TIME_EVERY_MIN minutes of
 //     play over the case's par (at most TIME_CAP);
 //   - adds one red herring: a report option that a world detail makes plausible and one command
-//     rules out (the case file's `expert` block says which).
+//     rules out (the case file's `expert` block says which);
+//   - keeps the departed senior's records short: history, README and comments cut by half or more,
+//     and no file holds the commands that solve the case — only traces that need reading into
+//     (the overlay's `history`, `files`, `crontabs`, `mails`, `terminalTabs`, `stickies`);
+//   - hides the board's evidence timeline (pins are placed by their own time stamps there, so it
+//     orders itself and adds nothing to the score; the pin log, the tray and the report evidence stay).
 
-import type { CaseFile, ExpertDef, FileDef } from './types.ts';
+import type { CaseFile, Emit, ExpertDef, FileDef, TimelineEvent } from './types.ts';
 
 /** Per-profile choice (localStorage), next to the 익숙해요 / 처음이에요 record. */
 export const EXPERT_KEY = 'no-handover:expert';
@@ -46,10 +51,24 @@ export function applyExpert(cs: CaseFile): CaseFile {
   const hosts = cs.hosts.map((hd) => {
     const add = (x.files ?? []).filter((f) => f.host === hd.name).map((f) => f.file);
     const df = x.df?.find((d) => d.host === hd.name)?.lines;
-    if (!add.length && !df) return hd;
+    const tabs = (x.crontabs ?? []).filter((c) => c.host === hd.name);
+    if (!add.length && !df && !tabs.length) return hd;
     const files: FileDef[] = hd.files.filter((f) => !add.some((a) => a.path === f.path)).concat(add);
-    return { ...hd, files, df: df ?? hd.df };
+    const crontabs = tabs.length ? { ...hd.crontabs, ...Object.fromEntries(tabs.map((c) => [c.user, c.content])) } : hd.crontabs;
+    return { ...hd, files, df: df ?? hd.df, crontabs };
   });
+  // a replaced history: the case's lines for that host and user go, the overlay's come in
+  const replaced = new Set((x.history ?? []).map((r) => `${r.host}\u0000${r.user}`));
+  const isReplaced = (e: Emit) => e.kind === 'history' && replaced.has(`${e.host}\u0000${e.user}`);
+  const kept: TimelineEvent[] = replaced.size
+    ? cs.timeline.flatMap((ev) => {
+        if (!ev.emits?.some(isReplaced)) return [ev];
+        const emits = ev.emits.filter((e) => !isReplaced(e));
+        return emits.length ? [{ ...ev, emits }] : [];
+      })
+    : cs.timeline;
+  const history: TimelineEvent[] = (x.history ?? []).flatMap((r) => r.lines.map((l) => ({ at: l.at, emits: [{ kind: 'history' as const, host: r.host, user: r.user, cmd: l.cmd }] })));
+  const mails = x.mails?.length ? cs.mails.filter((m) => !x.mails!.some((n) => n.id === m.id)).concat(x.mails) : cs.mails;
   const slots = cs.accusation.slots.map((s) => {
     const extra = (x.options ?? []).filter((o) => o.slot === s.id);
     if (!extra.length) return s;
@@ -61,7 +80,10 @@ export function applyExpert(cs: CaseFile): CaseFile {
   return {
     ...cs,
     hosts,
-    timeline: [...cs.timeline, ...(x.timeline ?? [])],
+    timeline: [...kept, ...history, ...(x.timeline ?? [])],
+    mails,
+    terminalTabs: x.terminalTabs ?? cs.terminalTabs,
+    stickies: x.stickies ?? cs.stickies,
     clues: [...cs.clues, ...(x.clues ?? [])],
     // per-field ✓/✗ only: the colleague's per-field hint lines would be unasked help
     accusation: { ...cs.accusation, slots, maxSubmissions: x.maxSubmissions, intro: x.intro ?? cs.accusation.intro, feedback: 'marks' },

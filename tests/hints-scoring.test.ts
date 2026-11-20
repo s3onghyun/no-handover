@@ -66,7 +66,7 @@ test('hint ladder: panel steps are counted as hints (summaries free); cost only 
 });
 
 const { pins, cites } = backing(cs);
-const correct = { cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account', 'bottleneck', 'cover-seojin', 'cover-jihoon'], cites };
+const correct = { cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account'], cites };
 
 test('scoring: perfect first submission', () => {
   const r = scoreSubmission(cs, correct, { attempt: 1, pinnedKeyClues: 6, hintCost: 0, pins });
@@ -84,17 +84,21 @@ test('scoring: attempt multiplier, evidence cap and hint cost', () => {
   assert.equal(r.total, Math.round(300 * 0.7) + 30 - 40);
 });
 
-test('scoring: blaming a person fails the responsibility slot even with all factors picked', () => {
-  const r = scoreSubmission(cs, { ...correct, responsibility: [...correct.responsibility, 'blame-jihoon'] }, { attempt: 1, pinnedKeyClues: 0, hintCost: 0, pins });
+test('scoring: blaming a person fails the responsibility slot', () => {
+  const r = scoreSubmission(cs, { ...correct, responsibility: ['git-admins', 'cron', 'oncall', 'blame-jihoon'] }, { attempt: 1, pinnedKeyClues: 0, hintCost: 0, pins });
   assert.equal(r.slots.responsibility?.correct, false);
   assert.deepEqual(r.blamed, ['jihoon']);
-  assert.equal(r.slots.responsibility?.points, 60);
+  assert.equal(r.slots.responsibility?.points, 21); // (20 + 20 + 15 − 40) / 70
 });
 
-test('scoring: responsibility passes at 70 without negatives', () => {
+test('scoring: responsibility takes exactly four, none blaming a person', () => {
   const slot = cs.accusation.slots.find((s) => s.id === 'responsibility')!;
+  assert.equal(slot.picks, 4);
+  assert.deepEqual(scoreSlot(slot, ['git-admins', 'cron', 'oncall', 'account']).points, 100);
   assert.equal(scoreSlot(slot, ['git-admins', 'cron', 'oncall', 'account']).correct, true);
-  assert.equal(scoreSlot(slot, ['git-admins', 'cron', 'oncall']).correct, false);
+  assert.equal(scoreSlot(slot, ['bottleneck', 'cover-seojin', 'cover-jihoon', 'oncall']).correct, true, 'any four factors');
+  assert.equal(scoreSlot(slot, ['git-admins', 'cron', 'oncall']).correct, false, 'three is not four');
+  assert.equal(scoreSlot(slot, ['git-admins', 'cron', 'oncall', 'account', 'bottleneck']).correct, false, 'five is not four');
 });
 
 test('scoring: wrong cause blames the person in the option', () => {

@@ -626,9 +626,10 @@ export const caseTwoDeleted: CaseFile = {
       {
         id: 'responsibility',
         title: '재발 방지 (무엇이 가능하게 했나)',
-        prompt: '보고서의 이 칸에 무엇을 쓸까? 해당하는 것을 모두 고르세요.',
+        prompt: '보고서의 이 칸에 무엇을 쓸까? 가장 크게 작용한 3개를 고르세요.',
         type: 'multi',
-        pass: 70,
+        // exactly three (docs/case-format.md §8): any three factors pass, the best three (65) make 100
+        picks: 3,
         options: [
           { id: 'no-verify', weight: 25, text: '지운 뒤 df 로 공간이 실제로 돌아왔는지 확인하는 절차가 없었다 — "지웠으니 됐다"가 확인이었다' },
           { id: 'open-rule', weight: 20, text: '열려 있는 로그는 rm 대신 비우거나 프로세스가 다시 열게 해야 한다는 절차가 런북에 없었다' },
@@ -822,12 +823,37 @@ export const caseTwoDeleted: CaseFile = {
   // point do count in df and not in du — the other textbook reason for df ≠ du. It is ruled out
   // by logshipd's own line a second earlier (it flushed the spool into raw/ and kept only its lock
   // file) and because covered files cannot grow, while /data grew 3.7G/h all night.
+  // Records: Eunjae's 2024-08 history keeps only the HUP that gave the space back; README, .bashrc
+  // (no 숨은거 alias), logshipd.conf and pay-api-01's README lose their how-to lines.
+  // Human trace: Jihoon's reply-all to Mirae, his own account of Wednesday — debug "briefly, then
+  // off", and "last week's" file removed. The journals say otherwise: debug from 14:22:47 with no
+  // switch back (logshipd's stats stay at 3.70 all night), and raw/ is this week's open file.
   expert: {
     maxSubmissions: 2,
     parMin: 16,
     intro: '서진님 검토 후 오미래 CTO 에게 갈 보고서. 세 칸. 제출은 2번까지 — 틀리면 칸마다 ✓/✗ 만 온다.',
     goalIntro: '서진님 검토 뒤 오미래 CTO 에게 갈 보고서. 세 칸을 채우면 사건이 끝나요. 제출은 2번까지 — 틀리면 칸마다 ✓/✗ 만 알려 줘요.',
     after: ['다음: 📝 보고서 — 원인, 경위, 재발 방지 세 칸 (제출 2번)', '막히면: ~/README.txt, history, 💡 (숙련자 모드: 감점)'],
+    history: [
+      {
+        host: L,
+        user: 'eunjae',
+        lines: [
+          { at: '2023-09-14T15:40:02', cmd: 'sudo systemctl enable --now logshipd' },
+          { at: '2024-08-21T10:31:05', cmd: 'ls -la /data/collector/raw' },
+          { at: '2024-08-21T10:44:02', cmd: 'sudo systemctl kill -s HUP logshipd' },
+          { at: '2024-08-21T10:45:40', cmd: '# 92% → 51%. 🌱' },
+          { at: '2026-11-12T09:25:02', cmd: '# 도윤님, 오늘은 logs-01. README 먼저 🌱' },
+        ],
+      },
+    ],
+    mails: [
+      {
+        id: 'jihoon-account', account: 'me', folder: 'inbox', from: 'jihoon', to: '오미래', cc: '인프라팀 (한도윤 외)', at: '2026-11-12T09:16',
+        subject: 'RE: [중요] 로그 서버 디스크 — 결제 로그 유실 여부 확인 요청',
+        body: '미래님,\n어제 제가 한 작업 공유드립니다!!\n\n- 14:10쯤 pay-api-01 결제 API 디버그 로그를 잠깐 켜서 p99 확인하고, 끝나고 바로 껐습니다.\n- 14:30쯤 logs-01 에서 지난주 결제 로그(raw/pay-api-01.log, 20G 정도)를 지웠습니다. 이번 주 로그는 건드리지 않았습니다.\n- 그 뒤로는 두 서버 다 손대지 않았습니다.\n\n혹시 제 작업 때문이면 말씀 주세요 🙏\n박지훈 드림',
+      },
+    ],
     df: [
       {
         host: L,
@@ -843,6 +869,11 @@ export const caseTwoDeleted: CaseFile = {
       },
     ],
     files: [
+      { host: L, file: { path: '/home/eunjae/README.txt', mtime: '2024-08-21T11:00', content: 'logs-01 — 로그 수집 서버 (남은재, 2023-09 / 2024-08 고침)\n\nraw/<서버>.log 는 이번 주, archive/ 는 지난주들 (일요일 00:00 logrotate).\nraw 파일은 rm 하지 마세요. (2024-08에 제가 그랬다가 반나절을 헤맸어요…)\n조사할 때는 아무것도 지우지 마세요. :)' } },
+      { host: L, file: { path: '/home/eunjae/.bashrc', mtime: '2024-08-21T11:02', content: EUNJAE_BASHRC.slice(0, EUNJAE_BASHRC.indexOf('\n\n# 다음 사람')) } },
+      { host: L, file: { path: '/home/eunjae/.ssh/config', mode: '600', mtime: '2025-02-11T14:20', content: 'Host pay-api-01\n  HostName 10.20.1.11' } },
+      { host: L, file: { path: '/etc/logshipd/logshipd.conf', mtime: '2023-09-14T15:30', content: LOGSHIPD_CONF.split('\n').filter((l) => !/^# (서버마다|다시 열기)/.test(l)).map((l) => l.replace(/\s+# (이보다 적으면|0 = 서버별).*$/, '')).join('\n') } },
+      { host: P, file: { path: '/home/eunjae/README.txt', mtime: '2025-11-03T16:40', content: '# pay-api-01 — 결제 API 1호기\n왜: 결제 API. 2018-04 첫 구성 (은재). 02호기와 같은 구성.\n- 설정: /etc/payment-api/config.yaml (pay-cfg 저장소에서 매시 5분 pull)\n다음 사람에게: 서버들은 생각보다 착해요.' } },
       {
         host: L,
         file: {

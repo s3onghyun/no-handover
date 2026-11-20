@@ -90,7 +90,7 @@ test('hint panel (Case 0): the current checklist item comes first; 방향 names 
 // ------------------------------------------------------------------ (c) hints as a record
 
 test('hint record: no score penalty by default; senior mode (?senior=1) takes the cost again', () => {
-  const sub = { cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account', 'bottleneck', 'cover-seojin', 'cover-jihoon'] };
+  const sub = { cause: 'fd', sequence: 'true', responsibility: ['git-admins', 'cron', 'oncall', 'account'] };
   const open = (g: Game) => {
     g.openHint('cause', 'summary');
     g.openHint('cause', 'direction');

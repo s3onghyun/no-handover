@@ -301,6 +301,13 @@ export interface SlotDef {
   /** Multi: minimum weight sum that counts as correct (no negative picks allowed). */
   pass?: number;
   /**
+   * Multi: how many options the report takes — exactly this many (the report stops at N). The
+   * slot is correct with N picks, none negative (and `pass`, if given); the best N positive
+   * weights make 100; every pick beyond N costs EXTRA_PICK_COST points, so ticking every
+   * plausible line never scores 100 (src/engine/scoring.ts).
+   */
+  picks?: number;
+  /**
    * Kinds of evidence this slot accepts. When present the report asks for at least one pinned
    * item per slot as its citation, and the slot only counts as correct when a cited pin meets one
    * of these kinds (src/engine/evidence.ts).
@@ -502,6 +509,19 @@ export interface ExpertDef {
   df?: { host: string; lines: string[] }[];
   /** Extra timeline events (journal lines, messages) appended to the case's. */
   timeline?: TimelineEvent[];
+  /**
+   * A user's shell history on a host, replaced: the case's history lines for that host and user
+   * are dropped and these are used instead (the shorter record a senior has to read into).
+   */
+  history?: { host: string; user: string; lines: { at: LocalTime; cmd: string }[] }[];
+  /** A user's crontab on a host, replaced. */
+  crontabs?: { host: string; user: string; content: string }[];
+  /** Extra or replaced mails (same id = replaced). */
+  mails?: MailDef[];
+  /** Terminal tabs, replaced (the frozen screen and the pre-typed command). */
+  terminalTabs?: TabDef[];
+  /** Desktop stickies, replaced. */
+  stickies?: Sticky[];
   /** Extra clues (the red herring and what rules it out; never in an evidence kind). */
   clues?: ClueDef[];
   /** Extra report options (the red herring), inserted into a slot at `at` (default: the end). */

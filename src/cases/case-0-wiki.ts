@@ -738,7 +738,39 @@ export const caseZeroWiki: CaseFile = {
     parMin: 8,
     intro: '서진님께 보낼 원인 보고. 두 칸. 제출은 2번까지 — 틀리면 칸마다 ✓/✗ 만 온다.',
     after: ['다음: 📝 원인 보고서 — 원인과 경위 두 칸 (제출 2번)', '막히면: history, ~/README.txt, 💡 (숙련자 모드: 감점)'],
+    // Eunjae's records, short: no command order, no df/du/tail lines to copy. What is left needs
+    // reading into: a 2023 TODO, the 2025 nginx incident's last steps, and today's line.
+    history: [
+      {
+        host: W,
+        user: 'eunjae',
+        lines: [
+          { at: '2023-04-03T10:02:11', cmd: 'sudo apt-get install -y nginx python3-venv' },
+          { at: '2023-04-03T10:31:50', cmd: 'sudo systemctl enable --now wiki' },
+          { at: '2023-04-03T10:40:12', cmd: 'ls /etc/logrotate.d/' },
+          { at: '2023-04-03T10:41:03', cmd: '# TODO: wiki 로그 logrotate 규칙 — 다음에. (지금은 작으니까)' },
+          { at: '2025-06-17T10:16:01', cmd: '# 크롤러. 같은 줄 반복.' },
+          { at: '2025-06-17T10:20:13', cmd: 'journalctl -u nginx --since "2025-06-17 08:00"' },
+          { at: '2026-11-10T09:22:40', cmd: '# 도윤님 연습용으로 그대로 둠 🌱' },
+        ],
+      },
+    ],
+    mails: [
+      {
+        id: 'brief', account: 'me', folder: 'inbox', from: 'eunjae', to: '한도윤', cc: '강서진', at: '2026-11-10T09:24',
+        subject: '[연습] 위키 502 — 제 자리 PC 쓰세요',
+        body: '도윤님,\n저 10시 반까지 인수인계 회의예요… 서진님이 위키 원인 찾기를 도윤님 연습으로 맡기셨대요.\n\n- 제 자리 PC에 조사 세션(읽기 전용) 열어 뒀어요.\n- 아무것도 안 망가져요. 지우거나 재시작하는 명령은 막혀 있어요.\n\n로그는 봤어요? 를 먼저 물어보세요. 자기한테요 :)\n\n남은재 🌱',
+      },
+    ],
+    terminalTabs: [
+      {
+        label: 'wiki-01', host: W, cwd: '/home/eunjae', prefill: 'history',
+        scrollback: ['Nuri wiki-01 (Ubuntu 22.04 LTS) — 사내 위키', '조사 모드 (읽기 전용, 연습용) — 명령 목록: help', 'eunjae@wiki-01:~$ # 도윤님, 여기서 시작해요 🌱'],
+      },
+    ],
     files: [
+      { host: W, file: { path: '/home/eunjae/README.txt', mtime: '2025-06-17T10:35', content: 'wiki-01 — 다음 사람에게 (남은재, 2023-04 / 2025-06 고침)\n\n왜: 사내 위키 서버. 위키가 죽으면 런북도 못 봐요.\n2025-06 디스크 장애: 시간을 먼저 적어요. 사람은 그다음.\n조사할 때는 아무것도 지우지 마세요. :)' } },
+      { host: W, file: { path: '/home/eunjae/.bashrc', mtime: '2025-06-17T10:40', content: EUNJAE_BASHRC.slice(0, EUNJAE_BASHRC.indexOf('\n\n# 다음 사람')) } },
       {
         host: W,
         file: {

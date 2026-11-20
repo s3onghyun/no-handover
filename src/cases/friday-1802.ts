@@ -978,9 +978,10 @@ done`,
       {
         id: 'responsibility',
         title: '책임·은폐 (무엇이 가능하게 했나)',
-        prompt: '보고서의 이 칸에 무엇을 쓸까? 해당하는 것을 모두 고르세요.',
+        prompt: '보고서의 이 칸에 무엇을 쓸까? 가장 크게 작용한 4개를 고르세요.',
         type: 'multi',
-        pass: 70,
+        // exactly four (docs/case-format.md §8): any four factors pass, the best four (70) make 100
+        picks: 4,
         options: [
           { id: 'git-admins', weight: 20, text: '긴급 대응 때 준 리뷰 우회 권한이 그 뒤로 회수되지 않아, 리뷰 없는 반영을 아무것도 막지 못했다' },
           { id: 'cron', weight: 20, text: '문서 · 런북에 없는 개인 예약 작업이 결제 서버에서 몇 년째 돌고 있었고, 아무도 그걸 몰랐다' },
