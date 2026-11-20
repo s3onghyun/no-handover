@@ -1353,6 +1353,10 @@ try {
   step('❓ shows 숙련자 모드 켜짐 for this case; the 💡 recap is −5 in this mode');
 
   // Case 0: the journal herring — du and journald.conf rule it out
+  // 숙련자 = 익숙해요 + the mode: Case 0 opens no window by itself, the terminal is one click away
+  assert.equal(await p9.locator('.window[data-app="terminal"]').count(), 0, '숙련자 (익숙해요): no terminal opens by itself in Case 0');
+  await p9.locator('.icon[data-app="terminal"]').click();
+  await p9.locator('.window[data-app="terminal"] .tin input').waitFor();
   await p9.locator('.window[data-app="terminal"] .tout').click();
   await run9('df -h');
   await pin9(/100%\s+\/var/);
