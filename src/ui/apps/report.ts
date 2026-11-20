@@ -2,10 +2,11 @@ import { clear, h, storage } from '../dom.ts';
 import { t } from '../../i18n.ts';
 import type { AppDef, UiCtx } from '../wm.ts';
 import type { Submission } from '../../engine/scoring.ts';
-import { complete, grade, missingCites, slotName, wrongReply } from '../../engine/scoring.ts';
+import type { FieldMark } from '../../engine/scoring.ts';
+import { fieldMarks, grade, picked, slotName, wrongReply } from '../../engine/scoring.ts';
 import { citeState, kindsFor, kindsOf } from '../../engine/evidence.ts';
 import type { Game, Pin } from '../../engine/game.ts';
-import type { SlotDef } from '../../engine/types.ts';
+import type { SlotDef, SlotId } from '../../engine/types.ts';
 import { playRecord, recordLine, resultCard } from '../../engine/record.ts';
 import { openedFor } from '../hintpanel.ts';
 import { drawResultCard, downloadResultCard } from '../resultcard.ts';
@@ -176,7 +177,7 @@ export const reportApp: AppDef = {
     }
     const root = h('div.report');
     body.appendChild(root);
-    let lastReply: string | null = null;
+    let lastReply: { head: string; marks: FieldMark[]; body: string; sign: string } | null = null;
 
     const save = () => storage.set(key, JSON.stringify(sub));
 
@@ -229,6 +230,7 @@ export const reportApp: AppDef = {
             sub.cites = { ...sub.cites, [slotId]: [...cur] };
             save();
             syncState();
+            syncSubmit();
           },
         });
         list.appendChild(h('label.citeopt', { title: p.text }, inp, h('span', null, pinLabel(p))));
@@ -238,26 +240,82 @@ export const reportApp: AppDef = {
       return box;
     };
 
+    // live cited pins only: a pin taken off the board since does not count
+    const liveCites = (slotId: SlotId): string[] => {
+      const live = new Set(g.st.pins.map((p) => p.id));
+      return (sub.cites?.[slotId] ?? []).filter((id) => live.has(id));
+    };
+    /** What each field still needs before the report can go: an answer, a cited pin, a cited pin of the right kind. */
+    const unmet = (): { slot: SlotDef; need: 'pick' | 'cite' | 'kind' }[] => {
+      const out: { slot: SlotDef; need: 'pick' | 'cite' | 'kind' }[] = [];
+      for (const slot of g.cs.accusation.slots) {
+        const v = picked(sub, slot.id);
+        if (Array.isArray(v) ? !v.length : !v) out.push({ slot, need: 'pick' });
+        if (!slot.evidence?.length) continue;
+        const cs = citeState(slot, liveCites(slot.id), g.st.pins);
+        if (cs !== 'ok') out.push({ slot, need: cs === 'missing' ? 'cite' : 'kind' });
+      }
+      return out;
+    };
+    const needText = (u: { slot: SlotDef; need: 'pick' | 'cite' | 'kind' }) => t(u.need === 'pick' ? 'report.needPick' : u.need === 'cite' ? 'report.needCite' : 'report.needKind', { f: slotName(u.slot) });
+
+    let submitBtn: HTMLButtonElement | null = null;
+    let needBox: HTMLElement | null = null;
+    /** Keep the submit button and the "제출 전에" list (and each field's 필요 line) in step with the form. */
+    const syncSubmit = () => {
+      if (!submitBtn || !needBox) return;
+      const miss = unmet();
+      const blocked = miss.length > 0 || g.submissionsLeft() <= 0;
+      submitBtn.setAttribute('aria-disabled', String(blocked));
+      submitBtn.classList.toggle('is-blocked', blocked);
+      clear(needBox);
+      needBox.classList.toggle('ok', !miss.length);
+      if (miss.length) needBox.append(h('b', null, `${t('report.needTitle')}:`), h('ul', null, ...miss.map((u) => h('li', { dataset: { slot: u.slot.id, need: u.need } }, needText(u)))));
+      else needBox.append(t('report.needOk'));
+      for (const slot of g.cs.accusation.slots) {
+        const el = root.querySelector(`.slot-need[data-slot="${slot.id}"]`);
+        if (!el) continue;
+        const mine = miss.filter((u) => u.slot === slot);
+        el.querySelector('.need-pick')?.classList.toggle('met', !mine.some((u) => u.need === 'pick'));
+        const c = el.querySelector('.need-cite');
+        c?.classList.toggle('met', !mine.some((u) => u.need !== 'pick'));
+        c?.classList.toggle('wrongkind', mine.some((u) => u.need === 'kind'));
+      }
+    };
+
     const render = () => {
       clear(root);
+      submitBtn = null;
+      needBox = null;
       if (g.st.finished) {
         debrief(root, ctx);
         root.scrollTop = 0;
         return;
       }
       root.appendChild(h('p.intro', null, g.cs.accusation.intro ?? t('report.intro')));
+      const prev = g.st.submissions[g.st.submissions.length - 1]?.score;
       for (const slot of g.cs.accusation.slots) {
         const hints = openedFor(g, slot.id);
+        const mark = prev ? (prev.slots[slot.id]?.correct ? '✓' : '✗') : null;
         const box = h(
           'section.slot',
-          null,
+          { dataset: { slot: slot.id } },
           h(
             'h3',
             null,
             slot.title,
+            mark ? h(`span.slot-mark.${mark === '✓' ? 'ok' : 'bad'}`, null, `${t('report.lastMark')} ${mark}`) : null,
             h('button.hint-btn', { title: t('hint.title'), onclick: () => document.dispatchEvent(new CustomEvent('nh-hint', { detail: slot.id })) }, t('hint.slot')),
           ),
           h('div.prompt', null, slot.prompt),
+          // what this field needs, up front: an answer and (with kinds) one cited pin of an accepted kind
+          h(
+            'p.slot-need',
+            { dataset: { slot: slot.id } },
+            `${t('report.slotNeed')}: `,
+            h('span.need-pick', null, t(slot.type === 'multi' ? 'report.slotPickMulti' : 'report.slotPick')),
+            slot.evidence?.length ? [' · ', h('span.need-cite', null, t('report.slotCite', { kinds: slot.evidence.map((k) => k.label).join(' / ') }))] : null,
+          ),
         );
         const shown = slot.options.filter((o) => g.optionShown(o));
         for (const o of shown) {
@@ -272,6 +330,7 @@ export const reportApp: AppDef = {
               if (slot.type === 'single') (sub as unknown as Record<string, string | null>)[slot.id] = o.id;
               else sub.responsibility = on ? [...new Set([...sub.responsibility, o.id])] : sub.responsibility.filter((x) => x !== o.id);
               save();
+              syncSubmit();
             },
           });
           box.appendChild(h('label.opt', null, inp, h('span', null, o.text)));
@@ -284,56 +343,71 @@ export const reportApp: AppDef = {
       const left = g.submissionsLeft();
       const max = g.cs.accusation.maxSubmissions;
       const leftText = max > 0 ? `${t('report.left')} ${left}/${max}` : t('report.unlimited');
+      needBox = h('div.submit-need', { 'aria-live': 'polite' });
+      submitBtn = h(
+        'button.primary-btn.submit-btn',
+        {
+          'aria-describedby': 'report-need',
+          onclick: async () => {
+            if (g.submissionsLeft() <= 0) return;
+            // an unmet field (no answer, no cited pin, a pin of another kind) blocks here: nothing is sent or counted
+            const miss = unmet();
+            if (miss.length) {
+              await notice(t('report.notReady'), [t('report.notReadyBody'), ...miss.map(needText)], t('modal.ok'));
+              return;
+            }
+            sub.cites = Object.fromEntries(g.cs.accusation.slots.filter((x) => sub.cites?.[x.id]).map((x) => [x.id, liveCites(x.id)]));
+            // the copy follows the case's real rule: unlimited, n of max left, or the last one
+            const lastOne = max > 0 && left <= 1;
+            const ok = await modal({
+              kind: 'modal-submit',
+              title: t('report.confirmTitle'),
+              body: max <= 0 ? t('report.confirmUnlimited') : lastOne ? t('report.confirmLast') : t('report.confirmLeft', { n: g.st.submissions.length + 1, left, max }),
+              ok: lastOne ? t('report.confirmOkLast') : t('report.confirmOk'),
+              cancel: t('report.confirmCancel'),
+              focusCancel: lastOne,
+            });
+            if (!ok || g.submissionsLeft() <= 0) return;
+            const attempt = g.st.submissions.length + 1;
+            const r = g.submit(sub);
+            if (!r) return;
+            if (!r.allCorrect && !g.st.finished) {
+              const rp = g.cs.accusation.reply;
+              const count = max > 0 ? ` (${g.st.submissions.length}/${max})` : ` (${g.st.submissions.length})`;
+              lastReply = {
+                head: `${replyLabel(ctx)}${count}`,
+                marks: fieldMarks(g.cs, r),
+                body: wrongReply(g.cs, r, sub, { attempt, pins: g.st.pins }),
+                sign: rp ? rp.sign : '오미래 드림 / CTO',
+              };
+            }
+            render();
+          },
+        },
+        `${t('report.submit')} (${leftText})`,
+      ) as HTMLButtonElement;
+      needBox.id = 'report-need';
       root.appendChild(
         h(
           'div.submitbar',
           null,
-          h(
-            'button.primary-btn',
-            {
-              disabled: left <= 0,
-              onclick: async () => {
-                if (!complete(g.cs, sub)) {
-                  await notice(t('report.notReady'), t('report.need'), t('modal.ok'));
-                  return;
-                }
-                // cited pins that were taken off the board since do not count
-                const live = new Set(g.st.pins.map((p) => p.id));
-                sub.cites = Object.fromEntries(Object.entries(sub.cites ?? {}).map(([k, v]) => [k, (v ?? []).filter((id) => live.has(id))]));
-                const noCite = missingCites(g.cs, sub, g.st.pins);
-                if (noCite.length) {
-                  await notice(t('report.notReady'), t('report.needCite', { slots: g.cs.accusation.slots.filter((x) => noCite.includes(x.id)).map(slotName).join(', ') }), t('modal.ok'));
-                  return;
-                }
-                // the copy follows the case's real rule: unlimited, n of max left, or the last one
-                const lastOne = max > 0 && left <= 1;
-                const ok = await modal({
-                  kind: 'modal-submit',
-                  title: t('report.confirmTitle'),
-                  body: max <= 0 ? t('report.confirmUnlimited') : lastOne ? t('report.confirmLast', { max }) : t('report.confirmLeft', { n: g.st.submissions.length + 1, left, max }),
-                  ok: lastOne ? t('report.confirmOkLast') : t('report.confirmOk'),
-                  cancel: t('report.confirmCancel'),
-                  focusCancel: lastOne,
-                });
-                if (!ok || g.submissionsLeft() <= 0) return;
-                const r = g.submit(sub);
-                if (!r) return;
-                if (!r.allCorrect && !g.st.finished) {
-                  const rp = g.cs.accusation.reply;
-                  const count = max > 0 ? ` (${g.st.submissions.length}/${max})` : ` (${g.st.submissions.length})`;
-                  // main cases: "어딘가 틀렸다" only (which slot stays hidden); the tutorial counts the wrong slots
-                  const body = wrongReply(g.cs, r, { partial: t('report.partial'), bundled: t('report.bundled'), cite: t('report.citeWrong', { slots: '{slots}' }) });
-                  lastReply = `${replyLabel(ctx)}${count}\n\n${body}\n\n${rp ? rp.sign : '오미래 드림 / CTO'}`;
-                }
-                render();
-              },
-            },
-            `${t('report.submit')} (${leftText})`,
-          ),
+          submitBtn,
+          needBox,
           h('span.muted', null, `★ ${t('report.evidence')}: +${Math.min(30, g.pinnedKeyClues() * 5)} · ${g.st.settings.senior ? t('report.hintsSenior', { n: g.ladder.totalCost() }) : t('report.hints', { n: g.hintCount() })}`),
         ),
       );
-      if (lastReply) root.appendChild(h('div.reply', null, lastReply));
+      if (lastReply)
+        root.appendChild(
+          h(
+            'div.reply',
+            null,
+            h('div.reply-head', null, lastReply.head),
+            h('ul.reply-marks', null, ...lastReply.marks.map((m) => h(`li.${m.ok ? 'ok' : 'bad'}`, { dataset: { slot: m.slot } }, `${m.ok ? '✓' : '✗'} ${m.name}`))),
+            h('div.reply-body', null, lastReply.body),
+            h('div.reply-sign', null, lastReply.sign),
+          ),
+        );
+      syncSubmit();
     };
     render();
     // red herrings unlock as clues are found or triggers fire: re-render only when the set changes

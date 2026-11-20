@@ -300,6 +300,59 @@ function pinToast(pin: Pin): void {
   );
   el.classList.add('pintoast');
 }
+/** The report can go: enough evidence pins and every field with kinds has one. */
+const reportReady = (): boolean => game.evidencePins().length >= pinsGoal() && uncoveredSlots(game.cs, game.st.pins) === 0;
+/**
+ * A terminal line just proved a clue that some report field accepts as evidence, and the report is
+ * not ready yet: a non-blocking toast "보고서에는 이 줄을 핀하세요 (n/N)" with the line; a click pins it.
+ * Not in 숙련자 모드 (no unasked help there), not for lines already on the board.
+ */
+function pinPrompt(c: ClueDef): boolean {
+  if (game.st.settings.senior || briefingActive || !hasEvidence(game.cs) || reportReady()) return false;
+  if (!game.cs.accusation.slots.some((s) => s.evidence?.some((k) => k.clues.includes(c.id)))) return false;
+  if (!String(game.st.clues[c.id]?.via ?? '').startsWith('cmd:')) return false;
+  if (game.st.pins.some((p) => p.clueIds.includes(c.id))) return false;
+  // the newest output line that proves it, with the source the terminal gives that line
+  for (const tb of game.st.tabs) {
+    let i = tb.lines.length - 1;
+    while (i >= 0 && !(tb.lines[i].cls !== 'sys' && tb.lines[i].text.trim() && game.cluesFor(tb.lines[i].text).includes(c.id))) i--;
+    if (i < 0) continue;
+    let j = i - 1;
+    while (j >= 0 && tb.lines[j].cls !== 'sys') j--;
+    const sys = j >= 0 ? tb.lines[j] : null;
+    const source = sys ? `${game.shell.frame(tb.session).host} · ${sys.text.replace(/^\S+\$ /, '')}` : tb.label;
+    const text = tb.lines[i].text;
+    for (const old of toasts.querySelectorAll('.toast.pinprompt')) old.remove();
+    const line = text.replace(/\s+/g, ' ').trim();
+    const el = ctx.toast(
+      h(
+        'div',
+        null,
+        h('div.pintoast-head', null, `📌 ${t('pin.prompt', { n: `${game.evidencePins().length}/${pinsGoal()}` })}`),
+        h('div.pintoast-line', { title: line }, line.length > 90 ? `${line.slice(0, 89)}…` : line),
+        h('button.pinprompt-btn', { type: 'button' }, t('pin.promptBtn')),
+      ),
+      () => {
+        if (game.st.pins.some((p) => p.text === text && p.source === source)) return;
+        pinToast(game.pin({ kind: 'line', text, source }));
+      },
+    );
+    el.classList.add('pinprompt');
+    return true;
+  }
+  return false;
+}
+// one prompt per command: of the clues one output proved, a key clue first, then case order
+const promptQueue: ClueDef[] = [];
+game.on('clue', (c) => {
+  if (promptQueue.push(c as ClueDef) > 1) return;
+  setTimeout(() => {
+    const all = promptQueue.splice(0);
+    const order = [...all.filter((x) => x.key), ...all.filter((x) => !x.key)];
+    for (const x of order) if (pinPrompt(x)) return;
+  }, 0);
+});
+
 /** Toasts sit bottom-right, as do the tray's coach marks: lift the toasts above a mark they would cover. */
 function clearOfMarks(): void {
   toasts.style.bottom = '';

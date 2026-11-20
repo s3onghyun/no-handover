@@ -758,3 +758,30 @@ html.reduce-motion .icon.pulse { background: rgba(242, 217, 78, 0.35); }
 @keyframes modal-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .modal-back { animation: none; } }
 html.reduce-motion .modal-back { animation: none; }
+
+/* ---------- report path: what each field needs, the blocked submit, per-field marks ---------- */
+.slot-need { margin: 4px 0 8px; font-size: 12.5px; color: var(--ink-2); }
+.slot-need .need-pick, .slot-need .need-cite { color: #a35a00; }
+.slot-need .need-pick::before, .slot-need .need-cite::before { content: '○ '; }
+.slot-need .met { color: #2f7a3a; }
+.slot-need .met::before { content: '✓ '; }
+.slot-need .need-cite.wrongkind::before { content: '△ '; }
+.slot-mark { margin-left: 8px; font-size: 12px; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
+.slot-mark.ok { color: #2f7a3a; background: #e6f2e2; }
+.slot-mark.bad { color: var(--warn); background: #fbe7e4; }
+.primary-btn.is-blocked { opacity: 0.5; cursor: not-allowed; }
+.submit-need { font-size: 12.5px; color: #a35a00; }
+.submit-need ul { display: inline; margin: 0; padding: 0; list-style: none; }
+.submit-need li { display: inline; }
+.submit-need li + li::before { content: ' · '; color: var(--ink-3); }
+.submit-need b { margin-right: 4px; }
+.submit-need.ok { color: #2f7a3a; }
+.reply-marks { list-style: none; margin: 6px 0; padding: 0; display: flex; gap: 10px; flex-wrap: wrap; white-space: normal; }
+.reply-marks li { font-weight: 600; }
+.reply-marks li.ok { color: #2f7a3a; }
+.reply-marks li.bad { color: var(--warn); }
+.reply-sign { margin-top: 6px; color: var(--ink-2); }
+.pinprompt-btn { margin-top: 6px; border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; background: transparent; color: inherit; padding: 2px 10px; font: inherit; cursor: pointer; }
+.pinprompt-btn:hover, .pinprompt-btn:focus-visible { background: rgba(255,255,255,0.12); }
+.todo .todo-report { grid-column: 2; justify-self: start; margin-top: 4px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; padding: 3px 10px; font: 600 12.5px/1.4 var(--sans); cursor: pointer; }
+.todo.goals-only .todo-report { display: block; margin: 6px 0 2px; }

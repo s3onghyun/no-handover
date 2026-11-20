@@ -504,10 +504,10 @@ export const caseZeroWiki: CaseFile = {
   // ------------------------------------------------------------------ report (two slots, unlimited)
   accusation: {
     maxSubmissions: 0,
-    // the tutorial keeps per-slot feedback ("2칸 중 1칸이…"); main cases only hear "어딘가 틀렸다"
-    feedback: 'per-slot',
-    intro: '서진님께 보낼 원인 보고. 두 칸만 채우면 된다. 제출은 몇 번이든 할 수 있다 — 틀리면 서진님이 짧게 답해 준다.',
-    reply: { from: '강서진', partial: '{total}칸 중 {n}칸이 로그랑 안 맞아요. 다시요.', sign: '강서진' },
+    // a wrong report: ✓/✗ per field, and 서진 says per field what does not fit yet (숙련자 모드: the marks only)
+    feedback: 'hints',
+    intro: '서진님께 보낼 원인 보고. 두 칸만 채우면 된다. 제출은 몇 번이든 할 수 있다 — 틀리면 칸마다 ✓/✗ 와 서진님의 짧은 한마디가 온다.',
+    reply: { from: '강서진', lines: ['✗ 칸이 로그랑 안 맞아요. 다시요.', '✗ 칸만 다시 봐요.', '아직 ✗ 칸이 있어요. 한 번 더요.'], sign: '강서진' },
     // options are hypotheses of the same length and grain; the pinned evidence decides
     slots: [
       {
@@ -685,7 +685,7 @@ export const caseZeroWiki: CaseFile = {
           answer: '터미널에 그대로 치세요: systemctl status wiki',
         },
         {
-          id: 'pins', text: '증거 2개 보드에 올리기 (칸마다 하나 이상) 📌', hint: '증거가 되는 줄에 마우스를 올리면 오른쪽에 📌 가 보여요. df -h 의 100% 줄부터.', any: [{ pins: 2 }],
+          id: 'pins', text: '증거 2개 핀 → 보고서 쓰기 (칸마다 하나 이상) 📌', hint: '증거가 되는 줄에 마우스를 올리면 오른쪽에 📌 가 보여요. df -h 의 100% 줄부터.', any: [{ pins: 2 }],
           say: '찾았다!! 노란 줄 옆 📌 눌러서 증거 두 개만 보드에 올려 봐요~',
           answer: 'df -h 의 "/dev/sdb1 … 100% /var" 줄과 systemctl status 의 "No space left on device" 줄에 마우스를 올리고 오른쪽 📌.',
         },
@@ -736,7 +736,7 @@ export const caseZeroWiki: CaseFile = {
   expert: {
     maxSubmissions: 2,
     parMin: 8,
-    intro: '서진님께 보낼 원인 보고. 두 칸. 제출은 2번까지 — 틀리면 몇 칸이 틀렸는지만 서진님이 짧게 답해 준다.',
+    intro: '서진님께 보낼 원인 보고. 두 칸. 제출은 2번까지 — 틀리면 칸마다 ✓/✗ 만 온다.',
     after: ['다음: 📝 원인 보고서 — 원인과 경위 두 칸 (제출 2번)', '막히면: history, ~/README.txt, 💡 (숙련자 모드: 감점)'],
     files: [
       {

@@ -663,11 +663,12 @@ export const caseOneCron: CaseFile = {
     { id: 'c1_nginx', label: '화 23:12 지훈의 nginx 변경 (client_max_body_size 50m) — 로그 폭주보다 48분 앞', slot: 'sequence', match: [{ output: '2026-11-10 jhpark: 첨부 50MB', host: W }, { output: 'Nov 10 23:12:40 .*Reload(ing|ed) A high performance', host: W }] },
   ],
 
-  // ------------------------------------------------------------------ report (two slots, five submissions, one bundled reply)
+  // ------------------------------------------------------------------ report (two slots, five submissions, per-field reply)
   accusation: {
     maxSubmissions: 5,
-    intro: '서진님께 보낼 원인 보고. 두 칸. 제출은 5번까지 — 틀리면 어느 칸인지는 알려 주지 않는다.',
-    reply: { from: '강서진', partial: '{total}칸 중 {n}칸이 로그랑 안 맞아요.', bundled: '어딘가 로그랑 안 맞아요. 다시요.', sign: '강서진' },
+    intro: '서진님께 보낼 원인 보고. 두 칸. 제출은 5번까지 — 틀리면 칸마다 ✓/✗ 와 서진님의 짧은 한마디가 온다.',
+    feedback: 'hints',
+    reply: { from: '강서진', lines: ['✗ 칸이 로그랑 안 맞아요. 다시요.', '✗ 칸만 다시 봐요.', '아직 ✗ 칸이 있어요. 한 번 더요.'], sign: '강서진' },
     // options are hypotheses of the same length and grain; the pinned evidence decides
     slots: [
       {
@@ -813,7 +814,7 @@ export const caseOneCron: CaseFile = {
     ],
   },
 
-  goal: { intro: '서진님께 보낼 원인 보고서를 채우면 사건이 끝나요. 제출은 5번까지 — 틀리면 어느 칸인지는 알려 주지 않아요.' },
+  goal: { intro: '서진님께 보낼 원인 보고서를 채우면 사건이 끝나요. 제출은 5번까지 — 틀리면 칸마다 ✓/✗ 로 알려 줘요.' },
 
   // the tool marks moved to Case 0 (owner feedback 2026-11-20); Case 1 adds no new tool, so only the goal card
   tour: {
@@ -845,7 +846,7 @@ export const caseOneCron: CaseFile = {
         { id: 'crontab', text: '내가 건 cron 줄 보기 — crontab', hint: '터미널을 누르고 crontab 으로 목록을. 맨 위 주석 두 줄도요.', any: [{ clue: 'c1_crontab' }], pulse: 'terminal' },
         { id: 'ran', text: '밤에 정말 돌았나 — journalctl', hint: 'cron 도 서비스예요. -u 로 골라 보세요.', any: [{ clue: 'c1_cronran' }] },
         { id: 'output', text: '그 출력은 어디로 갔나 — ls, cat', hint: 'crontab 줄의 >> 뒤를 보세요. cron 은 어느 디렉터리에서 시작할까요?', any: [{ clue: 'c1_notfound' }] },
-        { id: 'pins', text: '증거 3개 보드에 올리기 (칸마다 하나 이상) 📌', hint: '증거가 되는 줄에 마우스를 올리면 오른쪽에 📌.', any: [{ pins: 3 }] },
+        { id: 'pins', text: '증거 3개 핀 → 보고서 쓰기 (칸마다 하나 이상) 📌', hint: '증거가 되는 줄에 마우스를 올리면 오른쪽에 📌.', any: [{ pins: 3 }] },
       ],
       after: ['다음: 📝 보고서 — 원인, 경위 두 칸 (제출 5번)', '왜 터미널에선 됐을까: 내 터미널과 cron, 뭐가 다를까', '막히면: crontab 맨 위 주석, history, 💡'],
     },
@@ -885,8 +886,8 @@ export const caseOneCron: CaseFile = {
   expert: {
     maxSubmissions: 2,
     parMin: 12,
-    intro: '서진님께 보낼 원인 보고. 두 칸. 제출은 2번까지 — 틀리면 어느 칸인지는 알려 주지 않는다.',
-    goalIntro: '서진님께 보낼 원인 보고서를 채우면 사건이 끝나요. 제출은 2번까지 — 틀리면 어느 칸인지는 알려 주지 않아요.',
+    intro: '서진님께 보낼 원인 보고. 두 칸. 제출은 2번까지 — 틀리면 칸마다 ✓/✗ 만 온다.',
+    goalIntro: '서진님께 보낼 원인 보고서를 채우면 사건이 끝나요. 제출은 2번까지 — 틀리면 칸마다 ✓/✗ 만 알려 줘요.',
     after: ['다음: 📝 보고서 — 원인, 경위 두 칸 (제출 2번)', '막히면: crontab 맨 위 주석, history, 💡 (숙련자 모드: 감점)'],
     files: [
       {

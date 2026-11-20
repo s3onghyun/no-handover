@@ -436,15 +436,18 @@ export interface CaseFile {
     maxSubmissions: number;
     intro?: string;
     /**
-     * Reply after a wrong report: who answers, the text ({n} wrong of {total}), signature.
-     * `bundled`: the text when `feedback` is 'bundled' (no count, no slot).
+     * Reply after a wrong report: who answers and the signature. `lines`: the short line under the
+     * per-field ✓/✗ marks when `feedback` is 'marks' (one per attempt, in turn, so a second wrong
+     * report does not hear the same words).
      */
-    reply?: { from: string; partial: string; sign: string; bundled?: string };
+    reply?: { from: string; sign: string; lines?: string[] };
     /**
-     * 'bundled' (default, main cases): a wrong report only hears "something is wrong", never which
-     * slot or how many. 'per-slot' (Case 0): "{n} of {total} slots are wrong".
+     * A wrong report always shows each field ✓/✗ (the score still pays for the attempt).
+     * 'marks' (default): the marks and one short line. 'hints' (Cases 0–2 outside 숙련자 모드): the
+     * colleague also says, per field, what does not fit yet (the field's kind — cause, timeline,
+     * contributing factors — and an evidence kind with no pin on the board), never which option.
      */
-    feedback?: 'bundled' | 'per-slot';
+    feedback?: 'marks' | 'hints';
   };
   hints: HintsDef;
   triggers: TriggerDef[];
