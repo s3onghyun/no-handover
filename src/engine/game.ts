@@ -278,6 +278,11 @@ export class Game {
     if (c.trace && !this.st.log.some((e) => e.type === 'rung1')) this.log('rung1', { clue: c.id });
     if (c.key) this.ladder.progress(this.st.playMs);
     this.emit('clue', c);
+    // the decisive clue: one big moment per case (the UI shows it; reloading does not repeat it)
+    if (c.aha) {
+      this.log('aha', { clue: c.id });
+      this.emit('aha', c);
+    }
     this.observe({ type: 'clue', id: c.id });
     for (const tr of this.cs.triggers) {
       if (this.st.triggersFired.includes(tr.id)) continue;

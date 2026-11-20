@@ -250,6 +250,11 @@ export interface ClueDef {
   key?: boolean;
   /** Rung-1 diegetic trace (logged as "player reached rung 1"). */
   trace?: boolean;
+  /**
+   * The decisive clue: the one line that makes it click. Its text is the "aha" moment shown once
+   * when the clue is found (src/ui/motion.ts; one per case).
+   */
+  aha?: string;
   match: Matcher[];
 }
 
@@ -425,6 +430,30 @@ export interface CaseFile {
    * item is ticked (or the checklist folds). Default: all seven apps from the start.
    */
   desktop?: { icons: { app: string; after?: string }[] };
+  /** Guided tool tour: short coach marks anchored to apps, each shown once (docs/case-format.md §13). */
+  tour?: TourDef;
+  /**
+   * "이번 사건에서 밝혀낼 것": the goal card lists the report's slots (title + prompt, no answers).
+   * `intro` is the line above them; default: who the report goes to and how many submissions.
+   */
+  goal?: { intro?: string };
+}
+
+/** One coach mark: what an app is for, shown when it first matters. Anchored by app id only. */
+export interface TourStep {
+  id: string;
+  /** App id ('terminal', 'notes', …) or a tray control ('hint', 'help', 'goal'). */
+  app: string;
+  title: string;
+  text: string;
+  /** Wait until this objective is ticked (or the checklist folds). */
+  after?: string;
+  /** Wait until this many minutes of play. */
+  afterMin?: number;
+}
+
+export interface TourDef {
+  steps: TourStep[];
 }
 
 export interface RailDef {

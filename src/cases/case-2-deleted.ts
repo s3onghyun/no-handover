@@ -511,7 +511,7 @@ export const caseTwoDeleted: CaseFile = {
       id: 'c2_pid', label: 'logshipd 는 PID 1187, 11/02 부터 한 번도 재시작 안 함', slot: 'cause', key: true,
       match: [{ output: '^1187( |$)', host: L }, { output: '^MainPID=1187$', host: L }, { output: '^logship\\s+1187\\s', host: L }, { output: 'Main PID: 1187 \\(logshipd\\)', host: L }],
     },
-    { id: 'c2_deleted', label: '/proc/1187/fd/7 -> /data/collector/raw/pay-api-01.log (deleted)', slot: 'cause', key: true, match: [{ output: '7 -> /data/collector/raw/pay-api-01\\.log \\(deleted\\)', host: L }] },
+    { id: 'c2_deleted', label: '/proc/1187/fd/7 -> /data/collector/raw/pay-api-01.log (deleted)', slot: 'cause', key: true, aha: '(deleted) — 이름만 지워졌다. 파일은 아직 열려 있다.', match: [{ output: '7 -> /data/collector/raw/pay-api-01\\.log \\(deleted\\)', host: L }] },
     { id: 'c2_reopen', label: '마지막으로 파일을 다시 연 것: 수 11:02 (rm 보다 앞) — 그 뒤로 HUP 없음', slot: 'cause', match: [{ output: 'SIGHUP: reopened 4 file\\(s\\)', host: L }, { output: 'ExecMainStartTimestamp=Mon 2026-11-02', host: L }] },
     { id: 'c2_readme', label: '은재 README: "지운 로그도 누가 잡고 있으면 안 지워진 거예요"', slot: 'cause', trace: true, match: [{ output: '지운 로그도 누가 잡고 있으면 안 지워진 거예요', host: L }] },
     { id: 'c2_hist', label: '은재 history 2024-08: "df 92% / du 51%. 숫자가 안 맞음" → /proc/…/fd | grep deleted', slot: 'cause', trace: true, match: [{ output: 'df 92% / du 51%', host: L }, { output: "범인은 rm 이 아니라 '아직 열려 있는 파일'", host: L }] },
@@ -685,6 +685,8 @@ export const caseTwoDeleted: CaseFile = {
       { who: 'doyun', text: '처음으로 "프로세스가 연 파일" 을 직접 봤다. 사흘 뒤 금요일 사건의 fd 한도로 가는 다리다.' },
     ],
   },
+
+  goal: { intro: '서진님 검토 뒤 오미래 CTO 에게 갈 보고서. 세 칸을 채우면 사건이 끝나요. 제출은 4번까지 — 틀리면 어느 칸인지는 알려 주지 않아요.' },
 
   // ------------------------------------------------------------------ first minutes
   opening: {

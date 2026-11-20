@@ -49,6 +49,8 @@ export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioMa
       ),
     );
     if (collapsed) return;
+    // what the report asks, one click from the checklist (the goal card, no answers)
+    if (g.cs.goal) el.appendChild(h('button.todo-goal', { onclick: () => document.dispatchEvent(new CustomEvent('nh-goal')), title: t('goal.open') }, `🎯 ${t('goal.short')}: ${g.cs.accusation.slots.map((s) => s.title.replace(/\s*\(.*\)$/, '')).join(' · ')}`));
     const ol = h('ol');
     def.items.forEach((it, i) => {
       const done = g.objectives.isDone(it.id);

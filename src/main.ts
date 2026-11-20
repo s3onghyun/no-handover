@@ -19,6 +19,10 @@ import { installAudioUnlock } from './audio/unlock.ts';
 import { runBriefing } from './ui/briefing.ts';
 import { renderHintPanel } from './ui/hintpanel.ts';
 import { mountObjectives } from './ui/objectives.ts';
+import { applyMotionPref, showMoment } from './ui/motion.ts';
+import { mountTour, tourKey } from './ui/tour.ts';
+import { goalCard } from './ui/goal.ts';
+import type { ClueDef } from './engine/types.ts';
 import type { Message } from './engine/build.ts';
 import type { ScoreResult } from './engine/scoring.ts';
 
@@ -29,12 +33,14 @@ const CURRENT_KEY = 'no-handover:current';
 const params = new URLSearchParams(location.search);
 setLang((params.get('lang') as Lang) === 'en' ? 'en' : 'ko');
 document.documentElement.lang = getLang();
+applyMotionPref(params);
 
 // ?fresh=1 = a new participant: every case's save and the campaign progress are wiped
 if (params.has('fresh')) {
   for (const e of campaign.playable()) {
     storage.remove(`no-handover:save:${e.id}`);
     storage.remove(`no-handover:report:${e.id}`);
+    storage.remove(tourKey(e.id));
   }
   storage.remove(PROGRESS_KEY);
   storage.remove(CURRENT_KEY);
@@ -99,9 +105,10 @@ const desktop = h('div#desktop');
 const tasks = h('div.tasks');
 const clock = h('div.clock');
 const notifBtn = h('button.tray-btn', { title: t('tb.notifications'), 'aria-label': t('tb.notifications') }, '🔔');
-const hintBtn = h('button.tray-btn', { title: t('tb.hint') }, `💡 ${t('tb.hint')}`);
+const hintBtn = h('button.tray-btn', { title: t('tb.hint'), dataset: { tour: 'hint' } }, `💡 ${t('tb.hint')}`);
+const goalBtn = h('button.tray-btn.goalbtn', { title: t('goal.title'), 'aria-label': t('goal.title'), dataset: { tour: 'goal' } }, `🎯 ${t('goal.short')}`);
 const ptBtn = h('button.tray-btn', { title: t('app.playtest') }, '📋');
-const helpBtn = h('button.tray-btn', { title: t('tb.help'), 'aria-label': t('tb.help') }, '❓');
+const helpBtn = h('button.tray-btn', { title: t('tb.help'), 'aria-label': t('tb.help'), dataset: { tour: 'help' } }, '❓');
 const soundBtn = h('button.tray-btn.sound', { 'aria-pressed': 'false' });
 const volume = h('input.vol', { type: 'range', min: 0, max: 100, step: 5, title: t('tb.volume'), 'aria-label': t('tb.volume') }) as HTMLInputElement;
 const renderSound = () => {
@@ -141,7 +148,7 @@ const skipBtn =
   nextAfterTutorial && !progress.solved.includes(CASE.id)
     ? h('button.tray-btn.skiptut', { title: `${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」`, onclick: () => confirm(`${t('case.skipShort')} → ${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」?`) && skipTutorial() }, `⏭ ${t('case.skipShort')}`)
     : null;
-const taskbar = h('div#taskbar', null, h('div.brand', null, t('game.title'), h('small', null, t('game.titleKo'))), tasks, skipBtn, hintBtn, notifBtn, helpBtn, h('div.soundctl', null, soundBtn, volume), ptBtn, clock);
+const taskbar = h('div#taskbar', null, h('div.brand', null, t('game.title'), h('small', null, t('game.titleKo'))), tasks, skipBtn, goalBtn, hintBtn, notifBtn, helpBtn, h('div.soundctl', null, soundBtn, volume), ptBtn, clock);
 const toasts = h('div.toasts', { 'aria-live': 'polite' });
 document.body.append(desktop, taskbar, toasts);
 
@@ -201,10 +208,12 @@ wm.onFocus = (id) => game.focus(id);
 wm.onOpen = () => {
   void audio.play('sfx.window-open');
   objectivesUi?.refresh();
+  tourUi?.refresh();
 };
 wm.onClose = () => {
   void audio.play('sfx.window-close');
   objectivesUi?.refresh();
+  tourUi?.refresh();
 };
 // a real click or key press inside a window (the automatic focus on open does not count)
 const interact = (e: Event) => {
@@ -248,6 +257,7 @@ desktop.insertAdjacentHTML('beforeend', chair);
 desktop.appendChild(h('div.wall-caption', null, '바탕화면: 의자 (2026, 직접 만듦)'));
 desktop.appendChild(iconsEl);
 let objectivesUi: ReturnType<typeof mountObjectives> | null = null;
+let tourUi: ReturnType<typeof mountTour> = null;
 for (const s of game.cs.stickies) {
   const el = h('div.sticky', { style: { left: `${s.x}%`, top: `${s.y}%`, background: s.color ?? '#F2D94E' }, title: '포스트잇' }, s.text);
   el.appendChild(ctx.pinBtn({ kind: 'note', text: `포스트잇: ${s.text.replace(/\n/g, ' ')}`, source: '바탕화면' }));
@@ -309,10 +319,20 @@ hintBtn.onclick = () => (pop ? closePop() : openHintPanel());
 document.addEventListener('nh-hint', (e) => openHintPanel((e as CustomEvent<string>).detail));
 ptBtn.onclick = () => wm.open('playtest');
 
+/** "이번 사건에서 밝혀낼 것": always one click away (tray 🎯, the checklist's goal line, ❓). */
+function openGoal(): void {
+  closePop();
+  game.log('goal');
+  pop = h('div.popover.goalpop', { role: 'dialog', 'aria-label': t('goal.title') }, goalCard(game.cs));
+  document.body.appendChild(pop);
+}
+goalBtn.onclick = () => (pop?.classList.contains('goalpop') ? closePop() : openGoal());
+document.addEventListener('nh-goal', openGoal);
+
 helpBtn.onclick = () => {
   if (pop) return closePop();
   game.log('help');
-  pop = h('div.popover', { role: 'dialog' }, h('h3', null, `❓ ${t('help.title')}`));
+  pop = h('div.popover', { role: 'dialog' }, h('h3', null, `❓ ${t('help.title')}`), goalCard(game.cs));
   if (game.cs.opening) {
     pop.appendChild(
       h(
@@ -345,8 +365,16 @@ game.on('change', (ev) => {
     renderIcons();
     for (const ty of types) wm.refreshAll(ty);
     objectivesUi?.refresh();
+    tourUi?.refresh();
     renderClock();
   });
+});
+// the decisive clue: one big moment (skippable, never blocks input; reduced motion = no scaling)
+game.on('aha', (c) => {
+  const clue = c as ClueDef;
+  if (briefingActive || !clue.aha) return;
+  void audio.play('sfx.done');
+  showMoment({ kind: 'aha', title: clue.aha, sub: `${t('moment.aha')} · ${clue.label}`, holdMs: 1800 });
 });
 game.on('message', (m) => {
   const msg = m as Message;
@@ -393,6 +421,8 @@ game.on('pinned', () => void audio.play('sfx.pin'));
 game.on('accuse', (sc) => {
   // the debrief opens once the case is finished (solved, or out of submissions): reveal theme
   if (game.st.finished) {
+    const r = sc as ScoreResult;
+    showMoment({ kind: 'result', title: r.allCorrect ? t('moment.solved') : t('moment.closed'), sub: `${r.total} / ${r.max}`, tone: r.allCorrect ? 'good' : 'plain', holdMs: 2200 });
     markSolved();
     skipBtn?.remove(); // solved: no tutorial left to skip
     audio.stopLoop('music.tension', 1500);
@@ -422,6 +452,7 @@ function loop() {
   last = n;
   renderClock();
   if (game.st.unlocked && !briefingActive && !game.st.finished && game.now() >= TENSION_AT) audio.loop('music.tension');
+  if (game.st.unlocked && !briefingActive) tourUi?.refresh(); // time-based steps (💡 after a few minutes)
   if (n - lastSave > 5000 && game.st.unlocked) {
     lastSave = n;
     storage.set(SAVE_KEY, game.serialize());
@@ -440,6 +471,8 @@ function revealDesktop(first: boolean) {
   if (first && !game.cs.opening) wm.open('mail', 'brief');
   wm.open('terminal');
   objectivesUi.refresh();
+  tourUi ??= mountTour(game, { blocked: () => briefingActive || !game.st.unlocked || game.st.finished || !!document.querySelector('.moment, #briefing') });
+  setTimeout(() => tourUi?.refresh(), 1200);
   if (first) {
     void audio.play('sfx.pulse');
     const fresh = game.cs.mails.filter((m) => m.account === 'me' && m.folder === 'inbox' && !m.later);

@@ -1,10 +1,14 @@
 // Browser end-to-end run: builds nothing, serves dist/ with `vite preview`, drives the real UI
 // with playwright-core: first launch opens Case 0 (tutorial) — its short briefing, the pre-typed
 // `history`, Jihoon's rail, the five checklist items and icon unlocks, a wrong then a right
-// report — and the debrief's "다음 사건" button opens Case 3 「금요일 18:02」. There it watches
+// report — and the debrief's "다음 사건" button opens Case 1 「밤에만 실패하는 스크립트」 (full
+// briefing, the tool tour once and skipped, the goal card, the aha moment, a bundled wrong reply,
+// the result moment), then Case 2 「지웠는데 안 비워지는 디스크」 (two hosts, the deleted open file,
+// three slots), then Case 3 「금요일 18:02」. There it watches
 // the whole opening briefing, ticks the three "오늘 할 일" boxes, solves the case from the
 // departed senior's history line, then checks the skip path, the help-menu replay and the
-// persisted mute toggle in a second page, and the board/dashboard once more with reduced motion.
+// persisted mute toggle in a second page, the board/dashboard once more with reduced motion, and a
+// fourth page with reduced motion where the tour, the aha moment and typing never block each other.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
@@ -57,14 +61,14 @@ try {
 
   // ================================================================ Case 0 (tutorial)
   await page.locator('#boot .caselabel', { hasText: 'Case 0 · 튜토리얼' }).waitFor();
-  assert.match(await page.locator('#boot .skip').innerText(), /튜토리얼 건너뛰기 → Case 3 「금요일 18:02의 작은 변경」/);
+  assert.match(await page.locator('#boot .skip').innerText(), /튜토리얼 건너뛰기 → Case 1 「밤에만 실패하는 스크립트」/);
   await shot('case0-01-boot.png');
   await page.locator('#boot .linkbtn.cases').click();
   assert.equal(await page.locator('#cases li').count(), 5);
-  assert.equal(await page.locator('#cases li[data-id="friday-1802"].case-locked').count(), 1, 'Case 3 locked until Case 0 is solved');
-  assert.equal(await page.locator('#cases li.case-soon').count(), 3, 'Cases 1, 2, 4 are titled placeholders');
+  for (const id of ['case1-cron-env', 'case2-deleted-open', 'friday-1802']) assert.equal(await page.locator(`#cases li[data-id="${id}"].case-locked`).count(), 1, `${id} locked until the case before it is solved`);
+  assert.equal(await page.locator('#cases li.case-soon').count(), 1, 'Case 4 is the only titled placeholder');
   await page.locator('#cases button.primary').click();
-  step('first launch: Case 0 · 튜토리얼 lock screen with a skip link; case list shows 5 rungs, Case 3 locked');
+  step('first launch: Case 0 · 튜토리얼 lock screen with a skip link to Case 1; case list shows 5 rungs, Cases 1–3 locked');
 
   await page.locator('#boot button.primary').click();
   let t0 = Date.now();
@@ -229,14 +233,167 @@ try {
   assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1200, 630]);
   rmSync(dlDir, { recursive: true, force: true });
   step('debrief: record "힌트 3회 · 소요 · 명령 수", no penalty; 결과 카드 downloads as a 1200×630 PNG');
-  assert.match(await rep0.locator('.nextcase').innerText(), /다음 사건 → Case 3 「금요일 18:02의 작은 변경」/);
+  assert.match(await rep0.locator('.nextcase').innerText(), /다음 사건 → Case 1 「밤에만 실패하는 스크립트」/);
   step(`a wrong report gets 서진's short reply and 지훈's nudge; the second solves Case 0 (${total0.replace(/\s+/g, ' ')})`);
 
   await rep0.locator('.nextcase button').click();
-  await page.locator('#boot .caselabel', { hasText: 'Case 3' }).waitFor();
+  await page.locator('#boot .caselabel', { hasText: 'Case 1' }).waitFor();
   assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('no-handover:campaign'))).solved, ['case0-wiki']);
   assert.equal(await page.locator('#boot .skip').count(), 0);
-  step('debrief → 다음 사건: Case 3 lock screen; Case 0 recorded as solved');
+  await shot('case1-01-boot.png');
+  step('debrief → 다음 사건: Case 1 lock screen; Case 0 recorded as solved');
+
+  // ================================================================ Case 1 「밤에만 실패하는 스크립트」
+  await page.locator('#boot button.primary').click();
+  t0 = Date.now();
+  await page.locator('#briefing').waitFor();
+  await page.locator('#briefing[data-step="voice"] .brief-line').nth(1).waitFor({ timeout: 20000 });
+  assert.match(await page.locator('.brief-card').innerText(), /강서진/);
+  await page.waitForTimeout(800);
+  await shot('case1-02-briefing.png');
+  await page.locator('#briefing[data-step="mail"] .brief-mail', { hasText: '[연습 2] wiki-01 /var 92%' }).waitFor({ timeout: 45000 });
+  await page.locator('#briefing').waitFor({ state: 'detached', timeout: 30000 });
+  secs = (Date.now() - t0) / 1000;
+  assert.ok(secs >= 28 && secs <= 62, `Case 1 briefing took ${secs}s`);
+  step(`Case 1 briefing: 서진's voice message (subtitles), the mail slides in, ends on its own after ${secs.toFixed(1)} s`);
+
+  // ---- tool tour: one coach mark at a time, shown once, skippable
+  await page.locator('.tour[data-step="terminal"]').waitFor({ timeout: 5000 });
+  assert.equal(await page.locator('.tour').count(), 1, 'one mark at a time');
+  await shot('case1-03-tour.png');
+  await page.locator('.tour .tour-ok').click();
+  await page.locator('.tour[data-step="goal"]').waitFor({ timeout: 3000 });
+  await page.locator('.tour .tour-skip').click();
+  await page.waitForTimeout(1500);
+  assert.equal(await page.locator('.tour').count(), 0, 'skipped: no more marks');
+  assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('no-handover:tour:case1-cron-env'))), { seen: ['terminal', 'goal'], skipped: true });
+  step('tool tour: 터미널 → 🎯 목표, one at a time; "투어 건너뛰기" ends it and the seen state is saved');
+
+  // ---- goal card: in the checklist and behind 🎯
+  assert.match(await page.locator('.todo-goal').innerText(), /원인 · 경위/);
+  assert.equal(await page.locator('.todo li').count(), 4);
+  assert.equal(await page.locator('.icons .icon').count(), 5, 'five icons at first');
+  await page.locator('.goalbtn').click();
+  assert.equal(await page.locator('.goalpop .goal-list li').count(), 2);
+  await shot('case1-04-goal.png');
+  await page.locator('.goalbtn').click();
+  await page.locator('.goalpop').waitFor({ state: 'detached' });
+  step('goal card "이번 사건에서 밝혀낼 것": two report slots, in the checklist and behind 🎯');
+
+  await page.locator('.window[data-app="terminal"] .tout').click();
+  await run('crontab -l');
+  await todoItem('crontab').and(page.locator('.done')).waitFor();
+  await page.waitForTimeout(300);
+  await shot('case1-05-crontab.png');
+  await run('journalctl -u cron --since "2026-11-11 00:50" --until "2026-11-11 01:10"');
+  await todoItem('ran').and(page.locator('.done')).waitFor();
+  await page.locator('.icon[data-app="dashboard"]').waitFor();
+  await run('ls -l ~');
+  await run('cat ~/wiki-clean.log');
+  await page.locator('.moment.moment-aha').waitFor({ timeout: 3000 });
+  await page.keyboard.press('Escape');
+  await page.locator('.moment').waitFor({ state: 'detached', timeout: 2000 });
+  await todoItem('output').and(page.locator('.done')).waitFor();
+  step('crontab -l → journalctl -u cron → ~/wiki-clean.log: three boxes tick; the aha moment shows once and Esc skips it');
+  await pinLine(/^0 \* \* \* \* ~\/bin\/wiki-log-clean\.sh/);
+  await pinLine(/line 15: wikictl: command not found/);
+  await pinLine(/\(eunjae\) CMD \(~\/bin\/wiki-log-clean/);
+  await todoItem('pins').and(page.locator('.done')).waitFor();
+  await page.locator('.todo').waitFor({ state: 'detached', timeout: 6000 });
+  for (const c of ['which wikictl', 'cat ~/log/cron-env.txt', 'journalctl -u wiki --since "2026-11-11 00:00" --until "2026-11-11 00:10"', 'df -h']) await run(c);
+  assert.ok(await page.evaluate(() => window.__game.causeSolved()));
+  step('pins tick the fourth box; which / cron-env.txt / journalctl -u wiki / df complete the evidence');
+
+  await page.evaluate(() => {
+    for (const w of document.querySelectorAll('.window')) w.classList.add('min');
+  });
+  await page.locator('.icon[data-app="report"]').dblclick();
+  const rep1 = page.locator('.window[data-app="report"]');
+  assert.equal(await rep1.locator('section.slot').count(), 2);
+  await rep1.locator('input[name="slot-cause"]').nth(3).check(); // blames 지훈's nginx change
+  await rep1.locator('input[name="slot-sequence"]').nth(1).check();
+  await rep1.locator('.submitbar .primary-btn').click();
+  await rep1.locator('.reply', { hasText: '어딘가 로그랑 안 맞아요' }).waitFor();
+  assert.doesNotMatch(await rep1.locator('.reply').innerText(), /칸 중/, 'bundled: no slot count');
+  await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /제 nginx요/.test(m.text)), null, { timeout: 5000 });
+  await rep1.locator('input[name="slot-cause"]').nth(2).check();
+  await rep1.locator('.submitbar .primary-btn').click();
+  await page.locator('.moment.moment-result.good').waitFor({ timeout: 3000 });
+  await rep1.locator('.debrief h2').waitFor();
+  assert.match(await rep1.locator('.scorebox .s').nth(1).innerText(), /\/ 230/);
+  await page.locator('.moment').waitFor({ state: 'detached', timeout: 4000 });
+  assert.match(await rep1.locator('.nextcase').innerText(), /다음 사건 → Case 2 「지웠는데 안 비워지는 디스크」/);
+  step('Case 1 report: a wrong answer hears one bundled line and 지훈\'s nudge; the right one shows the result moment and the debrief');
+
+  await rep1.locator('.nextcase button').click();
+  await page.locator('#boot .caselabel', { hasText: 'Case 2' }).waitFor();
+  await shot('case2-01-boot.png');
+
+  // ================================================================ Case 2 「지웠는데 안 비워지는 디스크」
+  await page.locator('#boot button.primary').click();
+  await page.locator('#briefing[data-step="ring"]').waitFor({ timeout: 10000 });
+  await page.keyboard.press('Escape');
+  await page.locator('#briefing').waitFor({ state: 'detached', timeout: 2000 });
+  await page.waitForTimeout(1800);
+  assert.equal(await page.locator('.tour').count(), 0, 'Case 2 has no tour');
+  assert.equal(await page.locator('.icons .icon').count(), 7);
+  assert.match(await page.locator('.todo-goal').innerText(), /원인 · 경위 · 재발 방지/);
+  assert.equal(await page.locator('.todo li').count(), 3);
+  await shot('case2-02-desktop.png');
+  step('Case 2: briefing skipped with Esc; seven icons, three goals, the goal card lists three slots, no tour');
+
+  await page.locator('.window[data-app="terminal"] .tout').click();
+  await run('df -h');
+  await pinLine(/196G\s+180G\s+5\.9G\s+97%\s+\/data/);
+  await run('du -sh /data/collector/*');
+  await todoItem('gap').and(page.locator('.done')).waitFor();
+  await shot('case2-03-df-du.png');
+  await run('pgrep -f logshipd');
+  await run('ls -l /proc/1187/fd | grep deleted');
+  await page.locator('.moment.moment-aha').waitFor({ timeout: 3000 });
+  await page.keyboard.press('Escape');
+  await todoItem('holder').and(page.locator('.done')).waitFor();
+  await page.waitForTimeout(400);
+  const notes2 = page.locator('.window[data-app="notes"] .titlebar button.close');
+  if (await notes2.count()) await notes2.click(); // the memo scene opened the notebook
+  await pinLine(/\(deleted\)/);
+  await run('journalctl --since "2026-11-11 14:00" --until "2026-11-11 15:00"');
+  await pinLine(/COMMAND=\/usr\/bin\/rm pay-api-01\.log/);
+  await todoItem('pins').and(page.locator('.done')).waitFor();
+  step('df 180G vs du 95G → pgrep → /proc/1187/fd "(deleted)" (aha) → the sudo rm in the journal; three boxes tick');
+  await run('ssh pay-api-01');
+  await run('journalctl -u payment-api --since "2026-11-11 14:00" --until "2026-11-11 15:00"');
+  await page.locator('.tline', { hasText: 'log level changed: info -> debug' }).waitFor();
+  await run('exit');
+  await run('journalctl -u logshipd --since "2026-11-11 15:00" --until "2026-11-11 16:00"');
+  await run('cat /etc/logshipd/logshipd.conf');
+  step('second host: ssh pay-api-01, the runtime debug switch at 14:22, back with exit; logshipd stats and config');
+  await page.evaluate(() => {
+    for (const w of document.querySelectorAll('.window')) w.classList.add('min');
+  });
+  await page.locator('.icon[data-app="dashboard"]').dblclick();
+  await page.waitForTimeout(400);
+  await shot('case2-04-dashboard.png');
+  await page.locator('.window[data-app="dashboard"] .titlebar button.close').click();
+  await page.locator('.icon[data-app="report"]').dblclick();
+  const rep2 = page.locator('.window[data-app="report"]');
+  assert.equal(await rep2.locator('section.slot').count(), 3);
+  await rep2.locator('input[name="slot-cause"]').nth(3).check();
+  await rep2.locator('input[name="slot-sequence"]').nth(2).check();
+  for (const i of [0, 1, 2, 3, 4]) await rep2.locator('input[name="slot-responsibility"]').nth(i).check();
+  await rep2.locator('.submitbar .primary-btn').click();
+  await page.locator('.moment.moment-result.good').waitFor({ timeout: 3000 });
+  await rep2.locator('.debrief h2').waitFor();
+  assert.match(await rep2.locator('.scorebox .s').nth(1).innerText(), /\/ 330/);
+  await page.locator('.moment').waitFor({ state: 'detached', timeout: 4000 });
+  assert.match(await rep2.locator('.nextcase').innerText(), /다음 사건 → Case 3 「금요일 18:02의 작은 변경」/);
+  step('Case 2 report: three slots on the first submission, result moment, debrief → Case 3');
+
+  await rep2.locator('.nextcase button').click();
+  await page.locator('#boot .caselabel', { hasText: 'Case 3' }).waitFor();
+  assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('no-handover:campaign'))).solved, ['case0-wiki', 'case1-cron-env', 'case2-deleted-open']);
+  assert.equal(await page.locator('#boot .skip').count(), 0);
+  step('debrief → 다음 사건: Case 3 lock screen; Cases 0–2 recorded as solved');
 
   // ================================================================ Case 3 「금요일 18:02」
   await page.locator('#boot button.primary').click();
@@ -260,6 +417,7 @@ try {
   assert.equal(await page.locator('.tin input').inputValue(), 'crontab -');
   assert.equal(await page.locator('.todo li').count(), 3);
   assert.equal(await page.locator('.todo li.done').count(), 0);
+  assert.match(await page.locator('.todo-goal').innerText(), /원인 · 경위 · 책임·은폐/);
   assert.ok(await todoItem('terminal').locator('.hint').isVisible());
   await page.waitForTimeout(700);
   // screenshot at the pulse's brightest frame (the animation keeps running afterwards)
@@ -509,6 +667,29 @@ try {
   assert.equal(await p3.evaluate(() => document.getAnimations().filter((a) => a.effect?.target?.closest?.('.obs')).length), 0);
   await rmCtx.close();
   step('reduced motion: pins land and graphs still update, with no snap, blink, pulse or flash');
+  // ---- fourth page: reduced motion; the tour, the aha moment and the terminal never block each other
+  const p4 = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, reducedMotion: 'reduce' });
+  p4.on('pageerror', (e) => errors.push(String(e)));
+  p4.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  await p4.goto(`${url}?fresh=1&case=case1-cron-env&briefing=0`);
+  await p4.locator('#boot button.primary').click();
+  assert.equal(await p4.evaluate(() => document.documentElement.classList.contains('reduce-motion')), true);
+  await p4.locator('.tour[data-step="terminal"]').waitFor({ timeout: 5000 });
+  const tin = p4.locator('.tin input');
+  await tin.click();
+  await tin.fill('cat ~/wiki-clean.log');
+  await tin.press('Enter');
+  await p4.locator('.moment.moment-aha.still').waitFor({ timeout: 3000 });
+  await tin.fill('crontab -l');
+  await tin.press('Enter');
+  await p4.locator('.tline', { hasText: '0 * * * * ~/bin/wiki-log-clean.sh' }).waitFor({ timeout: 2000 });
+  assert.equal(await p4.locator('.tour').count(), 1, 'the coach mark stays while the player types');
+  const animMs = await p4.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.moment-card') ?? document.body).animationDuration) * 1000);
+  assert.ok(!(animMs > 1), `no scaling animation (${animMs} ms)`);
+  await p4.locator('.moment').waitFor({ state: 'detached', timeout: 2500 });
+  await p4.locator('.tour .tour-ok').click();
+  step('reduced motion: html.reduce-motion, the aha card appears still and leaves on its own; typing works with the coach mark and the moment on screen');
+  await p4.close();
 
   assert.deepEqual(errors, []);
   console.log('e2e passed');

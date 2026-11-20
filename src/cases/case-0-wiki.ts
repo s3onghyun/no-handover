@@ -464,6 +464,7 @@ export const caseZeroWiki: CaseFile = {
     { id: 'c0_df', label: 'df -h: /var 100% (/ 는 28%)', slot: 'cause', key: true, match: [{ output: '^/dev/sdb1\\s+20G\\s+19G\\s+0\\s+100%\\s+/var$', host: W }] },
     {
       id: 'c0_du', label: 'du / ls -lh: /var/log/wiki/wiki.log 11G', slot: 'cause', key: true,
+      aha: '찾았다 — /var 를 채운 건 wiki.log 하나, 11G.',
       match: [
         { output: '^11G\\s+\\S*wiki\\S*$', host: W },
         { output: `^${Math.ceil(WIKI_LOG_BYTES / 4096) * 4}\\s+\\S*wiki\\S*$`, host: W },
