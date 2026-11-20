@@ -3,7 +3,7 @@
 // active play, advanced by tick()) so reloads and backgrounded tabs do not skip ahead.
 
 import { buildWorld, type Message, type World } from './build.ts';
-import { evidencePins } from './evidence.ts';
+import { evidencePins, uncoveredSlots } from './evidence.ts';
 import { HintLadder, type LadderState, type PanelRung } from './hints.ts';
 import { buildPanel, openStep, type PanelInput, type PanelSection } from './hintpanel.ts';
 import { playRecord } from './record.ts';
@@ -529,7 +529,7 @@ export class Game {
     this.log('pin', { kind: pin.kind, source: pin.source, clues: pin.clueIds, text: pin.text.slice(0, 160) });
     this.emit('pinned', pin);
     this.emit('pins');
-    this.observe({ type: 'pins', count: this.evidencePins().length });
+    this.observe({ type: 'pins', count: this.evidencePins().length, uncovered: uncoveredSlots(this.cs, this.st.pins) });
     this.emit('save');
     return pin;
   }

@@ -845,7 +845,7 @@ export const caseOneCron: CaseFile = {
         { id: 'crontab', text: '내가 건 cron 줄 보기 — crontab', hint: '터미널을 누르고 crontab 으로 목록을. 맨 위 주석 두 줄도요.', any: [{ clue: 'c1_crontab' }], pulse: 'terminal' },
         { id: 'ran', text: '밤에 정말 돌았나 — journalctl', hint: 'cron 도 서비스예요. -u 로 골라 보세요.', any: [{ clue: 'c1_cronran' }] },
         { id: 'output', text: '그 출력은 어디로 갔나 — ls, cat', hint: 'crontab 줄의 >> 뒤를 보세요. cron 은 어느 디렉터리에서 시작할까요?', any: [{ clue: 'c1_notfound' }] },
-        { id: 'pins', text: '증거 3개 보드에 올리기 📌', hint: '증거가 되는 줄에 마우스를 올리면 오른쪽에 📌.', any: [{ pins: 3 }] },
+        { id: 'pins', text: '증거 3개 보드에 올리기 (칸마다 하나 이상) 📌', hint: '증거가 되는 줄에 마우스를 올리면 오른쪽에 📌.', any: [{ pins: 3 }] },
       ],
       after: ['다음: 📝 보고서 — 원인, 경위 두 칸 (제출 5번)', '왜 터미널에선 됐을까: 내 터미널과 cron, 뭐가 다를까', '막히면: crontab 맨 위 주석, history, 💡'],
     },

@@ -460,8 +460,8 @@ try {
   await pinLine(/\(deleted\)/);
   await run('journalctl --since "2026-11-11 14:00" --until "2026-11-11 15:00"');
   await pinLine(/COMMAND=\/usr\/bin\/rm pay-api-01\.log/);
-  await todoItem('pins').and(page.locator('.done')).waitFor();
-  step('df 180G vs du 95G → pgrep → /proc/1187/fd "(deleted)" (aha) → the sudo rm in the journal; three boxes tick');
+  assert.equal(await todoItem('pins').and(page.locator('.done')).count(), 0, '재발 방지 has no pin yet');
+  step('df 180G vs du 95G → pgrep → /proc/1187/fd "(deleted)" (aha) → the sudo rm in the journal; two boxes tick, "증거 3개" waits for 재발 방지');
   await run('ssh pay-api-01');
   await run('journalctl -u payment-api --since "2026-11-11 14:00" --until "2026-11-11 15:00"');
   await page.locator('.tline', { hasText: 'log level changed: info -> debug' }).waitFor();
@@ -469,7 +469,8 @@ try {
   await run('journalctl -u logshipd --since "2026-11-11 15:00" --until "2026-11-11 16:00"');
   await run('cat /etc/logshipd/logshipd.conf');
   await pinLine(/^max_source_bytes = 0/);
-  step('second host: ssh pay-api-01, the runtime debug switch at 14:22, back with exit; logshipd stats and config');
+  await todoItem('pins').and(page.locator('.done')).waitFor();
+  step('second host: ssh pay-api-01, the runtime debug switch at 14:22, back with exit; logshipd stats and config; the config pin ticks the third box');
   await page.evaluate(() => {
     for (const w of document.querySelectorAll('.window')) w.classList.add('min');
   });
@@ -1095,6 +1096,114 @@ try {
   assert.equal(await p7.evaluate(() => window.__game.st.submissions.length), 4, 'Esc sends nothing');
   step('last submission: the in-game dialog says it is the last and ends the case, focus on 더 살펴볼게요, Esc sends nothing');
   await p7.close();
+
+  // ---- eighth page: Case 2 evidence at 1280x800 — the terminal maximized over the desktop icons,
+  // the board reached from the taskbar, a pin toast with the count and the line, per-field progress
+  // in the goal card, the checklist waiting for every field, the report naming each field's kinds
+  const p8 = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+  p8.on('pageerror', (e) => errors.push(String(e)));
+  p8.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  p8.on('dialog', (d) => (nativeDialogs.push(`p8 ${d.type()}: ${d.message()}`), d.accept()));
+  const top8 = (sel) => p8.evaluate((sel) => { const w = document.querySelector(sel); if (!w) return 'missing'; const r = w.getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return e?.closest('.window')?.dataset.app ?? e?.className ?? '-'; }, sel);
+  const run8 = async (cmd) => {
+    const input = p8.locator('.tin input');
+    await input.fill(cmd);
+    await input.press('Enter');
+    await p8.waitForTimeout(80);
+  };
+  /** Back to the terminal the way a player would with the board in front: its taskbar entry. */
+  const term8 = async () => {
+    if ((await p8.evaluate(() => document.querySelector('.window.focused')?.dataset.app)) !== 'terminal') await p8.locator('#taskbar .task[data-app="terminal"]').click();
+    await p8.locator('.window[data-app="terminal"] .tout').click();
+  };
+  const pin8 = async (re) => {
+    const line = p8.locator('.tline', { hasText: re }).last();
+    await line.scrollIntoViewIfNeeded();
+    const lb = await line.boundingBox();
+    await line.hover({ position: { x: lb.width - 20, y: lb.height / 2 } }); // its right end: the 📌 column
+    await line.locator('.pinbtn').click();
+  };
+  await p8.goto(`${url}?fresh=1&case=case2-deleted-open&briefing=0`);
+  await p8.locator('#boot .caselabel', { hasText: 'Case 2' }).waitFor();
+  await p8.locator(await p8.locator('#boot .exp-new').count() ? '#boot .exp-new' : '#boot button.primary').click();
+  await p8.locator('#boot').waitFor({ state: 'detached' });
+  await p8.locator('.window[data-app="terminal"]').waitFor();
+  await p8.locator('.window[data-app="terminal"] .titlebar').dblclick();
+  await p8.locator('.window[data-app="terminal"].max').waitFor();
+  const boardTask = p8.locator('#taskbar .task[data-app="board"]');
+  await boardTask.waitFor();
+  assert.equal(await boardTask.locator('.badge').count(), 0, 'no badge before the first pin');
+  await term8();
+  await run8('df -h');
+  await pin8(/196G\s+180G\s+5\.9G\s+97%\s+\/data/);
+  const pinToast = p8.locator('.toast.pintoast');
+  await pinToast.waitFor();
+  assert.match(await pinToast.innerText(), /증거 1\/3 추가됨 — 보드에서 보고하기/);
+  assert.match(await pinToast.locator('.pintoast-line').innerText(), /\/dev\/sdb1\s+196G/);
+  assert.equal(await boardTask.locator('.badge').innerText(), '1');
+  assert.equal(await p8.locator('.icon[data-app="board"] .badge').innerText(), '1');
+  assert.equal(await top8('.icon[data-app="board"]'), 'terminal', 'the maximized terminal covers the 📌 icon');
+  await boardTask.click();
+  await p8.locator('.window[data-app="board"]:not(.min)').waitFor();
+  assert.equal(await top8('.window[data-app="board"]'), 'board', 'the taskbar 📌 brings the board in front of the terminal');
+  assert.equal(await p8.evaluate(() => document.querySelector('.window.focused')?.dataset.app), 'board');
+  await term8();
+  assert.equal(await top8('.window[data-app="terminal"]'), 'terminal');
+  await boardTask.click();
+  assert.equal(await top8('.window[data-app="board"]'), 'board', 'open but behind: one click raises it');
+  step('1280x800, terminal maximized over the icons: a pin shows "증거 1/3 추가됨 — 보드에서 보고하기" with the line, the 📌 taskbar entry carries the count and raises the board');
+
+  await term8();
+  await run8('du -sh /data/collector/*');
+  await pin8(/^67G\s+\/data\/collector\/archive/);
+  await run8('pgrep -f logshipd');
+  await run8('ls -l /proc/1187/fd | grep deleted');
+  await p8.waitForTimeout(2200);
+  await p8.keyboard.press('Escape');
+  await pin8(/\(deleted\)/);
+  await p8.waitForTimeout(200);
+  assert.equal(await p8.evaluate(() => window.__game.evidencePins().length), 3, 'three pins that count');
+  assert.equal(await p8.locator('.todo li[data-id="pins"].done').count(), 0, 'three 원인 pins alone do not tick "증거 3개": 경위 and 재발 방지 have none');
+  assert.match(await p8.locator('.todo li[data-id="pins"] .todo-ev').innerText(), /원인 2\/2 · 경위 0\/2 · 재발 방지 0\/3/);
+  await p8.locator('#taskbar .goalbtn').click();
+  const goal8 = p8.locator('.popover.goalpop');
+  await goal8.waitFor();
+  assert.match(await goal8.locator('.goal-ev[data-slot="cause"]').innerText(), /원인 증거 2\/2/);
+  assert.match(await goal8.locator('.goal-ev[data-slot="sequence"]').innerText(), /경위 증거 0\/2/);
+  assert.equal(await goal8.locator('.goal-ev.ready').count(), 1, 'only 원인 can be cited yet');
+  assert.doesNotMatch(await goal8.innerText(), /logshipd|deleted|pay-api-01|jhpark/, 'the goal card names kinds, never findings');
+  await p8.locator('#taskbar .goalbtn').click();
+  await goal8.waitFor({ state: 'detached' });
+  step('three 원인 pins: the checklist keeps "증거 3개" open until every field has one; 🎯 shows 원인 증거 2/2 · 경위 증거 0/2 without findings');
+
+  await term8();
+  await run8('journalctl --since "2026-11-11 14:00" --until "2026-11-11 15:00"');
+  await pin8(/COMMAND=\/usr\/bin\/rm pay-api-01\.log/);
+  await p8.waitForTimeout(200);
+  assert.equal(await p8.locator('.todo li[data-id="pins"].done').count(), 0, '재발 방지 still has none');
+  await p8.locator('.window[data-app="terminal"] .titlebar').dblclick(); // restore: the icons show again
+  await p8.locator('.window[data-app="terminal"]:not(.max)').waitFor();
+  await p8.locator('.icon[data-app="report"]').click();
+  const rep8 = p8.locator('.window[data-app="report"]');
+  await rep8.locator('section.slot').first().waitFor();
+  const need = (slot) => rep8.locator(`.cite[data-slot="${slot}"] .cite-need`);
+  assert.match(await need('cause').innerText(), /✓/);
+  assert.match(await need('sequence').innerText(), /✓/);
+  assert.match(await need('responsibility').innerText(), /아직 없음/);
+  assert.equal(await rep8.locator('.cite[data-slot="responsibility"] .crit.met').count(), 0);
+  assert.equal(await rep8.locator('.cite[data-slot="responsibility"] .crit.miss').count(), 3, 'each kind 재발 방지 accepts, none met');
+  // a cited pin that is not of the field's kinds is named before submitting
+  await rep8.locator('label.citeopt:has(input[name="cite-sequence"])', { hasText: /\/dev\/sdb1/ }).locator('input').check();
+  assert.match(await rep8.locator('.cite[data-slot="sequence"] .cite-state').innerText(), /이 칸의 종류가 아니에요/);
+  await rep8.locator('label.citeopt:has(input[name="cite-sequence"])', { hasText: /COMMAND=/ }).locator('input').check();
+  assert.match(await rep8.locator('.cite[data-slot="sequence"] .cite-state').innerText(), /인정돼요/);
+  await term8();
+  await run8('cat /etc/logshipd/logshipd.conf');
+  await pin8(/^max_source_bytes = 0/);
+  await p8.locator('.todo li[data-id="pins"].done').waitFor({ timeout: 2000 });
+  await rep8.locator('.cite[data-slot="responsibility"] .crit.met').first().waitFor();
+  step('report: each field lists the kinds it accepts with ✓/○ and whether the cited pin counts; once 재발 방지 has a pin, "증거 3개" ticks');
+  await p8.close();
   assert.deepEqual(nativeDialogs, [], 'no browser confirm()/alert() anywhere');
 
   assert.deepEqual(errors, []);

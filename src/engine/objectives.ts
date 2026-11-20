@@ -3,7 +3,7 @@
 //
 //   observe({ type: 'interact', app: 'terminal' })            -> ['terminal']
 //   observe({ type: 'cmd', host, line, output: [...] })        -> items whose cmd/output regex matched
-//   observe({ type: 'clue', id }) / ({ type: 'open', key }) / ({ type: 'pins', count })
+//   observe({ type: 'clue', id }) / ({ type: 'open', key }) / ({ type: 'pins', count, uncovered })
 //
 // Items can tick in any order. When all are done the sticky "folds" into the notebook; that is a
 // separate step (fold()) so the UI can play its little animation first.
@@ -22,7 +22,8 @@ export type Observation =
   | { type: 'cmd'; host: string; line: string; output: string[] }
   | { type: 'clue'; id: string }
   | { type: 'open'; key: string }
-  | { type: 'pins'; count: number };
+  /** `count` pins that count as evidence; `uncovered` report fields that no pin backs yet. */
+  | { type: 'pins'; count: number; uncovered?: number };
 
 export function emptyObjectiveState(): ObjectiveState {
   return { done: {}, foldedAt: null };
@@ -82,7 +83,7 @@ export class Objectives {
       case 'open':
         return 'open' in c && c.open === o.key;
       case 'pins':
-        return 'pins' in c && o.count >= c.pins;
+        return 'pins' in c && o.count >= c.pins && !o.uncovered;
     }
   }
 

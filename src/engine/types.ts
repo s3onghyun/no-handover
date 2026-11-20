@@ -524,7 +524,8 @@ export type ObjectiveCond =
   | { open: string }
   /**
    * At least this many pins on the evidence board that count as evidence: pins that meet some
-   * report slot's evidence kind (any pin when the case defines no kinds).
+   * report slot's evidence kind (any pin when the case defines no kinds), and every slot with
+   * kinds backed by at least one of them (the report asks each slot for a citation).
    */
   | { pins: number };
 

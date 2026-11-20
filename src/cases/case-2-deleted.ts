@@ -772,7 +772,7 @@ export const caseTwoDeleted: CaseFile = {
       items: [
         { id: 'gap', text: '디스크는 정말 찼나, 파일은 다 어디 있나', hint: '두 가지 숫자를 나란히 놓아 보세요.', any: [{ clue: 'c2_du' }], pulse: 'terminal' },
         { id: 'holder', text: '지운 파일은 어디로 갔나', any: [{ clue: 'c2_deleted' }] },
-        { id: 'pins', text: '증거 3개 보드에 올리기 📌', any: [{ pins: 3 }] },
+        { id: 'pins', text: '증거 3개 보드에 올리기 (칸마다 하나 이상) 📌', any: [{ pins: 3 }] },
       ],
       after: ['다음: 📝 보고서 — 원인, 경위, 재발 방지 세 칸 (제출 4번)', '언제부터: 지운 시각, 그리고 로그를 보낸 쪽 서버', '막히면: ~/README.txt, history, 💡'],
     },

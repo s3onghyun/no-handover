@@ -12,7 +12,7 @@ export interface AppInstance {
 export interface UiCtx {
   game: Game;
   wm: WM;
-  toast(html: string | Node, onClick?: () => void): void;
+  toast(html: string | Node, onClick?: () => void): HTMLElement;
   pinBtn(p: Omit<Pin, 'id' | 'ts' | 'onTimeline' | 'clueIds' | 'at'> & { sourceKey?: string; ts?: number | null }): HTMLElement;
   avatar(personId: string, size?: number): HTMLElement;
   name(personId: string): string;
@@ -43,6 +43,8 @@ interface Win {
 
 export class WM {
   private wins = new Map<string, Win>();
+  /** Taskbar entries kept while their window is closed (the evidence board): one click opens or raises it. */
+  private pinned = new Map<string, HTMLElement>();
   private z = 10;
   private cascade = 0;
   focused: string | null = null;
@@ -109,8 +111,9 @@ export class WM {
     el.addEventListener('pointerdown', () => this.focus(id), true);
     this.drag(el, el.querySelector('.titlebar') as HTMLElement);
     this.root.appendChild(el);
-    const task = h('button.task', { onclick: () => this.taskClick(id) }, `${def.icon} ${def.title()}`);
-    this.tasks.appendChild(task);
+    const task = this.pinned.get(id) ?? h('button.task', { onclick: () => this.taskClick(id), dataset: { app: id } }, `${def.icon} ${def.title()}`);
+    task.classList.add('open');
+    if (!task.isConnected) this.tasks.appendChild(task);
     const inst = def.mount(body, this.ctx);
     this.wins.set(id, { def, el, body, inst, task });
     this.focus(id);
@@ -126,7 +129,8 @@ export class WM {
   keepClearOf(id: string, of: string, column = 48): void {
     const a = this.wins.get(id)?.el;
     const b = this.wins.get(of)?.el;
-    if (!a || !b || b.classList.contains('min') || a.classList.contains('max') || b.classList.contains('max')) return;
+    // a maximized `of` counts too: it stops short of the checklist, and its 📌 column is still at its right edge
+    if (!a || !b || b.classList.contains('min') || a.classList.contains('max')) return;
     const bRight = b.offsetLeft + b.offsetWidth;
     const colLeft = bRight - column;
     const covers =
@@ -152,9 +156,28 @@ export class WM {
     el.style.setProperty('--max-right', r && vw - r - 8 >= 480 ? `${r + 8}px` : '0px');
   }
 
+  /**
+   * Keep a taskbar entry for app `id` even while its window is closed, so it can be reached when
+   * other windows cover its desktop icon. Returns the entry (callers add a badge or hide it).
+   */
+  pinTask(id: string): HTMLElement | null {
+    const def = this.apps.get(id);
+    if (!def) return null;
+    let task = this.pinned.get(id);
+    if (!task) {
+      task = h('button.task.pinned', { type: 'button', onclick: () => this.taskClick(id), dataset: { app: id }, title: def.title() }, h('span.task-label', null, `${def.icon} ${def.title()}`));
+      this.pinned.set(id, task);
+      this.tasks.prepend(task);
+    }
+    return task;
+  }
+
   private taskClick(id: string): void {
     const w = this.wins.get(id);
-    if (!w) return;
+    if (!w) {
+      this.open(id);
+      return;
+    }
     if (this.focused === id && !w.el.classList.contains('min')) this.minimize(id);
     else {
       w.el.classList.remove('min');
@@ -189,7 +212,8 @@ export class WM {
     const w = this.wins.get(id);
     if (!w) return;
     w.el.remove();
-    w.task.remove();
+    if (this.pinned.has(id)) w.task.classList.remove('open', 'active');
+    else w.task.remove();
     this.wins.delete(id);
     if (this.focused === id) this.focusTop();
     this.onClose(id);
