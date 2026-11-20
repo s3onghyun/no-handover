@@ -125,8 +125,10 @@ input, textarea, select { font: inherit; }
 #boot .fine { font-size: 12px; opacity: 0.6; margin-top: 16px; }
 
 /* ---------- common bits ---------- */
-.pinbtn { opacity: 0; border: 0; background: transparent; padding: 0 4px; font-size: 13px; line-height: 1; cursor: pointer; }
+/* faint but always there (touch and snapshot-driven tools have no hover); full on hover or keyboard focus */
+.pinbtn { opacity: 0.35; border: 0; background: transparent; padding: 0 4px; font-size: 13px; line-height: 1; cursor: pointer; }
 *:hover > .pinbtn, .pinbtn:focus-visible { opacity: 0.85; }
+.pinbtn:focus-visible { outline: 2px solid #f2d94e; outline-offset: 1px; border-radius: 3px; }
 .pinbtn:hover { opacity: 1; transform: scale(1.15); }
 .pinbtn.pinned { opacity: 0.9; filter: grayscale(0.2); }
 .av { width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 14px; overflow: hidden; }
@@ -155,7 +157,7 @@ input, textarea, select { font: inherit; }
 .tline.dim { color: var(--term-dim); }
 .tline.sys { color: var(--term-sys); }
 .tline:hover { background: rgba(255,255,255,0.04); }
-.tin { display: flex; gap: 8px; padding: 2px 10px 10px; align-items: baseline; flex: none; }
+.tin { display: flex; gap: 8px; padding: 2px 10px 10px; align-items: baseline; flex: none; order: 1; }
 .tin .ps1 { color: var(--term-sys); white-space: nowrap; }
 .tin input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--term-fg); font: 13px/1.45 var(--mono); caret-color: #f2d94e; }
 .tin input.frozen { color: #f2d94e; text-shadow: 0 0 6px rgba(242, 217, 78, 0.35); }

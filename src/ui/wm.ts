@@ -2,6 +2,7 @@
 
 import { h } from './dom.ts';
 import type { Game, Pin } from '../engine/game.ts';
+import { t } from '../i18n.ts';
 
 export interface AppInstance {
   refresh?(type?: string): void;
@@ -54,14 +55,55 @@ export class WM {
   /** Window opened / closed (sound cues, onboarding pulse). */
   onOpen: (id: string) => void = () => {};
   onClose: (id: string) => void = () => {};
+  /** Windows moved, resized, stacked, opened, closed or minimized (toasts keep off the 📌 columns, covered icons). */
+  onLayout: () => void = () => {};
   /** Width at the desktop's right edge that new windows keep clear of (the "오늘 할 일" sticky, which sits above every window). */
   reserveRight: () => number = () => 0;
   readonly root: HTMLElement;
   readonly tasks: HTMLElement;
 
+  private layoutPending = false;
+  private readonly ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => this.relayout()) : null;
+
   constructor(root: HTMLElement, tasks: HTMLElement) {
     this.root = root;
     this.tasks = tasks;
+  }
+
+  /** Windows changed: exposure and taskbar wording now, the rest batched to the next frame. */
+  relayout(): void {
+    this.syncExposure();
+    if (this.layoutPending) return;
+    this.layoutPending = true;
+    requestAnimationFrame(() => {
+      this.layoutPending = false;
+      this.syncExposure(); // a window that sized itself after opening
+      this.onLayout();
+    });
+  }
+
+  /**
+   * A window behind another one whose centre, prompt or titlebar buttons are covered leaves the
+   * accessibility tree until it comes to the front. Snapshot-driven tools click at an element's
+   * centre, so a covered control would hand the click to the window in front (the playtesters'
+   * "minimize hit the board and the terminal jumped forward"). The taskbar entry says where each
+   * window is: in front, behind another window, or minimized.
+   */
+  syncExposure(): void {
+    const shown = [...this.wins.entries()].filter(([, w]) => !w.el.classList.contains('min')).sort((a, b) => +b[1].el.style.zIndex - +a[1].el.style.zIndex);
+    const above: DOMRect[] = [];
+    const inside = (x: number, y: number) => above.some((r) => x > r.left && x < r.right && y > r.top && y < r.bottom);
+    const centre = (r: DOMRect) => [r.left + r.width / 2, r.top + r.height / 2] as const;
+    for (const [, w] of shown) {
+      const keys = [w.el, ...w.el.querySelectorAll<HTMLElement>('.titlebar button, .tin input')].map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height);
+      const covered = keys.some((r) => inside(...centre(r)));
+      if (covered) w.el.setAttribute('aria-hidden', 'true');
+      else w.el.removeAttribute('aria-hidden');
+      w.task.title = covered ? t('wm.behind', { app: w.def.title() }) : w.def.title();
+      w.el.dataset.covered = covered ? '1' : '';
+      above.push(w.el.getBoundingClientRect());
+    }
+    for (const w of this.wins.values()) if (w.el.classList.contains('min')) w.task.title = t('wm.minimized', { app: w.def.title() });
   }
 
   register(def: AppDef): void {
@@ -102,13 +144,18 @@ export class WM {
         { ondblclick: () => this.toggleMax(id) },
         h('span', null, def.icon),
         title,
-        h('button', { title: '최소화', 'aria-label': 'minimize', onclick: (e: Event) => (e.stopPropagation(), this.minimize(id)) }, '–'),
-        h('button', { title: '최대화', 'aria-label': 'maximize', onclick: (e: Event) => (e.stopPropagation(), this.toggleMax(id)) }, '▢'),
-        h('button.close', { title: '닫기', 'aria-label': 'close', onclick: (e: Event) => (e.stopPropagation(), this.close(id)) }, '✕'),
+        // the description names the window: tools list every window's controls, and "minimize" alone could be any of them
+        h('button', { title: t('wm.min', { app: def.title() }), 'aria-label': 'minimize', onclick: (e: Event) => (e.stopPropagation(), this.minimize(id)) }, '–'),
+        h('button', { title: t('wm.max', { app: def.title() }), 'aria-label': 'maximize', onclick: (e: Event) => (e.stopPropagation(), this.toggleMax(id)) }, '▢'),
+        h('button.close', { title: t('wm.close', { app: def.title() }), 'aria-label': 'close', onclick: (e: Event) => (e.stopPropagation(), this.close(id)) }, '✕'),
       ),
       body,
     );
     el.addEventListener('pointerdown', () => this.focus(id), true);
+    // keyboard focus or a tool's fill() landing in a window behind brings that window to the front
+    el.addEventListener('focusin', () => {
+      if (this.focused !== id && !el.classList.contains('min')) this.focus(id);
+    });
     this.drag(el, el.querySelector('.titlebar') as HTMLElement);
     this.root.appendChild(el);
     const task = this.pinned.get(id) ?? h('button.task', { onclick: () => this.taskClick(id), dataset: { app: id } }, `${def.icon} ${def.title()}`);
@@ -116,9 +163,11 @@ export class WM {
     if (!task.isConnected) this.tasks.appendChild(task);
     const inst = def.mount(body, this.ctx);
     this.wins.set(id, { def, el, body, inst, task });
+    this.ro?.observe(el);
     this.focus(id);
     if (arg !== undefined) inst.open?.(arg);
     this.onOpen(id);
+    this.relayout();
     return inst;
   }
 
@@ -140,6 +189,7 @@ export class WM {
     const limit = (this.root.clientWidth || window.innerWidth) - this.reserveRight() - 8;
     const x = limit - bRight - 8 >= a.offsetWidth ? bRight + 8 : colLeft - 8 - a.offsetWidth;
     if (x >= 8) a.style.left = `${x}px`;
+    this.relayout();
   }
 
   /**
@@ -154,6 +204,7 @@ export class WM {
     const vw = this.root.clientWidth || window.innerWidth;
     const r = on ? this.reserveRight() : 0;
     el.style.setProperty('--max-right', r && vw - r - 8 >= 480 ? `${r + 8}px` : '0px');
+    this.relayout();
   }
 
   /**
@@ -198,6 +249,7 @@ export class WM {
       this.onFocus(id);
       w.inst.focus?.();
     }
+    this.relayout();
   }
 
   minimize(id: string): void {
@@ -205,18 +257,26 @@ export class WM {
     if (!w) return;
     w.el.classList.add('min');
     w.task.classList.remove('active');
+    // keyboard focus must not stay inside a hidden window (typing would go nowhere visible)
+    if (w.el.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     if (this.focused === id) this.focusTop();
+    this.relayout();
   }
 
   close(id: string): void {
     const w = this.wins.get(id);
     if (!w) return;
+    this.ro?.unobserve(w.el);
     w.el.remove();
-    if (this.pinned.has(id)) w.task.classList.remove('open', 'active');
+    if (this.pinned.has(id)) {
+      w.task.classList.remove('open', 'active');
+      w.task.title = w.def.title();
+    }
     else w.task.remove();
     this.wins.delete(id);
     if (this.focused === id) this.focusTop();
     this.onClose(id);
+    this.relayout();
   }
 
   private focusTop(): void {
@@ -260,6 +320,7 @@ export class WM {
       const up = () => {
         handle.removeEventListener('pointermove', move);
         handle.removeEventListener('pointerup', up);
+        this.relayout();
       };
       handle.addEventListener('pointermove', move);
       handle.addEventListener('pointerup', up);

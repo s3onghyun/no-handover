@@ -2,7 +2,7 @@
 // labelled title and description, focus kept inside while open, Esc or a click outside cancels,
 // and focus goes back to where it was. Small motion only (a short fade; none with reduced motion).
 
-import { h } from './dom.ts';
+import { canRestoreFocus, h } from './dom.ts';
 
 export interface ModalOpts {
   title: string;
@@ -40,7 +40,7 @@ export function modal(o: ModalOpts): Promise<boolean> {
       if (done) return;
       done = true;
       wrap.remove();
-      if (back?.isConnected) back.focus({ preventScroll: true });
+      if (canRestoreFocus(back)) back.focus({ preventScroll: true });
       resolve(v);
     };
     okBtn.addEventListener('click', () => close(true));
