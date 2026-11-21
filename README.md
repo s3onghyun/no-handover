@@ -77,12 +77,12 @@ public/characters/  캐릭터 아트 (아래 참고)
 | 폴더 | 파일 |
 |---|---|
 | `public/audio/music/` | `amb.office`, `music.briefing`, `music.reveal`, `music.tension` |
-| `public/audio/voice/` | `voice.briefing-jihun`, `voice.briefing-case1-seojin`, `voice.briefing-case2-seojin`, 사건별 넛지 `voice.nudge-<사건 id>-idle-N` (직접 물었을 때 문구가 다르면 `…-idle-N-ask`) |
+| `public/audio/voice/` | 동료가 플레이어에게 하는 말마다 하나. 목록과 이름은 `src/engine/voices.ts`가 사건 데이터에서 만든다: 브리핑은 `opening.briefing.voiceCue`(`voice.briefing-case0-seojin` …), 넛지는 `voice.nudge-<사건 id>-idle-N`(`…-ask`), 나머지(오답 넛지, 트리거 메시지, 레일, 보고서 회신)는 `voice.<화자>-<자막의 FNV-1a 8자리>`. 줄을 고치거나 더하면 `npm test`(`tests/voices.test.ts`)가 파일이 없는 줄을 알려 준다 |
 | `public/audio/sfx/` | `sfx.ring`, `sfx.typing` (CC0 파일이 오면 ZzFX 대체음을 덮어씀), 그 밖의 `sfx.*`도 같은 이름이면 ZzFX보다 먼저 쓰인다 |
 
 예: `public/audio/music/amb.office.ogg`와 `public/audio/music/amb.office.mp3`. 하나만 있어도 된다. 다른 경로를 쓰려면 그 큐에 `src: [...]`를 적는다.
 
-**들어 있는 음원 파일** (2026-11-17·11-20, 합계 3.81 MB / 예산 4 MB, 각각 Opus `.ogg` + `.mp3`):
+**들어 있는 음원 파일** (2026-11-17·11-20·11-21, 합계 7.13 MB, 각각 Opus `.ogg` + `.mp3`; 예산은 사건마다 4 MB(음악 + 그 사건 목소리) — 페이지는 지금 사건의 목소리만 받는다):
 
 | 큐 | 길이 | 라우드니스 | 내용 |
 |---|---|---|---|
@@ -91,6 +91,7 @@ public/characters/  캐릭터 아트 (아래 참고)
 | `voice.briefing-jihun` | 23.6 s, 모노 | −16 LUFS | Case 3 브리핑의 지훈 음성 메시지 (Gemini TTS, Puck) |
 | `voice.briefing-case1-seojin` · `voice.briefing-case2-seojin` | 35.1 s · 30.9 s, 모노 | −16 LUFS | Case 1·2 브리핑의 서진 음성 메시지 (Gemini TTS, Aoede) |
 | `voice.nudge-*` (20개) | 3–12 s, 모노 | −16 LUFS | Case 0–3 동료 넛지, 서진 = Aoede, 지훈 = Puck (Gemini TTS) |
+| `voice.briefing-case0-seojin`, `voice.<화자>-*` (133개) | 0.6–23 s, 모노 | −16 LUFS | Case 0 브리핑과 나머지 동료 대사 전부(오답 넛지, 트리거, Case 0 레일, 보고서 오답 회신), 서진 = Aoede, 지훈 = Puck, 오미래 = Kore (Gemini TTS) |
 
 `music.reveal`은 아직 비어 있다(무음). **출처·처리 명령·측정값은 [`public/audio/audio-credits.md`](public/audio/audio-credits.md).** 음악·음성은 캡틴의 Gemini 계정으로 만든 **프로토타입용**이며, Gemini 앱 음악·TTS의 상업적 이용 조건은 판매 전에 확인해야 한다. 원본(저장소 밖 `data/infra-mystery-game/audio-in/`)에서 다시 만들기: `scripts/audio-prepare.sh <원본 폴더>`. 루프 이음매 검사: `scripts/audio-check-seam.sh`. 20초 미리듣기: `scripts/audio-preview.sh /tmp/nh-preview.wav`.
 
@@ -102,7 +103,7 @@ public/characters/  캐릭터 아트 (아래 참고)
 
 **들어 보기**: `npm run audio:render -- /tmp/nh` 후 `/tmp/nh/ui-set.wav`. 또는 게임에서 브라우저 콘솔에 `__audio.play('sfx.done')`.
 
-**확인**: `npm run e2e`의 두 번째 단계(`scripts/e2e-audio.mjs`)가 `dist/`의 임시 복사본에 시험용 톤 두 개(`amb.office.ogg`, `voice.briefing-jihun.mp3`)를 넣고 띄운 뒤, 데스크톱 Chrome의 자동 재생 규칙을 걸고 잠금 화면 빈 곳을 클릭해 AudioContext가 `running`인지, `sfx.ding`이 실제 출력(AnalyserNode)에 나오는지, 넣은 파일이 코드 수정 없이 재생되는지, 터미널 타이핑이 키 클릭을 내는지, 음악이 루프하지 않는지, 넣었던 `amb.office`를 임시 복사본에서 숨기면 합성 방 톤이 대신 루프하는지, 음소거 상태에서도 잠금이 풀리는지 본다. 임시 복사본은 끝나면 지운다(이 단계는 들어 있는 음원 파일을 먼저 지우고 시작한다). 들어 있는 음원 자체는 `node scripts/e2e-audio-files.mjs`(빌드 후)가 확인한다: Case 3(`?case=friday-1802`)를 ogg 그대로 한 번, ogg를 숨겨 mp3로 한 번 띄워, 잠금 화면 스팅·지훈 음성·환경음 루프가 파일로 재생되는지, 자막이 음성 길이에 맞춰 끝나는지, 마스터 출력 레벨(AnalyserNode)과 콘솔 디코드 오류를 본다. 이어서 Case 1·2 오프닝을 끝까지 보며, 스팅은 파일로, 아직 녹음이 없는 서진의 음성(`voice.briefing-case1-seojin`, `voice.briefing-case2-seojin`)은 자막 + 타이핑 소리로 대신하고, 메일 알림 뒤 환경음이 파일로 루프하는지 본다.
+**확인**: `npm run e2e`의 두 번째 단계(`scripts/e2e-audio.mjs`)가 `dist/`의 임시 복사본에 시험용 톤 두 개(`amb.office.ogg`, `voice.briefing-case0-seojin.mp3`)를 넣고 띄운 뒤, 데스크톱 Chrome의 자동 재생 규칙을 걸고 잠금 화면 빈 곳을 클릭해 AudioContext가 `running`인지, `sfx.ding`이 실제 출력(AnalyserNode)에 나오는지, 넣은 파일이 코드 수정 없이 재생되는지, 터미널 타이핑이 키 클릭을 내는지, 음악이 루프하지 않는지, 넣었던 `amb.office`를 임시 복사본에서 숨기면 합성 방 톤이 대신 루프하는지, 음소거 상태에서도 잠금이 풀리는지 본다. 임시 복사본은 끝나면 지운다(이 단계는 들어 있는 음원 파일을 먼저 지우고 시작한다). 들어 있는 음원 자체는 `node scripts/e2e-audio-files.mjs`(빌드 후)가 확인한다: Case 3(`?case=friday-1802`)를 ogg 그대로 한 번, ogg를 숨겨 mp3로 한 번 띄워, 잠금 화면 스팅·지훈 음성·환경음 루프가 파일로 재생되는지, 자막이 음성 길이에 맞춰 끝나는지, 마스터 출력 레벨(AnalyserNode)과 콘솔 디코드 오류를 본다. 들어 있는 목소리 파일은 형식마다 모두 디코드해 본다. 이어서 Case 0·1·2 오프닝을 끝까지 보며 스팅과 서진의 음성이 파일로 재생되고 메일 알림 뒤 환경음이 파일로 루프하는지, Case 1에서 넛지·트리거 메시지·보고서 오답 회신이 각자의 음성을 차례로 재생하는지 본다.
 
 ## 의존성과 라이선스
 

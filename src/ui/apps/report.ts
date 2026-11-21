@@ -396,6 +396,7 @@ export const reportApp: AppDef = {
                 body: wrongReply(g.cs, r, sub, { attempt, pins: g.st.pins }),
                 sign: rp ? rp.sign : '오미래 드림 / CTO',
               };
+              document.dispatchEvent(new CustomEvent('nh-reply', { detail: lastReply.body })); // main.ts voices it
             }
             render();
           },
