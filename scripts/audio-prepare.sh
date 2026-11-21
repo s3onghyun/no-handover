@@ -8,7 +8,9 @@
 #
 # Needs ffmpeg (tested with 6.1, libopus + libmp3lame) and python3 (stdlib only, to read loudnorm's JSON).
 # Targets (data/infra-mystery-game/audio-cues.md §d): voice -16 LUFS, music -18, ambience -24,
-# true peak <= -1 dBTP, 48 kHz, Opus in .ogg + MP3 fallback, all files together <= 4 MB.
+# true peak <= -1 dBTP, 48 kHz, Opus in .ogg + MP3 fallback. Budget: 4 MB per case (the music plus that case's
+# voices, both formats; a session loads only its own case's voices, src/engine/voices.ts), checked by
+# tests/voices.test.ts; all files together <= 8 MB.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -88,7 +90,7 @@ enc music.briefing music 96 128
 # (only the odd plosive is touched) leaves room for the linear loudnorm gain. Without it loudnorm
 # drops to dynamic mode (and hangs on voice.briefing-jihun in ffmpeg 6.1).
 # voice.briefing-jihun keeps its original -3.1 dBFS (0.7) limit and 48/64 kbps. Every other line
-# (Case 1-2 briefings, nudges) is encoded at speech rates that keep the whole set under 4 MB, Opus
+# (Case 0-2 briefings, every colleague line) is encoded at speech rates that keep each case under 4 MB, Opus
 # 20 kbps + MP3 24 kbps at 24 kHz (the TTS rate; MP3 below 32 kbps needs an MPEG-2 sample rate).
 # Its limit starts where the peaks land at -3 dBFS after the gain (gain from a first loudness
 # reading) and steps down 1 dB until loudnorm stays linear and both encodes are <= -1 dBTP: some
@@ -104,7 +106,7 @@ for src in "$IN"/voice.*.wav; do
   fi
   i="$(ffmpeg -hide_banner -nostdin -nostats -i "$src" -af "$TRIM,loudnorm=print_format=json" -f null - 2>&1 | python3 -c 'import sys,json; t=sys.stdin.read(); print(json.loads(t[t.rindex("{"):t.rindex("}")+1])["input_i"])')"
   head=3; ok=
-  while [ "$head" -le 9 ]; do
+  while [ "$head" -le 12 ]; do
     lim="$(python3 -c "print(min(1.0, 10 ** ((-$head - (-16 - $i)) / 20)))")"
     "${FF[@]}" -i "$src" -af "$TRIM,alimiter=limit=$lim:attack=1:release=50:level=0" -ar 48000 -ac 1 -c:a pcm_f32le "$WORK/voice.wav"
     if (loudnorm_2pass "$WORK/voice.wav" "$WORK/$id.wav" -16 1) 2>/dev/null; then
@@ -124,5 +126,5 @@ for f in "$OUT"/music/amb.office.{ogg,mp3} "$OUT"/music/music.briefing.{ogg,mp3}
   l=$(ffmpeg -hide_banner -nostdin -nostats -i "$f" -af loudnorm=print_format=json -f null - 2>&1 | python3 -c 'import sys; t=sys.stdin.read(); import json; d=json.loads(t[t.rindex("{"):t.rindex("}")+1]); print(d["input_i"], "LUFS", d["input_tp"], "dBTP")')
   printf '%-44s %8d B  %7.2f s  %s\n' "${f#"$OUT"/}" "$s" "$d" "$l"
 done
-printf 'total %d B (%.2f MB, budget 4 MB)\n' "$total" "$(python3 -c "print($total/1e6)")"
-[ "$total" -le 4000000 ] || { echo "over the 4 MB budget" >&2; exit 1; }
+printf 'total %d B (%.2f MB; budget 4 MB per case, npm test checks it; 8 MB for every case together)\n' "$total" "$(python3 -c "print($total/1e6)")"
+[ "$total" -le 8000000 ] || { echo "over the 8 MB ceiling" >&2; exit 1; }

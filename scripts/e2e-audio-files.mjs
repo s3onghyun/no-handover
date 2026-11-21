@@ -6,9 +6,11 @@
 //
 // Runs twice on temporary copies of dist/: as built (Opus .ogg first) and with every .ogg removed
 // (forces the .mp3 fallback). Each pass watches the whole briefing (~35 s).
-// Then the Case 1 and Case 2 openings (서진's voice messages): the sting and the voice play from the
+// Each pass also decodes every shipped voice file in that format (all cases' lines, src/engine/voices.ts).
+// Then the Case 0, 1 and 2 openings (서진's voice messages): the sting and the voice play from the
 // files with no typing fallback, the mail slides in, and the desktop loops amb.office from the file;
-// in Case 1 a colleague nudge then plays its own per-case voice line, the asked wording too (~80 s more).
+// in Case 1 a colleague nudge then plays its own per-case voice line, the asked wording too, a
+// trigger's two messages play one after the other, and a wrong report's reply plays line by line (~110 s more).
 //
 //   npm run build && node scripts/e2e-audio-files.mjs     (run after `npm run e2e`; not wired into it to keep package.json out of this change)
 
@@ -121,9 +123,8 @@ async function pass(format) {
       for (const id of Object.keys(window.__audio.manifest).filter((i) => i.startsWith('voice.'))) o[id] = (await window.__audio.load(id))?.duration ?? null;
       return o;
     });
-    for (const [id, d] of Object.entries(r.voices)) assert.ok(d > 2 && d < 40, `${id} decoded ${d} s`);
-    step(`all ${Object.keys(r.voices).length} voice cues decode from the ${format} files (${Math.min(...Object.values(r.voices)).toFixed(1)}–${Math.max(...Object.values(r.voices)).toFixed(1)} s)`);
-
+    for (const [id, d] of Object.entries(r.voices)) assert.ok(d > 0.4 && d < 40, `${id} decoded ${d} s`);
+    step(`all ${Object.keys(r.voices).length} of this case's voice cues decode from the ${format} files (${Math.min(...Object.values(r.voices)).toFixed(1)}–${Math.max(...Object.values(r.voices)).toFixed(1)} s)`);
     await page.locator('#boot button.primary').click();
     await page.locator('#briefing').waitFor();
     const tStart = Date.now();
@@ -176,6 +177,17 @@ async function pass(format) {
     r.fetched = fetched;
     assert.deepEqual(errors, []);
     step(`fetched ${format === 'ogg' ? 'only the .ogg files' : '.ogg → not audio (no file), then the .mp3 fallback'}; no page or console errors`);
+    // every shipped voice file of every case, in this format (the page only loads its own case's; after the fetch check, which these fetches would trip)
+    const shipped = readdirSync(join(site, 'audio', 'voice')).filter((f) => f.endsWith(`.${format}`));
+    const all = await page.evaluate(async (files) => {
+      const ctx = new OfflineAudioContext(1, 1, 48000);
+      const o = {};
+      for (const f of files) o[f] = await fetch(`audio/voice/${f}`).then((x) => x.arrayBuffer()).then((b) => ctx.decodeAudioData(b)).then((b) => b.duration, () => null);
+      return o;
+    }, shipped);
+    for (const [f, d] of Object.entries(all)) assert.ok(d > 0.4 && d < 40, `${f} decoded ${d} s`);
+    step(`all ${shipped.length} shipped .${format} voice files decode (${Math.min(...Object.values(all)).toFixed(1)}–${Math.max(...Object.values(all)).toFixed(1)} s)`);
+
   } finally {
     await page.close();
     await server.close();
@@ -183,7 +195,7 @@ async function pass(format) {
   }
 }
 
-/** Case 1 and Case 2: same opening scene, 서진's recorded voice message; then Case 1's per-case nudge voices. */
+/** Cases 0–2: same opening scene, 서진's recorded voice message; then Case 1's nudge, trigger and report-reply voices. */
 async function newOpenings() {
   const server = await preview({ root, preview: { port: 0, strictPort: false, open: false }, logLevel: 'silent' });
   const url = server.resolvedUrls.local[0];
@@ -194,6 +206,7 @@ async function newOpenings() {
   page.on('console', (m) => m.type() === 'error' && !/404 \(Not Found\)/.test(m.text()) && errors.push(m.text()));
   try {
     for (const [id, cue, mail] of [
+      ['case0-wiki', 'voice.briefing-case0-seojin', '[연습] 위키 502'],
       ['case1-cron-env', 'voice.briefing-case1-seojin', '[연습 2] wiki-01 /var 92%'],
       ['case2-deleted-open', 'voice.briefing-case2-seojin', '[중요] 로그 서버 디스크'],
     ]) {
@@ -201,7 +214,9 @@ async function newOpenings() {
       await page.goto(`${url}?fresh=1&case=${id}`);
       await page.mouse.click(30, 30);
       await page.waitForFunction(() => window.__audio.state() === 'running', null, { timeout: 5000 });
-      await page.locator('#boot button.primary').click();
+      // the first launch asks "터미널이 익숙해요 / 처음이에요" once
+      const exp = page.locator('#boot .exp-new');
+      await (await exp.count() ? exp : page.locator('#boot button.primary')).click();
       const t0 = Date.now();
       await page.locator('#briefing').waitFor();
       await page.waitForFunction(() => window.__audio.history.some((h) => h.id === 'music.briefing'), null, { timeout: 3000 });
@@ -216,7 +231,7 @@ async function newOpenings() {
       await page.locator('#briefing[data-step="mail"] .brief-mail', { hasText: mail }).waitFor({ timeout: 45000 });
       await page.locator('#briefing').waitFor({ state: 'detached', timeout: 30000 });
       const secs = (Date.now() - t0) / 1000;
-      assert.ok(secs >= 28 && secs <= 62, `${id} briefing ${secs}s`);
+      assert.ok(secs >= (id === 'case0-wiki' ? 18 : 28) && secs <= 62, `${id} briefing ${secs}s`);
       await page.waitForFunction(() => window.__audio.isLooping('amb.office'), null, { timeout: 5000 });
       assert.deepEqual(await page.evaluate(() => window.__audio.history.find((h) => h.id === 'amb.office')), { id: 'amb.office', status: 'file' });
       assert.equal(await page.evaluate(() => window.__audio.isLooping('sfx.typing')), false, 'typing loop stopped');
@@ -230,6 +245,20 @@ async function newOpenings() {
         }
         assert.equal(await page.evaluate(() => window.__audio.history.some((h) => h.id === 'voice.nudge-case1-cron-env-idle-3')), false, 'asked: only the -ask line');
         step(`${id}: nudge idle-1 → voice.nudge-case1-cron-env-idle-1, asked idle-3 → voice.nudge-case1-cron-env-idle-3-ask, both from the files`);
+        // a trigger's two messages: each line voiced, the second only after the first has finished
+        const [c1, c2] = ['voice.jihoon-11aeec07', 'voice.jihoon-9ad021a1'];
+        await page.evaluate(() => window.__game.fire('jihoon-nginx'));
+        await page.waitForFunction((c) => window.__audio.history.some((h) => h.id === c), c2, { timeout: 40000 });
+        const order = await page.evaluate(() => window.__audio.history.map((h) => h.id).filter((x) => x.startsWith('voice.jihoon-')));
+        assert.deepEqual(order.slice(-2), [c1, c2]);
+        step(`${id}: trigger jihoon-nginx → ${c1} then ${c2}, one after the other`);
+        // a wrong report's reply (report.ts → nh-reply): a field line, its evidence-kind pointer, the close
+        const body = "원인 칸이 기록이랑 안 맞아요. 그 설명으로는 설명 안 되는 줄이 남아요. '스크립트가 남긴 출력' 쪽은 아직 안 봤죠?\n경위 칸은 맞아요.\n다시요.";
+        const want = ['voice.seojin-e93f8bb7', 'voice.seojin-d3024536', 'voice.seojin-226910a7', 'voice.seojin-5720a328'];
+        await page.evaluate((b) => document.dispatchEvent(new CustomEvent('nh-reply', { detail: b })), body);
+        await page.waitForFunction((c) => window.__audio.history.some((h) => h.id === c), want[3], { timeout: 40000 });
+        assert.deepEqual(await page.evaluate((w) => window.__audio.history.filter((h) => w.includes(h.id)), want), want.map((x) => ({ id: x, status: 'file' })));
+        step(`${id}: wrong-report reply → ${want.join(', ')} in order, from the files`);
       }
     }
     assert.deepEqual(errors, []);

@@ -648,6 +648,7 @@ export const caseZeroWiki: CaseFile = {
       lockDate: '11월 10일 화요일',
       caller: 'seojin',
       kind: 'voice',
+      voiceCue: 'voice.briefing-case0-seojin',
       // ≤ 20 s in total for the tutorial (web-escape analysis §9-1 #5)
       lines: [
         { text: '도윤님. 위키 502예요.', pauseMs: 800 },

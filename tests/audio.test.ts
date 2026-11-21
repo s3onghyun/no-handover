@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { AudioManager, PENDING_MS, defaultFetch, type CtxLike, type StorageLike } from '../src/audio/audio.ts';
 import { MANIFEST, cueFiles, cueFolder, type CueDef } from '../src/audio/manifest.ts';
 import { CAMPAIGN } from '../src/cases/index.ts';
+import { voiceManifest } from '../src/engine/voices.ts';
 
 function fakeCtx(initial = 'suspended') {
   const log: string[] = [];
@@ -71,7 +72,7 @@ const M: Record<string, CueDef> = {
 test('audio: default file paths per cue folder; explicit src wins', () => {
   assert.deepEqual(cueFiles('amb.office', MANIFEST['amb.office']), ['audio/music/amb.office.ogg', 'audio/music/amb.office.mp3']);
   assert.deepEqual(cueFiles('music.reveal', MANIFEST['music.reveal']), ['audio/music/music.reveal.ogg', 'audio/music/music.reveal.mp3']);
-  assert.deepEqual(cueFiles('voice.briefing-jihun', MANIFEST['voice.briefing-jihun']), ['audio/voice/voice.briefing-jihun.ogg', 'audio/voice/voice.briefing-jihun.mp3']);
+  assert.deepEqual(cueFiles('voice.briefing-jihun', { class: 'voice', where: '' }), ['audio/voice/voice.briefing-jihun.ogg', 'audio/voice/voice.briefing-jihun.mp3']);
   assert.deepEqual(cueFiles('sfx.ring', MANIFEST['sfx.ring']), ['audio/sfx/sfx.ring.ogg', 'audio/sfx/sfx.ring.mp3']);
   assert.deepEqual(cueFiles('sfx.custom', M['sfx.custom']), ['x/one.ogg', 'x/one.mp3']);
   assert.equal(cueFolder('amb.x'), 'music');
@@ -264,21 +265,24 @@ test('audio: music/voice asked for just before the unlock play on unlock; UI cue
 });
 
 test('audio manifest: ids, classes, files and fallbacks', () => {
-  const ids = Object.keys(MANIFEST);
-  assert.equal(ids.length, 42);
-  for (const [id, c] of Object.entries(MANIFEST) as [string, CueDef][]) {
+  assert.equal(Object.keys(MANIFEST).length, 19);
+  assert.ok(Object.keys(MANIFEST).every((id) => !id.startsWith('voice.')), 'voices come from src/engine/voices.ts');
+  const all: Record<string, CueDef> = Object.assign({ ...MANIFEST }, ...CAMPAIGN.filter((e) => e.cs).map((e) => voiceManifest(e.cs!)));
+  for (const [id, c] of Object.entries(all)) {
     assert.match(id, /^(amb|music|voice|sfx)\.[a-z0-9-]+$/, id);
     assert.ok(['music', 'ambience', 'voice', 'sfx', 'ui'].includes(c.class), id);
     for (const s of cueFiles(id, c)) assert.match(s, new RegExp(`^audio/(music|voice|sfx)/${id.replace('.', '\\.')}\\.(ogg|mp3)$`), `${id}: ${s}`);
     if (c.class === 'music' || c.class === 'voice' || c.class === 'ambience') assert.equal(c.zzfx, undefined, `${id}: file only, silent until produced`);
     if (id.startsWith('sfx.')) assert.ok(c.zzfx, `${id}: every sfx has a zzfx fallback so the UI is audible today`);
   }
-  assert.ok('voice.briefing-jihun' in MANIFEST);
-  // every case briefing's voice cue is in the manifest (the file may be missing: subtitles + typing then)
-  for (const e of CAMPAIGN) if (e.cs?.opening?.briefing.voiceCue) assert.ok(e.cs.opening.briefing.voiceCue in MANIFEST, e.id);
-  // every idle nudge has its own per-case voice cue, plus `-ask` where the asked wording differs (main.ts plays it when present)
-  for (const e of CAMPAIGN) for (const n of e.cs?.hints.idle ?? []) {
-    assert.ok(`voice.nudge-${e.cs!.id}-${n.id}` in MANIFEST, `${e.id} ${n.id}`);
-    if (n.askText !== undefined) assert.ok(`voice.nudge-${e.cs!.id}-${n.id}-ask` in MANIFEST, `${e.id} ${n.id} ask`);
+  // every case briefing's voice cue and every idle nudge's per-case cue (plus `-ask`) is in its case's voices
+  for (const e of CAMPAIGN) {
+    if (!e.cs) continue;
+    const v = voiceManifest(e.cs);
+    if (e.cs.opening) assert.ok(e.cs.opening.briefing.voiceCue && e.cs.opening.briefing.voiceCue in v, e.id);
+    for (const n of e.cs.hints.idle) {
+      assert.ok(`voice.nudge-${e.cs.id}-${n.id}` in v, `${e.id} ${n.id}`);
+      if (n.askText !== undefined) assert.ok(`voice.nudge-${e.cs.id}-${n.id}-ask` in v, `${e.id} ${n.id} ask`);
+    }
   }
 });

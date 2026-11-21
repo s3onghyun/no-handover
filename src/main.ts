@@ -16,6 +16,7 @@ import { reportApp } from './ui/apps/report.ts';
 import { dashboardApp, playtestApp } from './ui/apps/misc.ts';
 import { AudioManager } from './audio/audio.ts';
 import { MANIFEST } from './audio/manifest.ts';
+import { cueFor, replyCues, voiceManifest } from './engine/voices.ts';
 import { installAudioUnlock } from './audio/unlock.ts';
 import { runBriefing } from './ui/briefing.ts';
 import { renderHintPanel } from './ui/hintpanel.ts';
@@ -129,7 +130,8 @@ if (game.st.finished) {
   if (!grades[CASE.id]) recordGrade(saveInfo(game.serialize())?.grade);
 }
 // music is one-shot stings by default; `?music=loop` lets a music.* cue loop (ambience always loops)
-const audio = new AudioManager(MANIFEST, { storage, musicLoops: params.get('music') === 'loop' });
+// only this case's voices: a session fetches (and preloads) one case's lines, not the season's
+const audio = new AudioManager({ ...MANIFEST, ...voiceManifest(game.cs) }, { storage, musicLoops: params.get('music') === 'loop' });
 (window as unknown as { __game: Game; __audio: AudioManager }).__game = game; // e2e and facilitator console access
 (window as unknown as { __audio: AudioManager }).__audio = audio;
 // the first click or key anywhere (lock screen included) starts sound; logged for the playtest
@@ -682,18 +684,27 @@ game.on('aha', (c) => {
   void audio.play('sfx.done');
   showMoment({ kind: 'aha', title: clue.aha, sub: `${t('moment.aha')} · ${clue.label}`, holdMs: 1800 });
 });
+// one colleague speaks at a time: a line waits for the one playing (two trigger messages, a report reply)
+let voiceQueue = Promise.resolve();
+function say(cue: string): void {
+  voiceQueue = voiceQueue
+    .then(async () => {
+      const hd = await audio.play(cue);
+      await new Promise((r) => setTimeout(r, hd.duration * 1000 + 250));
+    })
+    .catch(() => {}); // a failed line must not silence the ones after it
+}
+// the report's reply after a wrong submission (report.ts): its lines in order
+document.addEventListener('nh-reply', (e) => replyCues(game.cs, String((e as CustomEvent).detail)).forEach(say));
 game.on('message', (m) => {
   const msg = m as Message;
   const last = game.st.log[game.st.log.length - 1];
   const reason = last?.type === 'message' ? String(last.reason ?? '') : '';
   if (reason === 'ask') return; // the player's own quick reply: no ding, no toast
   void audio.play('sfx.ding');
-  // a recorded line for a colleague nudge: voice.nudge-<case id>-<nudge id>, `-ask` for its asked wording; no file = subtitles only
-  if (reason.startsWith('nudge:')) {
-    const n = game.cs.hints.idle.find((x) => x.id === reason.slice(6));
-    const cue = `voice.nudge-${game.cs.id}-${reason.slice(6)}${n?.askText !== undefined && msg.text === n.askText ? '-ask' : ''}`;
-    if (cue in MANIFEST) void audio.play(cue);
-  }
+  // the colleague's recorded line (src/engine/voices.ts); no file = subtitles only
+  const cue = cueFor(game.cs, msg.from, msg.text);
+  if (cue) say(cue);
   const c = game.cs.channels.find((x) => x.id === msg.channel);
   const el = h('div', null, h('b', null, `${ctx.name(msg.from)}`), h('span', { style: 'opacity:.7' }, ` · ${c?.title ?? ''}`), h('div', null, msg.text.length > 90 ? msg.text.slice(0, 90) + '…' : msg.text));
   ctx.toast(el, () => wm.open('messenger', msg.channel));

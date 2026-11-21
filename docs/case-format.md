@@ -195,7 +195,7 @@ opening: {
   briefing: {
     lockTime: '09:00', lockDate: '11월 16일 월요일',
     caller: 'jihoon', kind: 'voice',            // 'voice' = 음성 메시지, 'call' = 보이스톡
-    voiceCue: 'voice.briefing-jihun',           // src/audio/manifest.ts 의 id. 파일이 있으면 재생하고 자막 속도를 그 길이에 맞춘다
+    voiceCue: 'voice.briefing-jihun',           // public/audio/voice/ 의 파일 이름 (src/engine/voices.ts 가 큐로 등록). 파일이 있으면 재생하고 자막 속도를 그 길이에 맞춘다
     lines: [{ text: '도윤님~ 굿모닝요!! 지훈이에요 ㅋㅋ', pauseMs: 1000 }, …],  // 자막 = 메신저 말풍선처럼 한 글자씩
     mail: 'brief', mailPreview: '…오늘 21:00까지 부탁드립니다.',               // 끝에 미끄러져 들어오는 메일 알림
   },

@@ -2,7 +2,7 @@
 // real (headless) Chromium. Serves a TEMPORARY copy of dist/ with two throwaway test tones
 // dropped in where main's files will go, so nothing test-only is ever committed:
 //   audio/music/amb.office.ogg          (proves "drop a file in, it plays", ogg first)
-//   audio/voice/voice.briefing-jihun.mp3 (proves the mp3 fallback when there is no ogg)
+//   audio/voice/voice.briefing-case0-seojin.mp3 (proves the mp3 fallback when there is no ogg)
 // The tones are WAV bytes under those names; Chromium sniffs the content when decoding.
 //
 //   npm run build && node scripts/e2e-audio.mjs     (also part of `npm run e2e`)
@@ -43,7 +43,7 @@ function tone(hz, secs, amp = 0.3, sr = 44100) {
 }
 for (const [path, hz] of [
   ['audio/music/amb.office.ogg', 440],
-  ['audio/voice/voice.briefing-jihun.mp3', 330],
+  ['audio/voice/voice.briefing-case0-seojin.mp3', 330],
 ]) {
   mkdirSync(dirname(join(site, path)), { recursive: true });
   writeFileSync(join(site, path), tone(hz, 1));
@@ -158,12 +158,12 @@ try {
     return o;
   });
   for (const [id, s] of Object.entries(sources)) {
-    if (id === 'amb.office' || id === 'voice.briefing-jihun') assert.equal(s, 'file', id);
+    if (id === 'amb.office' || id === 'voice.briefing-case0-seojin') assert.equal(s, 'file', id);
     else if (id.startsWith('sfx.')) assert.equal(s, 'zzfx', id);
     else assert.equal(s, 'silent', id);
   }
   const nSfx = Object.keys(sources).filter((id) => id.startsWith('sfx.')).length;
-  step(`resolution: dropped amb.office.ogg and voice.briefing-jihun.mp3 (mp3 fallback) → file; ${nSfx} sfx → zzfx; the other ${Object.keys(sources).length - nSfx - 2} → silence`);
+  step(`resolution: dropped amb.office.ogg and voice.briefing-case0-seojin.mp3 (mp3 fallback) → file; ${nSfx} sfx → zzfx; the other ${Object.keys(sources).length - nSfx - 2} → silence`);
 
   // ---- start the game: the ambience loop plays the dropped file with no code change
   await page.locator('#boot button.primary').click();

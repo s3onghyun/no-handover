@@ -376,9 +376,11 @@ try {
   assert.doesNotMatch(reply0, /어딘가|디스크 한 곳/);
   assert.equal(await rep0.locator('section.slot[data-slot="cause"] .slot-mark.bad').count(), 1);
   assert.equal(await rep0.locator('section.slot[data-slot="sequence"] .slot-mark.ok').count(), 1);
+  // 지훈's wrong-answer nudge lands a beat later and re-renders the report: wait for it before the screenshot
+  await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /PDF 하나로/.test(m.text)), null, { timeout: 5000 });
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   await rep0.locator('.reply').scrollIntoViewIfNeeded();
   await shot('case0-r3-reply.png');
-  await page.waitForFunction(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /PDF 하나로/.test(m.text)), null, { timeout: 5000 });
   await pick(rep0, 'cause', 'disk');
   await submit(rep0, /몇 번이든/);
   await rep0.locator('.debrief h2').waitFor();
