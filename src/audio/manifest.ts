@@ -2,9 +2,11 @@
 // (the cue sheet main firstmate produces the music and voice from).
 //
 // Resolution order, per cue, every time it plays (src/audio/audio.ts):
-//   1. a file: `src`, or by default public/audio/<folder>/<id>.ogg then .mp3, where <folder> is
-//      music (amb.*, music.*), voice (voice.*) or sfx (sfx.*). Dropping a file there is enough;
-//      no code change. ogg is tried first, mp3 is the fallback for browsers without ogg.
+//   1. a file: `src`, or for a cue marked `file: true` public/audio/<folder>/<id>.ogg then .mp3,
+//      where <folder> is music (amb.*, music.*), voice (voice.*) or sfx (sfx.*). Only shipped files
+//      are requested (no 404s): drop the .ogg and .mp3 in and mark the cue `file: true`;
+//      tests/audio.test.ts fails when a marked file is missing or a file is dropped without the mark.
+//      ogg is tried first, mp3 is the fallback for browsers without ogg.
 //   2. `zzfx`: a sound synthesised in the browser with ZzFX (src/audio/vendor/zzfx.ts, MIT).
 //   3. `synth`: a longer procedural sound (amb.office → src/audio/roomtone.ts, seamless loop).
 //   4. silence.
@@ -30,6 +32,8 @@ export type ZzfxHit = [at: number, gain?: number, semitones?: number];
 export interface CueDef {
   /** Files to try in order (paths relative to the site root, i.e. public/). Default: see cueFiles(). */
   src?: string[];
+  /** Ships audio/<folder>/<id>.ogg and .mp3 (see cueFiles). Unmarked cues without `src` fetch nothing. */
+  file?: boolean;
   class: VolumeClass;
   loop?: boolean;
   /** Per-cue gain on top of the class gain (0..1, default 1). Applies to files and zzfx alike. */
@@ -49,8 +53,8 @@ export interface CueDef {
 // prettier-ignore
 export const MANIFEST = {
   // ---------------------------------------------------------------- music / ambience (files only)
-  'amb.office': { class: 'ambience', loop: true, gain: 0.7, synth: 'roomtone', where: '데스크톱 내내 (브리핑 뒤 시작). 파일이 없으면 합성 방 톤 (갈색 잡음 + 저역 필터 + 느린 패드)' },
-  'music.briefing': { class: 'music', where: '오프닝 브리핑 시작 (잠금 화면 → 음성 메시지)' },
+  'amb.office': { class: 'ambience', file: true, loop: true, gain: 0.7, synth: 'roomtone', where: '데스크톱 내내 (브리핑 뒤 시작). 파일이 없으면 합성 방 톤 (갈색 잡음 + 저역 필터 + 느린 패드)' },
+  'music.briefing': { class: 'music', file: true, where: '오프닝 브리핑 시작 (잠금 화면 → 음성 메시지)' },
   'music.reveal': { class: 'music', where: '보고서 정답 → 해설 화면' },
   'music.tension': { class: 'music', loop: true, gain: 0.5, where: '게임 시계 18:00 이후 또는 첫 오답 뒤 (선택, ?music=loop 일 때만 루프)' },
   // voice.*: one entry per colleague line, generated per case by src/engine/voices.ts (voiceManifest)
@@ -108,9 +112,10 @@ export function cueFolder(id: string): 'music' | 'voice' | 'sfx' {
   return id.startsWith('voice.') ? 'voice' : id.startsWith('sfx.') ? 'sfx' : 'music';
 }
 
-/** Files to try for a cue, in order: the explicit `src`, else audio/<folder>/<id>.ogg and .mp3. */
+/** Files to try for a cue, in order: the explicit `src`, else audio/<folder>/<id>.ogg and .mp3 if it ships them, else none. */
 export function cueFiles(id: string, cue: CueDef): string[] {
   if (cue.src) return cue.src;
+  if (!cue.file) return [];
   const stem = `audio/${cueFolder(id)}/${id}`;
   return [`${stem}.ogg`, `${stem}.mp3`];
 }

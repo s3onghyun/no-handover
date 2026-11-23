@@ -77,7 +77,7 @@ export function voiceLines(cs: CaseFile): VoiceLine[] {
 
 /** Manifest entries for one case's voices (files in public/audio/voice/<cue>.ogg|.mp3). */
 export function voiceManifest(cs: CaseFile): Record<string, CueDef> {
-  return Object.fromEntries(voiceLines(cs).map((l) => [l.cue, { class: 'voice', where: `${cs.id} ${l.where} (${cs.people[l.from]?.name ?? l.from})` } satisfies CueDef]));
+  return Object.fromEntries(voiceLines(cs).map((l) => [l.cue, { class: 'voice', file: true, where: `${cs.id} ${l.where} (${cs.people[l.from]?.name ?? l.from})` } satisfies CueDef]));
 }
 
 /** The cue voicing a live message, if it is one of the case's lines. */

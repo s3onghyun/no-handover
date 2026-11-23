@@ -53,7 +53,7 @@ src/cases/    index.ts(사다리 5칸) case-0-wiki.ts friday-1802.ts  ← 사건
 src/ui/       wm.ts(창 관리자) dom.ts style.css briefing.ts(오프닝) objectives.ts(오늘 할 일 포스트잇) apps/*.ts
 src/i18n.ts   UI 문자열 표 (ko 먼저, en 같은 키)
 tests/        node:test 단위 테스트 + 데이터로 푸는 시나리오
-scripts/e2e.mjs  실제 브라우저 e2e   scripts/e2e-audio.mjs  소리 e2e   scripts/audio-render.ts  WAV 렌더   scripts/ambience-render.ts  방 톤 + 키 클릭 WAV
+scripts/e2e.mjs  실제 브라우저 e2e   scripts/e2e-audio.mjs  소리 e2e   scripts/audio-render.ts  WAV 렌더   scripts/ambience-render.ts  방 톤 + 키 클릭 WAV   scripts/og-image.mjs  링크 미리보기 이미지(public/og-image.png, 결과 카드 렌더러로 그림)
 public/characters/  캐릭터 아트 (아래 참고)
 ```
 
@@ -70,9 +70,9 @@ public/characters/  캐릭터 아트 (아래 참고)
 
 `src/audio/`. 큐 id(21개)는 저장소 밖 `data/infra-mystery-game/audio-cues.md`의 큐 시트와 같다.
 
-**큐마다 재생 순서**: ① 파일(`.ogg` 먼저, 없거나 못 읽으면 `.mp3`) → ② ZzFX 합성(`manifest.ts`의 `zzfx` 배열이 있을 때) → ③ 무음. 파일이 없는 것은 정상이다(404나 개발 서버의 HTML 응답은 "없음"으로 처리).
+**큐마다 재생 순서**: ① 파일(`.ogg` 먼저, 없거나 못 읽으면 `.mp3`) → ② ZzFX 합성(`manifest.ts`의 `zzfx` 배열이 있을 때) → ③ 무음. 파일이 없는 것은 정상이다. 게임은 들어 있는 파일만 요청한다(파일이 있는 큐에만 `manifest.ts`의 `file: true`, 목소리는 전부). 그래도 404나 개발 서버의 HTML 응답이 오면 "없음"으로 처리한다.
 
-**파일을 넣는 곳** (이름 = 큐 id, 코드 수정 없이 다음 빌드부터 재생):
+**파일을 넣는 곳** (이름 = 큐 id, 그 큐에 `file: true`를 적으면 다음 빌드부터 재생. 목소리는 이미 적혀 있다):
 
 | 폴더 | 파일 |
 |---|---|
@@ -80,7 +80,7 @@ public/characters/  캐릭터 아트 (아래 참고)
 | `public/audio/voice/` | 동료가 플레이어에게 하는 말마다 하나. 목록과 이름은 `src/engine/voices.ts`가 사건 데이터에서 만든다: 브리핑은 `opening.briefing.voiceCue`(`voice.briefing-case0-seojin` …), 넛지는 `voice.nudge-<사건 id>-idle-N`(`…-ask`), 나머지(오답 넛지, 트리거 메시지, 레일, 보고서 회신)는 `voice.<화자>-<자막의 FNV-1a 8자리>`. 줄을 고치거나 더하면 `npm test`(`tests/voices.test.ts`)가 파일이 없는 줄을 알려 준다 |
 | `public/audio/sfx/` | `sfx.ring`, `sfx.typing` (CC0 파일이 오면 ZzFX 대체음을 덮어씀), 그 밖의 `sfx.*`도 같은 이름이면 ZzFX보다 먼저 쓰인다 |
 
-예: `public/audio/music/amb.office.ogg`와 `public/audio/music/amb.office.mp3`. 하나만 있어도 된다. 다른 경로를 쓰려면 그 큐에 `src: [...]`를 적는다.
+예: `public/audio/music/amb.office.ogg`와 `public/audio/music/amb.office.mp3`. `file: true`는 두 형식을 다 요청한다. 하나만 넣거나 다른 경로를 쓰려면 그 큐에 `src: [...]`를 적는다. `npm test`(`tests/audio.test.ts`)는 요청하는 파일이 없거나, 넣은 파일을 아무 큐도 요청하지 않으면 실패한다.
 
 **들어 있는 음원 파일** (2026-11-17·11-20·11-21, 합계 7.13 MB, 각각 Opus `.ogg` + `.mp3`; 예산은 사건마다 4 MB(음악 + 그 사건 목소리) — 페이지는 지금 사건의 목소리만 받는다):
 
