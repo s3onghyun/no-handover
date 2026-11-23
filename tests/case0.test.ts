@@ -133,6 +133,36 @@ test('case 0 rail: Jihoon names the next step (never the command) and redirects 
   assert.ok(g.st.log.some((e) => e.type === 'rail-redirect' && e.item === 'df'));
 });
 
+test('case 0 rail: in "누가 채웠나" every du the hints suggest is on track (no "그건 나중에요")', () => {
+  const item = cs.opening!.objectives.items.find((i) => i.id === 'tail')!;
+  // every du the hints name for this step (💡 방향 · 정답, the cause direction, the debrief card)
+  const hinted = new Set<string>();
+  const texts = [item.direction, item.answer, ...cs.hints.explicit.map((d) => d.text), ...cs.debrief.cards.map((c) => `${c.cmd} ${c.explain}`)];
+  for (const t of texts) for (const m of (t ?? '').matchAll(/du -sh \S+/g)) hinted.add(m[0]);
+  assert.ok(hinted.has('du -sh /var/log/*') && hinted.has('du -sh /var/log/wiki/*'), [...hinted].join(' · '));
+  const variants = ['du /var/log', 'du -h /var/log/wiki', 'du -sh /var/log/', 'du -sh /var/*', 'du -sh /var/log/* | sort -rh', 'du -ah /var/log/wiki | sort -h | tail', 'du -h --max-depth=1 /var'];
+  for (const c of [...hinted, ...variants]) {
+    const g = new Game(cs);
+    const step = (line: string) => {
+      g.runCommand(0, line);
+      for (let i = 0; i < 3; i++) g.tick(1000);
+    };
+    step('history');
+    step('df -h');
+    step('du -sh /var/log/*'); // finds c0_du: the next du finds nothing new
+    step(c);
+    assert.equal(g.objectives.current()?.id, 'tail', c);
+    assert.ok(!g.st.log.some((e) => e.type === 'rail-redirect'), `${c}: no redirect`);
+    assert.ok(!g.st.live.some((m) => m.text.startsWith('그건 나중에요')), c);
+  }
+  // still off track on this step: a du elsewhere, or another tool that finds nothing
+  for (const c of ['du -sh /home', 'du -sh ~', 'ls']) {
+    const g = new Game(cs);
+    for (const l of ['history', 'df -h', c]) g.runCommand(0, l);
+    assert.ok(g.st.log.some((e) => e.type === 'rail-redirect' && e.item === 'tail'), c);
+  }
+});
+
 test('case 0 nudges: checklist, messenger and notes never spell out the command path; 💡 carries it', () => {
   const items = cs.opening!.objectives.items;
   // the commands of the lesson (with their arguments) that only Eunjae's records and 💡 may name
