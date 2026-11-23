@@ -36,7 +36,7 @@ function files(g: Game): [string, string, string][] {
 // the commands that solve each case (its e2e path and its 💡 정답), as they would be typed
 const ANSWERS: [CaseFile, string[]][] = [
   [c0, ['df -h', 'du -sh /var/log', 'tail -n 20 /var/log/wiki', 'systemctl status wiki', 'journalctl -u wiki']],
-  [c1, ['crontab -l', 'cat ~/log/cron-env.txt', 'cat ~/wiki-clean.log', 'which wikictl', 'type wikictl', 'env -i', 'journalctl -u cron']],
+  [c1, ['crontab -l', 'cat ~/log/cron-env.txt', 'cat ~/wiki-cert.log', 'which wikictl', 'type wikictl', 'env -i', 'journalctl -u cron']],
   [c2, ['df -h', 'du -sh /data', 'pgrep -f logshipd', 'grep deleted', '/fd |', 'journalctl --since', 'journalctl -u logshipd', 'journalctl -u payment-api', 'systemctl status logshipd']],
 ];
 
@@ -80,13 +80,13 @@ test('숙련자 records: each case is still solvable from what the world shows',
   assert.match(tab, /^0 9 \* \* 1 \/home\/eunjae\/bin\/disk-report\.sh/m);
   assert.doesNotMatch(tab, /절대 경로|cron-env/);
   assert.ok('c1_crontab' in g1.st.clues);
-  assert.match(out(g1, 'cat ~/wiki-clean.log'), /line 15: wikictl: command not found/, 'the script still fails on line 15');
+  assert.match(out(g1, 'cat ~/wiki-cert.log'), /line 15: wikictl: command not found/, 'the script still fails on line 15');
   // nothing on the desk or in the mail points at the comments that are gone
   assert.doesNotMatch(g1.cs.stickies.map((x) => x.text).join('\n'), /주석/);
   assert.doesNotMatch(g1.cs.mails.find((m) => m.id === 'eunjae-cron')!.body, /주석/);
   assert.doesNotMatch(g0.cs.mails.find((m) => m.id === 'brief')!.body, /순서가 거기/);
   assert.doesNotMatch(g0.cs.terminalTabs[0].scrollback!.join('\n'), /순서/);
-  assert.match(out(g1, 'head -15 ~/bin/wiki-log-clean.sh').split('\n')[14], /^wikictl log truncate/);
+  assert.match(out(g1, 'head -15 ~/bin/wiki-cert-renew.sh').split('\n')[14], /^wikictl cert renew/);
   // Case 2: Eunjae's 2024 history keeps only the HUP that freed the space
   const g2 = new Game(c2, null, { senior: true });
   const h2 = out(g2, 'cat ~/.bash_history');

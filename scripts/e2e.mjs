@@ -460,7 +460,7 @@ try {
   assert.match(await page.locator('.brief-card').innerText(), /강서진/);
   await page.waitForTimeout(800);
   await shot('case1-02-briefing.png');
-  await page.locator('#briefing[data-step="mail"] .brief-mail', { hasText: '[연습 2] wiki-01 /var 92%' }).waitFor({ timeout: 45000 });
+  await page.locator('#briefing[data-step="mail"] .brief-mail', { hasText: '[연습 2] 위키 인증서 만료' }).waitFor({ timeout: 45000 });
   await page.locator('#briefing').waitFor({ state: 'detached', timeout: 30000 });
   secs = (Date.now() - t0) / 1000;
   assert.ok(secs >= 28 && secs <= 62, `Case 1 briefing took ${secs}s`);
@@ -497,23 +497,26 @@ try {
   await todoItem('ran').and(page.locator('.done')).waitFor();
   await page.locator('.icon[data-app="dashboard"]').waitFor();
   await run('ls -l ~');
-  await run('cat ~/wiki-clean.log');
+  await run('cat ~/wiki-cert.log');
   await page.locator('.moment.moment-aha').waitFor({ timeout: 3000 });
   await page.keyboard.press('Escape');
   await page.locator('.moment').waitFor({ state: 'detached', timeout: 2000 });
   await todoItem('output').and(page.locator('.done')).waitFor();
-  step('crontab -l → journalctl -u cron → ~/wiki-clean.log: three boxes tick; the aha moment shows once and Esc skips it');
-  await pinLine(/^0 \* \* \* \* ~\/bin\/wiki-log-clean\.sh/);
+  step('crontab -l → journalctl -u cron → ~/wiki-cert.log: three boxes tick; the aha moment shows once and Esc skips it');
+  await pinLine(/^0 \* \* \* \* ~\/bin\/wiki-cert-renew\.sh/);
   await pinLine(/line 15: wikictl: command not found/);
-  await pinLine(/\(eunjae\) CMD \(~\/bin\/wiki-log-clean/);
+  await pinLine(/\(eunjae\) CMD \(~\/bin\/wiki-cert-renew/);
   await todoItem('pins').and(page.locator('.done')).waitFor();
   await todoItem('pins').locator('.todo-report').click();
   await page.locator('.window[data-app="report"]:not(.min)').waitFor();
   await page.locator('.todo').waitFor({ state: 'detached', timeout: 6000 });
   await page.locator('.window[data-app="report"] .titlebar button.close').click();
-  for (const c of ['which wikictl', 'cat ~/log/cron-env.txt', 'journalctl -u wiki --since "2026-11-11 00:00" --until "2026-11-11 00:10"', 'df -h']) await run(c);
+  for (const c of ['which wikictl', 'cat ~/log/cron-env.txt', 'journalctl -u wiki --since "2026-11-11 08:00"', 'openssl x509 -enddate -noout -in /etc/wiki/tls/wiki.crt']) await run(c);
   assert.ok(await page.evaluate(() => window.__game.causeSolved()));
-  step('pins tick the fourth box and its "📝 보고서 쓰기" opens the report; which / cron-env.txt / journalctl -u wiki / df complete the evidence');
+  await run('curl -v https://wiki.nuricloud.example/healthz');
+  await page.locator('.tline', { hasText: 'curl: (60) SSL certificate problem: certificate has expired' }).waitFor();
+  await shot('case1-06-cert.png');
+  step('pins tick the fourth box and its "📝 보고서 쓰기" opens the report; which / cron-env.txt / journalctl -u wiki / openssl x509 complete the evidence; curl -v stops on the expired certificate');
 
   await page.evaluate(() => {
     for (const w of document.querySelectorAll('.window')) w.classList.add('min');
@@ -527,7 +530,7 @@ try {
   await pick(rep1, 'cause', 'not-run');
   await pick(rep1, 'sequence', 'true');
   await cite(rep1, 'cause', /line 15: wikictl: command not found/);
-  await cite(rep1, 'sequence', /\(eunjae\) CMD \(~\/bin\/wiki-log-clean/);
+  await cite(rep1, 'sequence', /\(eunjae\) CMD \(~\/bin\/wiki-cert-renew/);
   await submit(rep1, /1번째 제출이에요 \(남은 제출 5\/5\)/);
   await rep1.locator('.reply', { hasText: '강서진의 회신 (1/5)' }).waitFor();
   assert.deepEqual(await rep1.locator('.reply .reply-marks li').allInnerTexts(), ['✗ 원인', '✓ 경위']);
@@ -943,12 +946,12 @@ try {
   await p4.locator('.tour[data-step="goal"]').waitFor({ timeout: 5000 });
   const tin = p4.locator('.tin input');
   await tin.click();
-  await tin.fill('cat ~/wiki-clean.log');
+  await tin.fill('cat ~/wiki-cert.log');
   await tin.press('Enter');
   await p4.locator('.moment.moment-aha.still').waitFor({ timeout: 3000 });
   await tin.fill('crontab -l');
   await tin.press('Enter');
-  await p4.locator('.tline', { hasText: '0 * * * * ~/bin/wiki-log-clean.sh' }).waitFor({ timeout: 2000 });
+  await p4.locator('.tline', { hasText: '0 * * * * ~/bin/wiki-cert-renew.sh' }).waitFor({ timeout: 2000 });
   assert.equal(await p4.locator('.tour').count(), 1, 'the coach mark stays while the player types');
   const animMs = await p4.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.moment-card') ?? document.body).animationDuration) * 1000);
   assert.ok(!(animMs > 1), `no scaling animation (${animMs} ms)`);
@@ -1274,14 +1277,14 @@ try {
   await p7.locator('#briefing .brief-skip').click().catch(() => {});
   await p7.locator('.tin input').waitFor();
   await okMarks7();
-  for (const c of ['crontab -l', 'journalctl -u cron --since "2026-11-11 00:50" --until "2026-11-11 01:10"', 'cat ~/wiki-clean.log']) {
+  for (const c of ['crontab -l', 'journalctl -u cron --since "2026-11-11 00:50" --until "2026-11-11 01:10"', 'cat ~/wiki-cert.log']) {
     await p7.locator('.tin input').fill(c);
     await p7.locator('.tin input').press('Enter');
   }
   await p7.evaluate(() => {
     for (const w of document.querySelectorAll('.window:not([data-app="terminal"])')) w.classList.add('min');
   });
-  for (const re of [/^0 \* \* \* \* ~\/bin\/wiki-log-clean\.sh/, /line 15: wikictl: command not found/, /\(eunjae\) CMD \(~\/bin\/wiki-log-clean/]) {
+  for (const re of [/^0 \* \* \* \* ~\/bin\/wiki-cert-renew\.sh/, /line 15: wikictl: command not found/, /\(eunjae\) CMD \(~\/bin\/wiki-cert-renew/]) {
     const line = p7.locator('.tline', { hasText: re }).last();
     await line.hover();
     await line.locator('.pinbtn').click();
@@ -1299,7 +1302,7 @@ try {
   await pick(rep7, 'cause', 'cron-path');
   await pick(rep7, 'sequence', 'true');
   await cite(rep7, 'cause', /line 15: wikictl: command not found/);
-  await cite(rep7, 'sequence', /\(eunjae\) CMD \(~\/bin\/wiki-log-clean/);
+  await cite(rep7, 'sequence', /\(eunjae\) CMD \(~\/bin\/wiki-cert-renew/);
   await rep7.locator('.submitbar .primary-btn').click();
   const sub7 = p7.locator('.modal-back .modal-submit');
   await sub7.waitFor();
@@ -1571,14 +1574,14 @@ try {
   assert.equal(await p9.locator('.todo').count(), 0);
   await p9.locator('.window[data-app="terminal"] .tout').click();
   await run9('crontab -l');
-  await pin9(/^0 \* \* \* \* ~\/bin\/wiki-log-clean\.sh/);
+  await pin9(/^0 \* \* \* \* ~\/bin\/wiki-cert-renew\.sh/);
   assert.equal(await p9.locator('.tline', { hasText: /절대 경로|cron-env/ }).count(), 0, '숙련자: no comment says why');
   await run9('journalctl -u cron --since "2026-11-11 00:50" --until "2026-11-11 01:10"');
-  await pin9(/\(eunjae\) CMD \(~\/bin\/wiki-log-clean/);
+  await pin9(/\(eunjae\) CMD \(~\/bin\/wiki-cert-renew/);
   await run9('cat ~/log/cron-env.txt');
-  await run9('head -12 ~/bin/wiki-log-clean.sh');
-  await p9.locator('.tline', { hasText: '[[ "$SIZE_MB" -lt "$LIMIT_MB"' }).waitFor();
-  await run9('cat ~/wiki-clean.log');
+  await run9('head -12 ~/bin/wiki-cert-renew.sh');
+  await p9.locator('.tline', { hasText: '[[ "$LEFT_H" -gt "$RENEW_BEFORE_H"' }).waitFor();
+  await run9('cat ~/wiki-cert.log');
   await skipAha9();
   await pin9(/line 15: wikictl: command not found/);
   const rep91 = await report9();
@@ -1586,7 +1589,7 @@ try {
   await rep91.locator('input[name="slot-cause"][value="cron-path"]').check();
   await rep91.locator('input[name="slot-sequence"][value="true"]').check();
   await rep91.locator('label.citeopt:has(input[name="cite-cause"])', { hasText: /line 15: wikictl: command not found/ }).first().locator('input').check();
-  await rep91.locator('label.citeopt:has(input[name="cite-sequence"])', { hasText: /\(eunjae\) CMD \(~\/bin\/wiki-log-clean/ }).first().locator('input').check();
+  await rep91.locator('label.citeopt:has(input[name="cite-sequence"])', { hasText: /\(eunjae\) CMD \(~\/bin\/wiki-cert-renew/ }).first().locator('input').check();
   await solved9(rep91, 'Case 2');
   assert.ok(await p9.evaluate(() => window.__game.expert()));
   step('Case 1 (숙련자): the [[ ]] script and cron\'s SHELL=/bin/sh make the sh herring plausible; #!/bin/bash and line 15 rule it out; solved');
@@ -1720,11 +1723,11 @@ try {
   if (!(await term10.count())) await p10.locator('.icon[data-app="terminal"]').click();
   await term10.waitFor();
   await run10('crontab -l');
-  const cron10 = p10.locator('.tline', { hasText: /^0 \* \* \* \* ~\/bin\/wiki-log-clean\.sh/ }).last();
+  const cron10 = p10.locator('.tline', { hasText: /^0 \* \* \* \* ~\/bin\/wiki-cert-renew\.sh/ }).last();
   const cronPin10 = cron10.locator('.pinbtn');
   await p10.mouse.move(8, 700); // the bare desktop: nothing hovered
   assert.ok(+(await cronPin10.evaluate((b) => getComputedStyle(b).opacity)) >= 0.25, 'the 📌 shows without hovering');
-  assert.match(await cronPin10.getAttribute('aria-label'), /^핀: 0 \* \* \* \* ~\/bin\/wiki-log-clean\.sh/);
+  assert.match(await cronPin10.getAttribute('aria-label'), /^핀: 0 \* \* \* \* ~\/bin\/wiki-cert-renew\.sh/);
   assert.ok((await cronPin10.getAttribute('aria-label')).length <= 45, 'named after the first 40 characters of its line');
   await cronPin10.focus();
   assert.ok(+(await cronPin10.evaluate((b) => getComputedStyle(b).opacity)) >= 0.8, 'keyboard focus shows the 📌 in full');
@@ -1798,7 +1801,7 @@ try {
   step('messenger with toasts stacked: the toasts sit beside the 📌 column, and the newest message pins');
 
   await p10.locator('.tin input').focus();
-  for (const c of ['history', 'journalctl', 'cat ~/wiki-clean.log', 'history']) await run10(c);
+  for (const c of ['history', 'journalctl', 'cat ~/wiki-cert.log', 'history']) await run10(c);
   assert.ok((await p10.locator('.tline').count()) >= 200, 'a long output');
   const tb10 = p10.getByRole('textbox', { name: 'command' });
   assert.equal(await tb10.count(), 1, 'the prompt keeps role textbox and its name after a long output');
