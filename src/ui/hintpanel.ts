@@ -64,8 +64,18 @@ function section(game: Game, sec: PanelSection, opts: { focus?: string; rerender
   // ② 방향
   const s2 = h('div.hp-step', { dataset: { rung: 'direction' } }, h('span.hp-n', null, '②'));
   const body2 = h('div.hp-body');
-  if (sec.directions.length) body2.append(h('small', null, t('hint.directionLabel')), ...sec.directions.map((d) => h('div.hp-dir', null, d)));
-  if (sec.moreDirections) body2.appendChild(h('button.hint-btn', { onclick: () => open('direction') }, sec.directions.length ? t('hint.directionMore') : t('hint.direction')));
+  if (sec.directions.length)
+    body2.append(
+      h('small', null, t('hint.directionLabel')),
+      ...sec.directions.map((d, i) => {
+        const part = sec.directionParts[i] ?? 'look';
+        return h('div.hp-dir', { dataset: { part } }, h('span.hp-part', null, part === 'compare' ? t('hint.partCompare') : t('hint.partLook')), d);
+      }),
+    );
+  if (sec.moreDirections)
+    body2.appendChild(
+      h('button.hint-btn', { onclick: () => open('direction') }, sec.nextPart === 'compare' ? t('hint.directionCompare') : sec.directions.length ? t('hint.directionMore') : t('hint.direction')),
+    );
   else if (!sec.directions.length) body2.appendChild(h('button.hint-btn', { disabled: true, title: t('hint.afterSummary') }, t('hint.direction')));
   s2.appendChild(body2);
   el.appendChild(s2);
@@ -101,5 +111,8 @@ function section(game: Game, sec: PanelSection, opts: { focus?: string; rerender
 export function openedFor(game: Game, key: string): string[] {
   const sec = game.hintPanel().find((s) => s.key === key);
   if (!sec) return [];
-  return [...sec.directions.map((d) => `② ${d}`), ...(sec.answer !== null ? [`③ ${sec.answer}`] : [])];
+  return [
+    ...sec.directions.map((d, i) => `② ${sec.directionParts[i] === 'compare' ? t('hint.partCompare') : t('hint.partLook')} · ${d}`),
+    ...(sec.answer !== null ? [`③ ${sec.answer}`] : []),
+  ];
 }

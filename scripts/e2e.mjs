@@ -214,14 +214,20 @@ try {
   const causeSec = hp.locator('.hp-sec[data-key="cause"]');
   await causeSec.locator('[data-rung="summary"] button').click();
   await causeSec.locator('[data-rung="direction"] button').click();
-  await causeSec.locator('.hp-dir', { hasText: 'Mounted on' }).waitFor();
+  await causeSec.locator('.hp-dir[data-part="look"]', { hasText: 'Mounted on' }).waitFor();
+  assert.match(await causeSec.locator('.hp-dir[data-part="look"] .hp-part').innerText(), /볼 곳/);
+  // ② comes in two parts: where to look, then (same direction) what to compare there
+  const cmpBtn = causeSec.locator('[data-rung="direction"] button');
+  assert.match(await cmpBtn.innerText(), /비교할 것 보기/);
+  await cmpBtn.click();
+  await causeSec.locator('.hp-dir[data-part="compare"]', { hasText: '/ 줄과 /var 줄' }).waitFor();
   assert.equal(await hp.locator('.hp-opens dd').innerText(), '1번 · 세지 않음');
-  assert.equal(await hp.locator('.hp-steps dd').innerText(), '3개 · 방향·정답');
+  assert.equal(await hp.locator('.hp-steps dd').innerText(), '4개 · 방향·정답');
   assert.match(await hp.locator('.hp-record').innerText(), /패널을 열거나 요약을 보는 건 세지 않아요/);
   await shot('polish-01-hint-panel.png');
   await page.mouse.click(700, 300);
   await hp.waitFor({ state: 'detached' });
-  step('`hint` → 💡 panel: 요약 (free) → 방향 → 정답 behind a second confirm, for the checklist item and the cause slot; counters: panel opened 1번 (not counted) apart from 3 hint steps');
+  step('`hint` → 💡 panel: 요약 (free) → 방향 (볼 곳, then 비교할 것) → 정답 behind a second confirm, for the checklist item and the cause slot; counters: panel opened 1번 (not counted) apart from 4 hint steps');
 
   await run('df -h');
   // round 3: a line a report field accepts as evidence brings "보고서에는 이 줄을 핀하세요 (0/2)" with the line
@@ -389,7 +395,7 @@ try {
   await page.evaluate(() => document.querySelector('.window[data-app="report"]').classList.add('max'));
   await page.waitForTimeout(400);
   await shot('case0-03-debrief.png');
-  assert.match(await rep0.locator('.record .rec-line').innerText(), /^힌트 단계 3개 · (\d+분 )?\d+초 · 명령 \d+개$/);
+  assert.match(await rep0.locator('.record .rec-line').innerText(), /^힌트 단계 4개 · (\d+분 )?\d+초 · 명령 \d+개$/);
   assert.match(await rep0.locator('.record .rec-panel').innerText(), /💡 패널은 \d+번 열었어요 — 패널을 연 횟수는 세지 않아요/);
   assert.equal(await rep0.locator('.badge-nohint').count(), 0, 'no badge after hints');
   assert.equal(await rep0.locator('.scorebox').innerText().then((x) => /−\d/.test(x)), false, 'no hint penalty outside senior mode');
@@ -405,7 +411,7 @@ try {
   assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1200, 630]);
   rmSync(dlDir, { recursive: true, force: true });
   assert.match(await rep0.locator('.cites').innerText(), /✓ 원인[\s\S]*디스크 사용량[\s\S]*✓ 경위[\s\S]*처음 시작된 시각/);
-  step('debrief: record "힌트 단계 3개 · 소요 · 명령 수" with panel opens noted as not counted, no penalty; 결과 카드 downloads as a 1200×630 PNG');
+  step('debrief: record "힌트 단계 4개 · 소요 · 명령 수" with panel opens noted as not counted, no penalty; 결과 카드 downloads as a 1200×630 PNG');
   assert.match(await rep0.locator('.nextcase').innerText(), /다음 사건 → Case 1 「밤에만 실패하는 스크립트」/);
   // round 2: the way on stays in the taskbar after the debrief is closed
   assert.match(await page.locator('#taskbar .nextcase-btn').innerText(), /다음 사건 → Case 1/);
