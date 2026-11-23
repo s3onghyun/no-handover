@@ -26,15 +26,20 @@
 // faint 📌 on every line named after it, tap to pin, a hint on a plain click, "already pinned"; a
 // covered window leaves the accessibility tree, focus raises a window, minimized stays minimized,
 // toasts keep off the 📌 columns, and the command textbox precedes a long output in the document.
+// An eleventh round opens the terminal in Case 0 (처음이에요) and Case 1 (익숙해요) at 1280x800 and 1024x768,
+// with and without reduced motion: the prompt sits at the bottom of the terminal, the output right
+// above it from the first line on, the newest line just over the prompt, focus kept in the prompt.
+// It also runs in WebKit (the Safari engine) when PW_WEBKIT names a WebKit launcher or is 1.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
 //   PW_CHROMIUM=/path/to/chrome npm run e2e  # use a specific browser binary
+//   PW_WEBKIT=1 npm run e2e                   # also check the terminal prompt in WebKit (or PW_WEBKIT=/path/to/launcher)
 //
 // Uses the Playwright-managed headless shell from ~/.cache/ms-playwright when no path is given.
 
 import { preview } from 'vite';
-import { chromium } from 'playwright-core';
+import { chromium, webkit } from 'playwright-core';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -1801,6 +1806,84 @@ try {
   assert.ok(ib10.y >= ob10.y + ob10.height - 2, 'and still sits under it on screen');
   step('long output: the command textbox keeps its role and name, ahead of the output in the document and under it on screen');
   await ctx10.close();
+
+  // ---- eleventh round: the prompt sits at the bottom of the terminal and the output grows right above it
+  // (a playtester: "the terminal opens at the bottom but the input shows up at the top": the prompt was at
+  // the bottom while a short output, and so each command's echo, stayed at the top of an empty panel)
+  const engines11 = [['chromium', browser]];
+  if (process.env.PW_WEBKIT) engines11.push(['webkit', await webkit.launch(process.env.PW_WEBKIT === '1' ? {} : { executablePath: process.env.PW_WEBKIT })]);
+  for (const [engine, b11] of engines11) {
+    for (const [w, hgt] of [[1280, 800], [1024, 768]]) {
+      for (const reducedMotion of ['no-preference', 'reduce']) {
+        for (const [q, choice] of [['', 'exp-new'], ['&case=case1-cron-env', 'exp-familiar']]) {
+          const tag = `${engine} ${w}x${hgt} ${reducedMotion} ${choice}`;
+          const ctx11 = await b11.newContext({ viewport: { width: w, height: hgt }, deviceScaleFactor: 1, reducedMotion });
+          const p11 = await ctx11.newPage();
+          p11.on('pageerror', (e) => errors.push(`${tag}: ${e}`));
+          p11.on('dialog', (d) => (nativeDialogs.push(`p11 ${d.type()}: ${d.message()}`), d.accept()));
+          await p11.goto(`${url}?fresh=1&briefing=0${q}`);
+          await p11.locator(`#boot .${choice}`).click();
+          await p11.locator('#boot').waitFor({ state: 'detached' });
+          const term11 = p11.locator('.window[data-app="terminal"]');
+          if (!(await term11.count())) await p11.locator('.icon[data-app="terminal"]').click();
+          const input11 = term11.locator('.tin input');
+          await input11.waitFor();
+          /** Boxes of the terminal body, the prompt row and the last output line, plus where focus is. */
+          const geo11 = () =>
+            p11.evaluate(() => {
+              const term = document.querySelector('.window[data-app="terminal"] .term');
+              const box = (el) => {
+                const r = el.getBoundingClientRect();
+                return { top: r.top, bottom: r.bottom };
+              };
+              const out = term.querySelector('.tout');
+              const lines = out.querySelectorAll('.tline');
+              return {
+                term: box(term),
+                tin: box(term.querySelector('.tin')),
+                last: box(lines[lines.length - 1]),
+                lastText: lines[lines.length - 1].textContent,
+                atEnd: out.scrollHeight - out.scrollTop - out.clientHeight < 2,
+                focused: document.activeElement === term.querySelector('.tin input'),
+              };
+            });
+          const expect11 = (g, when) => {
+            assert.ok(Math.abs(g.tin.bottom - g.term.bottom) <= 1, `${tag} ${when}: the prompt sits at the bottom of the terminal (${g.tin.bottom} vs ${g.term.bottom})`);
+            assert.ok(g.last.bottom <= g.tin.top + 1, `${tag} ${when}: the last output line is above the prompt (${g.last.bottom} vs ${g.tin.top})`);
+            assert.ok(g.tin.top - g.last.bottom <= 12, `${tag} ${when}: the newest line sits right above the prompt, not ${Math.round(g.tin.top - g.last.bottom)}px up`);
+            assert.ok(g.atEnd, `${tag} ${when}: the output is scrolled to its newest line`);
+          };
+          await p11.waitForTimeout(1000); // the window-open animation (under 1 s) has settled
+          expect11(await geo11(), 'on open');
+          await input11.fill('pwd');
+          await input11.press('Enter');
+          await p11.waitForTimeout(120);
+          let g11 = await geo11();
+          expect11(g11, 'after one command');
+          assert.match(g11.lastText, /^\/home\//, `${tag}: pwd's answer is the line just above the prompt`);
+          assert.ok(g11.focused, `${tag}: focus stays in the prompt`);
+          for (const c of ['help', 'ls -la', 'history', 'help']) {
+            await input11.fill(c);
+            await input11.press('Enter');
+          }
+          await p11.waitForTimeout(120);
+          g11 = await geo11();
+          expect11(g11, 'after a long output');
+          assert.ok(g11.focused, `${tag}: focus stays in the prompt after a long output`);
+          const first11 = await p11.evaluate(() => {
+            const out = document.querySelector('.window[data-app="terminal"] .tout');
+            out.scrollTop = 0;
+            return out.firstElementChild.getBoundingClientRect().top - out.getBoundingClientRect().top;
+          });
+          assert.ok(first11 >= 0 && first11 <= 12, `${tag}: scrolling up still reaches the first line (${first11})`);
+          if (shots && w === 1280 && choice === 'exp-new') await p11.screenshot({ path: join(shots, `terminal-prompt-bottom-${engine}-${reducedMotion}.png`) });
+          await ctx11.close();
+        }
+      }
+    }
+    if (b11 !== browser) await b11.close();
+  }
+  step(`terminal: the prompt at the bottom, the output right above it from the first line, the newest line over the prompt, focus kept (${engines11.map(([e]) => e).join(' + ')}; 1280x800 and 1024x768; reduced motion on and off; Case 0 and Case 1)`);
   assert.deepEqual(nativeDialogs, [], 'no browser confirm()/alert() anywhere');
 
   assert.deepEqual(errors, []);

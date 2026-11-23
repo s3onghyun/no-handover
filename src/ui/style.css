@@ -150,13 +150,19 @@ input, textarea, select { font: inherit; }
 .ttab { padding: 4px 12px; border: 0; border-radius: 6px 6px 0 0; background: #1f2328; color: #9aa39c; font: 12px var(--mono); white-space: nowrap; }
 .ttab.sel { background: var(--term-bg); color: #e9ece4; }
 .ttab.dead { color: #59615b; font-style: italic; }
-.tout { flex: 1; overflow: auto; padding: 8px 10px 4px; white-space: pre-wrap; word-break: break-all; }
+/* the output sits on the prompt like a real terminal: a short output stacks at the bottom, right above
+   the prompt (an auto top margin, which drops to 0 once the lines overflow, so the scroll still reaches
+   the first line); the newest line is always the one just above the prompt */
+.tout { flex: 1; min-height: 0; overflow: auto; padding: 8px 10px 4px; white-space: pre-wrap; word-break: break-all; display: flex; flex-direction: column; }
+.tout > * { flex: none; }
+.tout > :first-child { margin-top: auto; }
 .tline { position: relative; min-height: 1.45em; padding-right: 22px; }
 .tline .pinbtn { position: absolute; right: 0; top: 0; }
 .tline.err { color: var(--term-err); }
 .tline.dim { color: var(--term-dim); }
 .tline.sys { color: var(--term-sys); }
 .tline:hover { background: rgba(255,255,255,0.04); }
+/* order: 1 puts the prompt under the output on screen though it comes first in the document */
 .tin { display: flex; gap: 8px; padding: 2px 10px 10px; align-items: baseline; flex: none; order: 1; }
 .tin .ps1 { color: var(--term-sys); white-space: nowrap; }
 .tin input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--term-fg); font: 13px/1.45 var(--mono); caret-color: #f2d94e; }
