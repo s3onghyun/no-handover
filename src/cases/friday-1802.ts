@@ -1028,14 +1028,51 @@ done`,
     // 💡 panel "방향" lines: the first one whose clues are not all found is offered next.
     // 요약 is generated from found clues; 정답 defaults to the correct option(s). Costs apply in senior mode only.
     explicit: [
-      { slot: 'cause', cost: 10, unlessClues: ['c_cron'], text: '03:15에 무엇이 시작됐는지 보세요: journalctl -u cron, 그리고 crontab -l.' },
-      { slot: 'cause', cost: 10, unlessClues: ['c_history'], text: '은재님 history의 4984~4990, 퇴사일 오후 다섯 줄을 그대로 다시 쳐 보세요.' },
-      { slot: 'cause', cost: 10, unlessClues: ['c_fds', 'c_limit', 'c_backup_files'], text: '지금 열린 fd 수(fds) + 백업이 여는 파일 수(tail ~/log/backup.log)를 LimitNOFILE 4096과 더해 비교해 보세요.' },
-      { slot: 'sequence', cost: 10, unlessClues: ['s_commit', 's_revert'], text: 'pay-cfg 탭에서 cd /srv/git/pay-config.git 후 git log --format=fuller, git branch -a.' },
-      { slot: 'sequence', cost: 10, unlessClues: ['s_last', 's_approve'], text: 'bastion 탭에서 last, review-web 탭에서 grep sjkang /var/log/nginx/access.log | tail.' },
-      { slot: 'sequence', cost: 10, unlessClues: ['s_notif', 's_summary'], text: '지워진 메시지 원문은 알림 센터(작업 표시줄 🔔)와 은재님 메일함의 "읽지 않은 메시지 요약"에 남아 있어요.' },
-      { slot: 'responsibility', cost: 10, unlessClues: ['r_group', 'r_hook'], text: 'pay-cfg에서 getent group git-admins 와 cat /srv/git/pay-config.git/hooks/pre-receive 를 같이 보세요.' },
-      { slot: 'responsibility', cost: 10, unlessClues: ['s_vacation'], text: '알림 37건은 왜 퇴사자에게 갔을까요? bastion의 서진님 휴가 인수인계 메모(sudo로만 열림).' },
+      {
+        slot: 'cause', cost: 10, unlessClues: ['c_cron'],
+        text: '03:15에 무엇이 시작됐는지 보세요: pay-api-01 탭에서 journalctl -u cron, 그리고 crontab -l → 03:15 에 도는 줄을 📌 (근거: 예약 · 작업 기록).',
+        compare: '그 줄의 시간 필드(분 시 일 월 요일)를 읽어, 5xx 가 시작된 시각과 끝난 시각(대시보드 5xx 패널)과 나란히 놓으세요.',
+      },
+      {
+        slot: 'cause', cost: 10, unlessClues: ['c_history'],
+        text: '은재님 history의 4984~4990, 퇴사일 오후 다섯 줄을 그대로 다시 쳐 보세요.',
+        compare: '은재님이 그 다섯 줄로 확인하던 숫자 두 개를 적고, 서로 비교해 보세요. 마지막 # 줄이 무엇을 걱정하나요?',
+      },
+      {
+        slot: 'cause', cost: 10, unlessClues: ['c_emfile'],
+        text: 'pay-api-01 에서 journalctl -u payment-api --since "2026-11-14 03:10" — 03:15 이후 첫 오류 줄을 📌 (근거: 장애 시각의 오류 로그).',
+        compare: '오류 줄 끝의 문구를 보기 여섯 개에 대 보세요. 디스크가 찼다면, 메모리가 바닥났다면, DB 가 연결을 거절했다면 각각 어떤 문구가 찍혔을까요? (df -h 와 대시보드 메모리 숫자도 같이)',
+      },
+      {
+        slot: 'cause', cost: 10, unlessClues: ['c_fds', 'c_limit', 'c_backup_files'],
+        text: '자원 한도: systemctl show payment-api -p LimitNOFILE, 지금 열린 fd 수(별칭 fds), 백업이 여는 파일 수(tail ~/log/backup.log) → 📌 (근거: 자원 한도 · 사용량 수치).',
+        compare: '지금 열린 fd 수 + 백업이 여는 파일 수를 더해 LimitNOFILE 4096과 비교해 보세요. 금요일 변경 전 fd 수였다면 넘었을까요? 대시보드의 열린 파일 수 패널도 같은 이야기예요.',
+      },
+      {
+        slot: 'sequence', cost: 10, unlessClues: ['s_commit', 's_revert'],
+        text: 'pay-cfg 탭에서 cd /srv/git/pay-config.git 후 git log --format=fuller, git branch -a → 금요일 커밋 줄을 📌 (근거: 변경 기록).',
+        compare: '커밋 시각(금 18:02)과 5xx 가 처음 난 시각을 나란히 놓으세요. 변경 직후부터 났나요, 몇 시간 뒤에 났나요? 그 사이에 시작된 다른 것이 있나요?',
+      },
+      {
+        slot: 'sequence', cost: 10, unlessClues: ['s_last', 's_approve'],
+        text: 'bastion 탭에서 last, review-web 탭에서 grep sjkang /var/log/nginx/access.log | tail → 승인 줄을 📌 (근거: 접속 · 승인 기록).',
+        compare: '승인 시각과 접속 시각, 그리고 5xx 가 시작된 03:15 를 나란히: 승인이 새 배포를 했다면 저널에 배포 줄이 있어야 해요. 있나요?',
+      },
+      {
+        slot: 'sequence', cost: 10, unlessClues: ['s_notif', 's_summary'],
+        text: '지워진 메시지 원문은 알림 센터(작업 표시줄 🔔)와 은재님 메일함의 "읽지 않은 메시지 요약"에 남아 있어요. 각각 📌 (근거: 메시지 · 알림 기록).',
+        compare: '지워진 메시지가 쓰인 시각과 지워진 시각을 적어, 장애 시각(03:15~05:40)의 앞인지 뒤인지 보세요.',
+      },
+      {
+        slot: 'responsibility', cost: 10, unlessClues: ['r_group', 'r_hook'],
+        text: 'pay-cfg에서 getent group git-admins 와 cat /srv/git/pay-config.git/hooks/pre-receive 를 같이 보세요. 둘 다 📌 (근거: 권한 · 그룹 설정).',
+        compare: '그룹 명단과 훅의 "건너뛰기" 줄을 나란히: 누가 리뷰 없이 반영할 수 있었나요? 그 권한은 언제, 왜 생겼나요? (은재님 TODO)',
+      },
+      {
+        slot: 'responsibility', cost: 10, unlessClues: ['s_vacation'],
+        text: '알림 37건은 왜 퇴사자에게 갔을까요? bastion 탭에서 sudo ls /home/sjkang → 서진님 휴가 인수인계 메모를 sudo cat 으로 열어 📌 (근거: 사람이 남긴 메모 · 기록).',
+        compare: '#장애-알림의 수신자와 메모의 "온콜 2순위 수정" 날짜를 나란히 놓으세요. 장애 날짜보다 앞인가요, 뒤인가요?',
+      },
       { slot: 'responsibility', cost: 10, text: '이 칸은 "누가"가 아니라 "무엇이 그걸 가능하게 했나"입니다. 사람을 범인으로 고르면 틀린 칸이 돼요.' },
     ],
     // "뭐부터 봐요?" / "막혔어요": the next idle nudge right away, from whoever sends it

@@ -567,9 +567,31 @@ export const caseZeroWiki: CaseFile = {
     },
     // 💡 panel "방향" lines (요약 is generated from found clues; 정답 defaults to the correct option)
     explicit: [
-      { slot: 'cause', cost: 5, unlessClues: ['c0_df', 'c0_du'], text: 'df -h 에서 Use% 100% 인 줄의 Mounted on(/var)을 보세요. 그 안에서 du -sh /var/log/* 로 가장 큰 것을 찾으세요.' },
-      { slot: 'cause', cost: 5, unlessClues: ['c0_loop', 'c0_status'], text: 'tail -n 20 /var/log/wiki/wiki.log — 같은 오류가 반복되면 그게 디스크를 채운 쓰기예요. systemctl status wiki 의 맨 아래 줄이 멈춘 이유예요.' },
-      { slot: 'sequence', cost: 5, unlessClues: ['c0_start', 'c0_full'], text: 'journalctl -u wiki 에서 시각 두 개: 반복이 시작된 시각(월 21:14)과 No space left on device 가 처음 나온 시각(화 08:47).' },
+      {
+        slot: 'cause', cost: 5, unlessClues: ['c0_df', 'c0_du'],
+        text: '터미널(wiki-01)에서 df -h — Use% 가 100% 인 줄의 Mounted on 을 보세요. 그 경로 안에서 du -sh /var/log/* 로 가장 큰 것을 찾아, 두 줄 다 📌 (근거: 디스크 사용량).',
+        compare: 'df -h 의 / 줄과 /var 줄을 나란히 보세요. 한 곳만 찼나요, 전부 찼나요? 메모리(OOM)나 DNS 가 원인이라면 df 가 이렇게 나올 이유가 있는지, 보기마다 대 보세요.',
+      },
+      {
+        slot: 'cause', cost: 5, unlessClues: ['c0_loop', 'c0_status'],
+        text: 'tail -n 20 /var/log/wiki/wiki.log (끝에서 반복되는 줄)와 systemctl status wiki (Active 줄과 맨 아래 줄) — 둘 다 📌 (근거: 위키가 남긴 오류 · 서비스 상태).',
+        compare: 'systemctl status 맨 아래 줄의 오류 문구를 보기 다섯 개에 하나씩 대 보세요. 그 문구를 그대로 설명하는 보기는 하나뿐이에요. "파일 하나가 망가뜨렸다"면 반복되는 줄이 무엇을 쓰고 있어야 할까요?',
+      },
+      {
+        slot: 'sequence', cost: 5, unlessClues: ['c0_start'],
+        text: 'journalctl -u wiki — 위에서부터 처음 나오는 thumbnail(attach/…) 줄의 시각을 📌 (근거: 처음 시작된 시각의 기록). 은재님 메일함의 위키 업로드 알림 메일도 같은 시각이에요.',
+        compare: '그 시각과 위키가 멈춘 시각 사이는 몇 시간인가요? 보기의 "몇 년 동안 조금씩"과 "하룻밤 사이" 중 어느 쪽 간격인지 보세요.',
+      },
+      {
+        slot: 'sequence', cost: 5, unlessClues: ['c0_full'],
+        text: 'journalctl -u wiki 에서 No space left on device 가 처음 나온 줄을 📌 (근거: 위키가 멈춘 시각의 기록).',
+        compare: '그 줄과 바로 뒤의 Scheduled restart 줄들, 어느 쪽이 먼저인가요? "아침에 누가 재시작하다 꼬였다"면 순서가 어떻게 찍혀야 할지 대 보세요.',
+      },
+      {
+        slot: 'sequence', cost: 5, unlessClues: ['c0_loop', 'c0_suppressed'],
+        text: '밤사이 쌓인 기록: tail -n 20 /var/log/wiki/wiki.log 의 attempt 숫자, 또는 journalctl -u wiki 의 "Suppressed … messages" 줄 → 📌 (근거: 밤사이 쌓인 기록).',
+        compare: 'attempt 숫자를 처음 시작된 시각부터 지난 시간으로 나눠 보세요. 가끔 한 번인가요, 쉬지 않고인가요? "디스크 읽기 · 쓰기 오류"라면 이 줄 대신 무엇이 찍혀야 할까요?',
+      },
     ],
     // the panel also walks the open checklist item (요약 = ticked items, 방향 = its hint, 정답 = its command)
     objectivePanel: true,

@@ -56,7 +56,8 @@ test('hint panel: 요약 → 방향 → 정답 in order, per slot; summary lists
 test('hint panel: every direction can be opened one by one; multi-slot answer lists the factors', () => {
   const g = new Game(c3);
   g.openHint('responsibility', 'summary');
-  const n = c3.hints.explicit.filter((x) => x.slot === 'responsibility').length;
+  // each direction is one step, or two when it also says what to compare (볼 곳 → 비교할 것)
+  const n = c3.hints.explicit.filter((x) => x.slot === 'responsibility').reduce((a, x) => a + (x.compare ? 2 : 1), 0);
   for (let i = 0; i < n; i++) assert.ok(g.openHint('responsibility', 'direction'));
   assert.equal(g.openHint('responsibility', 'direction'), null);
   assert.equal(g.hintPanel().find((s) => s.key === 'responsibility')!.directions.length, n);
