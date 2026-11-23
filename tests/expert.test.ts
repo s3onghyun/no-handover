@@ -95,14 +95,14 @@ test('Case 0 herring: journald rotating overnight; du and journald.conf rule it 
 test('Case 1 herring: SHELL=/bin/sh and a [[ ]] check; the shebang and the hourly output rule it out', () => {
   const g = new Game(c1, null, { senior: true });
   assert.match(out(g, 'cat ~/log/cron-env.txt'), /^SHELL=\/bin\/sh$/m);
-  const script = out(g, 'cat ~/bin/wiki-log-clean.sh');
-  assert.match(script, /if \[\[ "\$SIZE_MB" -lt "\$LIMIT_MB" && "\$1" != "--force" \]\]; then/);
-  assert.match(script.split('\n')[14], /^wikictl log truncate --keep-tail /, 'line 15 is still the wikictl call');
+  const script = out(g, 'cat ~/bin/wiki-cert-renew.sh');
+  assert.match(script, /if \[\[ "\$LEFT_H" -gt "\$RENEW_BEFORE_H" && "\$1" != "--dry-run" \]\]; then/);
+  assert.match(script.split('\n')[14], /^wikictl cert renew /, 'line 15 is still the wikictl call');
   assert.ok('c1x_shebang' in g.st.clues, 'the first line is #!/bin/bash');
   // got past the check every hour: the error is on line 15, not a syntax error
-  assert.match(out(g, 'cat ~/wiki-clean.log'), /정리 시작\n.*line 15: wikictl: command not found/);
+  assert.match(out(g, 'cat ~/wiki-cert.log'), /갱신 시작\n.*line 15: wikictl: command not found/);
   const b = new Game(c1);
-  assert.doesNotMatch(out(b, 'cat ~/bin/wiki-log-clean.sh'), /\[\[/);
+  assert.doesNotMatch(out(b, 'cat ~/bin/wiki-cert-renew.sh'), /\[\[/);
 });
 
 test('Case 2 herring: a tmpfs mounted over a non-empty spool; logshipd\'s flush line rules it out', () => {
@@ -189,7 +189,7 @@ test('saves: a started case keeps its mode; a lock-screen save in the other mode
   const saved = JSON.parse(g.serialize());
   const again = new Game(c1, saved, { senior: false });
   assert.equal(again.expert(), true, 'started in 숙련자 모드: stays');
-  assert.match(out(again, 'cat ~/bin/wiki-log-clean.sh'), /\[\[/);
+  assert.match(out(again, 'cat ~/bin/wiki-cert-renew.sh'), /\[\[/);
   const lock = JSON.parse(new Game(c1).serialize());
   const x = new Game(c1, lock, { senior: true });
   assert.equal(x.expert(), true);

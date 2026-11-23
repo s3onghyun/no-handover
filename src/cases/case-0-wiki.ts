@@ -362,7 +362,7 @@ export const caseZeroWiki: CaseFile = {
     {
       id: 'closing', account: 'me', folder: 'inbox', from: 'seojin', to: '한도윤', cc: '남은재', at: '2026-11-10T10:31', later: true,
       subject: 'RE: 위키 502 원인',
-      body: '봤어요.\n- 원인: /var 100%, wiki.log 11G. 맞아요.\n- 경위: 월 21:14부터 재시도. 08:47 꽉 참. 맞아요.\n\n재시도 끄고 로그 비웠어요. 위키 살아났어요.\nlogrotate 규칙은 제가. 디스크 80% 알림도.\n임시 정리 스크립트는 도윤님 숙제. 오늘 밤 cron으로 걸어 봐요.\nRB-019에 df 순서 추가할게요.\n\n강서진',
+      body: '봤어요.\n- 원인: /var 100%, wiki.log 11G. 맞아요.\n- 경위: 월 21:14부터 재시도. 08:47 꽉 참. 맞아요.\n\n재시도 끄고 로그 비웠어요. 위키 살아났어요.\nlogrotate 규칙은 제가. 디스크 80% 알림도.\n숙제: 위키 인증서 자동 갱신을 서버 cron 으로. 지금은 은재 선배 노트북에서 돌아요. 오늘 밤 걸어 봐요.\nRB-019에 df 순서 추가할게요.\n\n강서진',
     },
     {
       id: 'wiki-upload', account: 'pc', folder: 'inbox', from: 'wikibot', to: '인프라팀', at: '2026-11-09T21:14',

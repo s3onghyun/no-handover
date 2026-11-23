@@ -26,12 +26,12 @@ const FOLLOW: Record<string, Record<string, Step[]>> = {
   },
   [c1.id]: {
     c1_cronran: ['journalctl -u cron'],
-    c1_notfound: ['ls -l ~', 'cat ~/wiki-clean.log'],
+    c1_notfound: ['ls -l ~', 'cat ~/wiki-cert.log'],
     'c1_where,c1_cronpath': ['which wikictl', 'echo $PATH', 'cat ~/log/cron-env.txt'],
     c1_crontab: ['crontab -l'],
-    c1_requeue: ['journalctl -u wiki --since "2026-11-11 00:00"'],
-    c1_df: ['df -h'],
-    'c1_cronran,c1_quiet': ['journalctl -u cron', 'cat ~/wiki-clean.log'],
+    c1_expired: ['journalctl -u wiki --since "2026-11-11 00:00"'],
+    c1_enddate: ['openssl x509 -enddate -noout -in /etc/wiki/tls/wiki.crt'],
+    'c1_cronran,c1_countdown': ['journalctl -u cron', 'cat ~/wiki-cert.log'],
   },
   [c2.id]: {
     'c2_df,c2_du': ['df -h', 'du -sh /data/collector/*'],

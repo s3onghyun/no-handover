@@ -79,6 +79,22 @@ export interface CommitDef {
   diff?: string;
 }
 
+/** An X.509 certificate as openssl and curl print it. Times are UTC ('2026-11-11T00:00:04'). */
+export interface CertDef {
+  /** OpenSSL 3 one-line form: 'CN = wiki.example.com'. */
+  subject: string;
+  issuer: string;
+  notBefore: string;
+  notAfter: string;
+  /** Hex, no colons. */
+  serial: string;
+  san?: string[];
+  /** 'C8:34:…' as `-fingerprint` prints it. */
+  sha1?: string;
+  /** The full `-text` dump of the real certificate (otherwise a short one is built from the fields). */
+  text?: string[];
+}
+
 export interface RepoDef {
   /** Working tree path where `git` commands work (e.g. /home/eunjae/src/pay-config). */
   path: string;
@@ -114,6 +130,13 @@ export interface HostDef {
   uptime?: string;
   /** curl targets: 'localhost:8080/metrics' -> response body. */
   http?: Record<string, string>;
+  /**
+   * HTTPS endpoints for `curl https://…` (Case 1): 'wiki.example.com' or 'host:port' -> the
+   * certificate the server presents and the body it answers once the handshake passes (-k).
+   */
+  tls?: Record<string, { ip: string; cert: CertDef; body: string }>;
+  /** X.509 certificates `openssl x509 -in <path>` reads (the PEM file itself is in `files`). */
+  certs?: Record<string, CertDef>;
   /** Users whose home dirs require sudo to read. */
   sudoRead?: boolean;
   /**
