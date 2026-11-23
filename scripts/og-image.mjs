@@ -22,7 +22,6 @@ const CARD = {
   headline: '서버 장애의 원인을 찾는다',
   stats: [
     { label: '사건', value: '4개' },
-    { label: '명령', value: '약 40개' },
     { label: '가입', value: '없음' },
     { label: '언어', value: '한국어' },
   ],
