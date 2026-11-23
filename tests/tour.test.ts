@@ -69,8 +69,8 @@ test('aha: one decisive clue per playable case, a key clue, fired once with a lo
   const g = new Game(caseOneCron);
   let n = 0;
   g.on('aha', () => n++);
-  g.runCommand(0, 'cat ~/wiki-clean.log');
-  g.runCommand(0, 'cat ~/wiki-clean.log');
+  g.runCommand(0, 'cat ~/wiki-cert.log');
+  g.runCommand(0, 'cat ~/wiki-cert.log');
   assert.equal(n, 1);
   assert.equal(g.st.log.filter((e) => e.type === 'aha').length, 1);
 });

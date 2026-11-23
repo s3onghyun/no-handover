@@ -207,7 +207,7 @@ async function newOpenings() {
   try {
     for (const [id, cue, mail] of [
       ['case0-wiki', 'voice.briefing-case0-seojin', '[연습] 위키 502'],
-      ['case1-cron-env', 'voice.briefing-case1-seojin', '[연습 2] wiki-01 /var 92%'],
+      ['case1-cron-env', 'voice.briefing-case1-seojin', '[연습 2] 위키 인증서 만료'],
       ['case2-deleted-open', 'voice.briefing-case2-seojin', '[중요] 로그 서버 디스크'],
     ]) {
       console.log(`\n[${id}] opening against ${url}`);
@@ -246,7 +246,7 @@ async function newOpenings() {
         assert.equal(await page.evaluate(() => window.__audio.history.some((h) => h.id === 'voice.nudge-case1-cron-env-idle-3')), false, 'asked: only the -ask line');
         step(`${id}: nudge idle-1 → voice.nudge-case1-cron-env-idle-1, asked idle-3 → voice.nudge-case1-cron-env-idle-3-ask, both from the files`);
         // a trigger's two messages: each line voiced, the second only after the first has finished
-        const [c1, c2] = ['voice.jihoon-11aeec07', 'voice.jihoon-9ad021a1'];
+        const [c1, c2] = ['voice.jihoon-ffc6faa1', 'voice.jihoon-4b5a263b'];
         await page.evaluate(() => window.__game.fire('jihoon-nginx'));
         await page.waitForFunction((c) => window.__audio.history.some((h) => h.id === c), c2, { timeout: 40000 });
         const order = await page.evaluate(() => window.__audio.history.map((h) => h.id).filter((x) => x.startsWith('voice.jihoon-')));

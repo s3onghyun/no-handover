@@ -4,9 +4,9 @@
 import { expandAliases, parse, ParseError, type ListItem, type SimpleCmd, type Word } from './parser.ts';
 import type { HistEntry, HostWorld, World } from './build.ts';
 import { errText, Vfs, type VNode, type Who } from './vfs.ts';
-import { fmtDate, fmtGit, fmtIso, fmtLs, fmtSyslog, parseLocal, parseSince } from './time.ts';
+import { fmtDate, fmtGit, fmtIso, fmtLs, fmtSyslog, parseLocal, parseSince, tzOffsetMs } from './time.ts';
 import { manFor } from './manpages.ts';
-import type { CommitDef, RepoDef } from './types.ts';
+import type { CertDef, CommitDef, RepoDef } from './types.ts';
 
 export interface Frame {
   host: string;
@@ -90,6 +90,47 @@ const BLOCKED: Record<string, string> = {
 
 /** Tools absent from the hosts: the answer does not depend on the case's lesson. */
 const NOT_INSTALLED = new Set(['lsof', 'docker', 'kubectl']);
+
+const MON3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** OpenSSL's ASN1_TIME print: 'Nov 11 00:00:04 2026 GMT' (day padded with a space). */
+export function certDate(utc: string): string {
+  const x = new Date(parseLocal(utc));
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${MON3[x.getUTCMonth()]} ${String(x.getUTCDate()).padStart(2, ' ')} ${p(x.getUTCHours())}:${p(x.getUTCMinutes())}:${p(x.getUTCSeconds())} ${x.getUTCFullYear()} GMT`;
+}
+
+/** `openssl x509 -text`, the parts that matter here (public key bytes left out). */
+function certText(cert: CertDef): string[] {
+  if (cert.text) return cert.text;
+  const serial = cert.serial.toLowerCase().match(/.{1,2}/g)!.join(':');
+  return [
+    'Certificate:',
+    '    Data:',
+    '        Version: 3 (0x2)',
+    '        Serial Number:',
+    `            ${serial}`,
+    '        Signature Algorithm: ecdsa-with-SHA256',
+    `        Issuer: ${cert.issuer}`,
+    '        Validity',
+    `            Not Before: ${certDate(cert.notBefore)}`,
+    `            Not After : ${certDate(cert.notAfter)}`,
+    `        Subject: ${cert.subject}`,
+    '        Subject Public Key Info:',
+    '            Public Key Algorithm: id-ecPublicKey',
+    '                Public-Key: (256 bit)',
+    '                ASN1 OID: prime256v1',
+    '                NIST CURVE: P-256',
+    '        X509v3 extensions:',
+    '            X509v3 Key Usage: critical',
+    '                Digital Signature',
+    '            X509v3 Extended Key Usage: ',
+    '                TLS Web Server Authentication',
+    '            X509v3 Subject Alternative Name: ',
+    `                ${(cert.san ?? []).map((n) => `DNS:${n}`).join(', ')}`,
+    '    Signature Algorithm: ecdsa-with-SHA256',
+  ];
+}
 
 /** Files bigger than this are not dumped by cat (the player is pointed at head/tail instead). */
 export const CAT_LIMIT = 50 * 1024 * 1024;
@@ -526,6 +567,91 @@ export class Shell {
       return fail(err, 127);
     }
     return fn({ s, f, hw: this.host(f.host), args: argv.slice(1), stdin, sudo, events, sys, env });
+  }
+
+  /** `curl https://…`: the TLS handshake against the certificate the host presents (-v, -k, -s, -S, -I). */
+  private curlTls(c: Ctx, key: string, flags: Map<string, string | true>): IO {
+    const [hostPort, ...rest] = key.split('/');
+    const path = '/' + rest.join('/');
+    const [host, port = '443'] = hostPort.split(':');
+    const ep = (c.hw.def.tls ?? {})[port === '443' ? host : hostPort] ?? (c.hw.def.tls ?? {})[hostPort];
+    const verbose = flags.has('v') || flags.has('verbose');
+    const silent = (flags.has('s') || flags.has('silent')) && !flags.has('S') && !flags.has('show-error');
+    const insecure = flags.has('k') || flags.has('insecure');
+    const head = flags.has('I') || flags.has('head');
+    const err: string[] = [];
+    if (!ep) {
+      if (verbose) err.push(`*   Trying ${host}:${port}...`, `* connect to ${host} port ${port} failed: Connection refused`);
+      if (!silent) err.push(`curl: (7) Failed to connect to ${host} port ${port} after 0 ms: Connection refused`);
+      return { out: [], err, code: 7 };
+    }
+    const nowUtc = this.now() - tzOffsetMs(this.world.cs.clock.tz);
+    const expired = parseLocal(ep.cert.notAfter) < nowUtc;
+    const curlName = (dn: string) => dn.replace(/ = /g, '=').replace(/, /g, '; ');
+    if (verbose)
+      err.push(
+        `*   Trying ${ep.ip}:${port}...`,
+        `* Connected to ${host} (${ep.ip}) port ${port} (#0)`,
+        '* ALPN, offering h2',
+        '* ALPN, offering http/1.1',
+        '*  CAfile: /etc/ssl/certs/ca-certificates.crt',
+        '*  CApath: /etc/ssl/certs',
+        '* TLSv1.0 (OUT), TLS header, Certificate Status (22):',
+        '* TLSv1.3 (OUT), TLS handshake, Client hello (1):',
+        '* TLSv1.2 (IN), TLS header, Certificate Status (22):',
+        '* TLSv1.3 (IN), TLS handshake, Server hello (2):',
+        '* TLSv1.2 (IN), TLS header, Finished (20):',
+        '* TLSv1.2 (IN), TLS header, Supplemental data (23):',
+        '* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):',
+        '* TLSv1.2 (IN), TLS header, Supplemental data (23):',
+        '* TLSv1.3 (IN), TLS handshake, Certificate (11):',
+      );
+    if (expired && !insecure) {
+      if (verbose) err.push('* TLSv1.2 (OUT), TLS header, Unknown (21):', '* TLSv1.3 (OUT), TLS alert, certificate expired (557):', '* SSL certificate problem: certificate has expired', '* Closing connection 0');
+      if (!silent)
+        err.push(
+          'curl: (60) SSL certificate problem: certificate has expired',
+          'More details here: https://curl.se/docs/sslcerts.html',
+          '',
+          'curl failed to verify the legitimacy of the server and therefore could not',
+          'establish a secure connection to it. To learn more about this situation and',
+          'how to fix it, please visit the web page mentioned above.',
+        );
+      return { out: [], err, code: 60 };
+    }
+    if (verbose)
+      err.push(
+        '* TLSv1.2 (IN), TLS header, Supplemental data (23):',
+        '* TLSv1.3 (IN), TLS handshake, CERT verify (15):',
+        '* TLSv1.2 (IN), TLS header, Supplemental data (23):',
+        '* TLSv1.3 (IN), TLS handshake, Finished (20):',
+        '* TLSv1.2 (OUT), TLS header, Finished (20):',
+        '* TLSv1.3 (OUT), TLS change cipher, Change cipher spec (1):',
+        '* TLSv1.2 (OUT), TLS header, Supplemental data (23):',
+        '* TLSv1.3 (OUT), TLS handshake, Finished (20):',
+        '* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384',
+        '* ALPN, server accepted to use h2',
+        '* Server certificate:',
+        `*  subject: ${curlName(ep.cert.subject)}`,
+        `*  start date: ${certDate(ep.cert.notBefore)}`,
+        `*  expire date: ${certDate(ep.cert.notAfter)}`,
+        `*  subjectAltName: host "${host}" matched cert's "${host}"`,
+        `*  issuer: ${curlName(ep.cert.issuer)}`,
+        expired ? '*  SSL certificate verify result: certificate has expired (10), continuing anyway.' : '*  SSL certificate verify ok.',
+        '* Using HTTP2, server supports multiplexing',
+        `> ${head ? 'HEAD' : 'GET'} ${path} HTTP/2`,
+        `> Host: ${host}`,
+        '> user-agent: curl/7.81.0',
+        '> accept: */*',
+        '>',
+        '< HTTP/2 200',
+        '< server: nginx/1.18.0 (Ubuntu)',
+        '< content-type: text/plain; charset=utf-8',
+        '<',
+      );
+    const out = head ? ['HTTP/2 200', 'server: nginx/1.18.0 (Ubuntu)', 'content-type: text/plain; charset=utf-8', ''] : ep.body.split('\n');
+    if (verbose) err.push(`* Connection #0 to host ${host} left intact`);
+    return { out, err, code: 0 };
   }
 
   // ---------------------------------------------------------------- helpers for commands
@@ -1248,14 +1374,82 @@ export class Shell {
     };
 
     cmds.curl = (c) => {
-      const { pos } = getopt(c.args, ['o', 'H', 'X', 'd', 'm']);
+      const { flags, pos } = getopt(c.args, ['o', 'H', 'X', 'd', 'm', 'A', 'u', 'w'], ['output', 'header', 'request', 'data', 'max-time', 'user-agent', 'write-out']);
       const url = pos[0];
       if (!url) return fail(["curl: try 'curl --help' for more information"], 2);
       const key = url.replace(/^https?:\/\//, '');
+      if (/^https:\/\//.test(url)) return this.curlTls(c, key, flags);
       const http = c.hw.def.http ?? {};
       if (key in http) return ok(http[key].split('\n'));
       const hostPart = key.split('/')[0];
       return fail(`curl: (7) Failed to connect to ${hostPart.split(':')[0]} port ${hostPart.split(':')[1] ?? 80} after 0 ms: Couldn't connect to server`, 7);
+    };
+
+    // `openssl x509`: read a certificate file's dates, names and serial (OpenSSL 3.0 output formats)
+    cmds.openssl = (c) => {
+      const sub = c.args[0];
+      if (!sub || sub === 'help') return ok(['help:', '', 'Standard commands', 'x509              (조사 모드에서는 x509 만: 인증서 파일 읽기)', '', 'openssl x509 -in <파일> -noout -dates']);
+      if (sub === 'version') return ok(['OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)']);
+      if (sub === 's_client' || sub === 'req' || sub === 'genrsa' || sub === 'genpkey' || sub === 'ca' || sub === 'rsa' || sub === 'pkey' || sub === 'verify') {
+        c.events.push({ type: 'blocked', cmd: `openssl ${sub}` });
+        return fail([`조사 모드: 'openssl ${sub}' 은(는) 이 세션에서 쓸 수 없어요. 인증서 파일은 openssl x509 -in <파일> -noout -dates, 서버가 내보내는 인증서는 curl -v https://… 로 봐요.`], 126);
+      }
+      if (sub !== 'x509') return fail([`Invalid command '${sub}'; type "help" for a list.`], 1);
+      const a = c.args.slice(1);
+      let inPath: string | null = null;
+      let noout = false;
+      let checkend: number | null = null;
+      const prints: string[] = [];
+      for (let i = 0; i < a.length; i++) {
+        const o = a[i].replace(/^--/, '-');
+        if (o === '-in' && i + 1 < a.length) inPath = a[++i];
+        else if (o === '-noout') noout = true;
+        else if (o === '-checkend' && i + 1 < a.length) checkend = +a[++i];
+        else if (o === '-ext' && i + 1 < a.length) prints.push(`ext:${a[++i]}`);
+        else if (o === '-inform' && i + 1 < a.length) i++;
+        else if (['-enddate', '-startdate', '-dates', '-subject', '-issuer', '-serial', '-text', '-fingerprint'].includes(o)) prints.push(o.slice(1));
+        else return fail([`x509: Unknown option: ${a[i]}`, "x509: Use -help for summary."], 1);
+      }
+      let pem: string;
+      let cert: CertDef | undefined;
+      const certs = c.hw.def.certs ?? {};
+      if (inPath) {
+        const abs = this.path(c, inPath);
+        const txt = c.hw.vfs.readFile(abs, this.who(c.f, c.sudo));
+        if (typeof txt !== 'string' || txt in errText) {
+          const why = txt === 'EACCES' ? 'Permission denied' : txt === 'EISDIR' ? 'Is a directory' : 'No such file or directory';
+          return fail([`Could not open file or uri for loading certificate from ${inPath}`, `40F7A1E2B67F0000:error:80000002:system library:file_open:${why}:../providers/implementations/storemgmt/file_store.c:267:calling stat(${inPath})`, 'Unable to load certificate'], 1);
+        }
+        pem = txt;
+        cert = certs[abs];
+        if (!cert) return fail([`Could not read certificate from ${inPath}`, 'Unable to load certificate'], 1);
+      } else {
+        if (!c.stdin) return fail(['(조사 모드: 입력을 기다리지 않아요. 인증서 파일을 -in <파일> 로 주세요.)'], 1);
+        pem = c.stdin.join('\n');
+        const hit = Object.entries(certs).find(([path]) => c.hw.vfs.readFile(path, this.who(c.f, c.sudo)) === pem);
+        if (!hit) return fail(['Could not read certificate from <stdin>', 'Unable to load certificate'], 1);
+        cert = hit[1];
+      }
+      const out: string[] = [];
+      for (const p of prints) {
+        if (p === 'enddate') out.push(`notAfter=${certDate(cert.notAfter)}`);
+        else if (p === 'startdate') out.push(`notBefore=${certDate(cert.notBefore)}`);
+        else if (p === 'dates') out.push(`notBefore=${certDate(cert.notBefore)}`, `notAfter=${certDate(cert.notAfter)}`);
+        else if (p === 'subject') out.push(`subject=${cert.subject}`);
+        else if (p === 'issuer') out.push(`issuer=${cert.issuer}`);
+        else if (p === 'serial') out.push(`serial=${cert.serial.toUpperCase()}`);
+        else if (p === 'fingerprint' && cert.sha1) out.push(`SHA1 Fingerprint=${cert.sha1}`);
+        else if (p.startsWith('ext:')) out.push('X509v3 Subject Alternative Name: ', `    ${(cert.san ?? []).map((n) => `DNS:${n}`).join(', ')}`);
+        else if (p === 'text') out.push(...certText(cert));
+      }
+      if (!noout) out.push(...pem.split('\n'));
+      if (checkend !== null) {
+        const nowUtc = this.now() - tzOffsetMs(this.world.cs.clock.tz);
+        const expires = parseLocal(cert.notAfter) <= nowUtc + checkend * 1000;
+        out.push(expires ? 'Certificate will expire' : 'Certificate will not expire');
+        return { out, err: [], code: expires ? 1 : 0 };
+      }
+      return ok(out);
     };
 
     cmds.ping = (c) => {

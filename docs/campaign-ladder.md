@@ -16,7 +16,7 @@
 | Case | 제목 | 게임 속 시각 | 원칙 하나 | 새로 쓰는 명령 (누적) | 힌트 1단 흔적 | 인물 | 예상 길이 | "시스템이 범인"은 어디까지 |
 |---|---|---|---|---|---|---|---|---|
 | **0** 튜토리얼 | 위키가 안 열려요 | 2026-11-10(화) 09:30–10:30, 은재 퇴사 주. 은재는 인수인계 회의 중 | **로그는 디스크를 채운다. 디스크가 차면 멀쩡한 서비스도 멈춘다** (`df -h`로 어디가 찼는지, `du`/`tail`로 누가 쓰는지, `systemctl status`로 서비스를) | `ls cd pwd cat head tail grep df du history systemctl status journalctl` (+ `man help hint clear`) — 12개 | 터미널에 **미리 쳐진 `history`**(Enter만 누르면 성공): 2025-06 디스크 장애 다섯 줄과 `# 디스크 먼저. 그다음 누가 쓰는지.`, 오늘 09:22의 `# 도윤님 연습용…`. `~/README.txt`의 "장애 나면 제 순서". 단서 줄은 노랗게 표시 | 도윤, 서진(브리핑·넛지·회신), 지훈(레일 안내 + PDF를 올린 사람, 오답 넛지), 은재(기록으로만) | 익숙 3–5분 · 처음 8–12분 | **빠진 규칙 하나.** 깨진 PDF를 올린 사람이 아니라, 회전(logrotate) 규칙이 없는 로그와 간격 없는 재시도, 디스크 알림이 없는 서버 |
-| **1** | 밤에만 실패하는 스크립트 | 11/11(수) 09:30, Case 0 다음 날 | **cron은 로그인 셸이 아니다** (PATH·환경 변수·작업 디렉터리가 다르다) | + `crontab -l` `ls -l`(권한 읽기) `id` `echo $PATH` `env` `which`/`type` `grep -r` `/etc/cron.d` `journalctl -u cron` — 19개 | 은재 crontab 맨 위 주석 두 줄(`# 여기 거는 줄은 명령도 출력도 전부 절대 경로로.` `# 왜냐고요? 그날 떠 둔 ~/log/cron-env.txt 랑 내 터미널을 나란히 보면 알아요` — 결론 없이 단서만), 2024-03에 떠 둔 `~/log/cron-env.txt`, history의 `env -i … /bin/sh -c …` 시험 한 줄과 `# 터미널에서 되는 건 증거가 아님`, 절대 경로만 쓰는 `disk-report.sh` | 도윤(자기 정리 스크립트!), 서진, 지훈(같은 밤 nginx 설정을 바꿈 = 붉은 청어), 은재(기록) | 익숙 5–8분 · 처음 15–20분 | **조용한 실패.** 도윤의 스크립트가 아니라, 실패를 아무에게도 알리지 않는 cron(MAILTO 없음)과 "내 터미널에선 됐다"는 확인 방식 |
+| **1** | 밤에만 실패하는 스크립트 | 11/11(수) 09:30, Case 0 다음 날 | **cron은 로그인 셸이 아니다** (PATH·환경 변수·작업 디렉터리가 다르다) | + `crontab -l` `ls -l`(권한 읽기) `id` `echo $PATH` `env` `which`/`type` `grep -r` `/etc/cron.d` `journalctl -u cron` `date` `openssl x509` `curl -v` — 22개 | 은재 crontab 맨 위 주석 두 줄(`# 여기 거는 줄은 명령도 출력도 전부 절대 경로로.` `# 왜냐고요? 그날 떠 둔 ~/log/cron-env.txt 랑 내 터미널을 나란히 보면 알아요` — 결론 없이 단서만), 2024-03에 떠 둔 `~/log/cron-env.txt`, history의 `env -i … /bin/sh -c …` 시험 한 줄과 `# 터미널에서 되는 건 증거가 아님`, 절대 경로만 쓰는 `disk-report.sh` | 도윤(자기 인증서 갱신 스크립트!), 서진, 지훈(같은 밤 nginx TLS 설정을 바꿈 = 붉은 청어), 은재(기록) | 익숙 5–8분 · 처음 15–20분 | **조용한 실패.** 도윤의 스크립트가 아니라, 실패를 아무에게도 알리지 않는 cron(MAILTO 없음)과 "내 터미널에선 됐다"는 확인 방식 |
 | **2** | 지웠는데 안 비워지는 디스크 | 11/12(목) 09:30, 은재 출근 마지막 전날. 같은 날 16:40 오미래의 p99 메일 | **지운 파일도 프로세스가 열고 있으면 공간을 차지한다** (`df`와 `du`가 다를 때, 프로세스와 파일 디스크립터) | + `ps` `pgrep` `ls -l /proc/<PID>/fd` `systemctl show` `wc -l` `sort` `uniq` `ssh`(2대) `journalctl --since/--until -t sudo` — 28개 (`lsof`는 "설치되어 있지 않아요") | 은재 README "숫자 두 개가 다르면? 거기서부터예요"(순서도 명령도 적지 않음), history 2024-08 `# df 92% / du 51%` → `ls -l /proc/$(pgrep -f logshipd)/fd \| grep deleted`, 별칭 `숨은거`, 포스트잇 "지운 다음엔 꼭 df" | 지훈(어제 "도와주려고" 로그를 `rm`), 서진, 오미래(메일 첫 등장), 은재(기록) | 익숙 6–10분 · 처음 20–30분 | **고쳤다고 믿은 조치.** 확인 절차 없는 수동 조치, 그리고 처음으로 "파일을 연 프로세스"라는 층 |
 | **3** | 금요일 18:02의 작은 변경 *(현 1화)* | 11/16(월) 09:00–21:00, 은재 퇴사 사흘 뒤 | **프로세스마다 열 수 있는 파일 수에는 한도가 있고, 소켓도 파일이다** (`ulimit -n` / `LimitNOFILE`) | + `crontab -l -u` `systemctl show -p` `ulimit` `ss` `git log/show/branch` `getent group` `last` `sudo` `curl` (4대) — 약 40개 | history 4984–4990, 별칭 `밤`·`fds`, 포스트잇 "밤에 도는 것들을 먼저 보세요", 도윤 메모, 22:15 DM | 네 사람 + 오미래 | 익숙 10–15분 · 처음 30–45분 | **사람 넷의 결함이 겹친 구조.** 리뷰 없는 머지 권한, 문서에 없는 cron, 갱신 안 된 온콜표, 회수 안 된 퇴사자 계정 |
 | **4** | 남아 있는 열쇠 | 11/23(월), 은재 퇴사 열흘 뒤 | **SSH 키는 서버마다 남는다. 계정 회수 ≠ 키 회수** (`authorized_keys`, `auth.log`) | + `cat ~/.ssh/authorized_keys` `grep auth.log` `last -n` `getent passwd` `find -mtime` `sudo -l` (5대) — 약 45개 | 은재 history `# 키 정리: 5대 중 3대 함`, 남은 키 옆의 주석, 잠긴 메일 초안 하나가 풀림 | 서진, 지훈, 보안팀, 오미래, 은재(피날레 답장 한 통 — §8-3의 유일한 예외) | 40–60분 | **조직의 절차.** 퇴사 처리 체크리스트에 서버 키가 없다. 시즌 질문 "은재는 왜 떠났나"에 처음 답이 비친다 |
@@ -34,17 +34,17 @@
 - **레일과 출구** (웹 방탈출 분석 §9, firstmate 2026-11-17): 첫 명령 `history`는 미리 쳐져 있고 반드시 성공한다(Her Story의 `MURDER`, Bitburner). 단계마다 체크리스트 한 줄과 지훈의 메신저 한 줄이 **무엇을 볼 차례인지만** 말하고(명령은 적지 않는다), 단서도 체크도 못 만든 명령에는 단계마다 한 번 "그건 나중에요 ㅋㅋ 디스크부터 봐요!!"라고 되돌린다. 정확한 명령 순서는 은재의 history·README에만 있고, 💡 패널이 방향(도구 이름) → 정답(명령)으로 꺼내 준다(2026-11-20 손잡기 줄이기, 아래 3절). 단서 줄은 노랗게(clmystery의 `CLUE`). 바탕화면은 아이콘 3개(터미널·메신저·메일)로 시작해 체크가 진행될 때마다 메모장 → 증거 보드 → 대시보드 → 보고서가 나타난다. 시니어는 잠금 화면 링크나 작업 표시줄 ⏭ 로 언제든 Case 3으로 건너뛴다. 브리핑은 20초 이하(서진의 음성 메시지 3줄). 터미널에 `hint`를 치면 💡 패널이 열린다.
 - **고발 2칸**(원인 / 경위), 제출 무제한, 칸별 피드백("2칸 중 1칸"), 넛지 2분(직전 1분 안에 단서를 찾았으면 보류, 단계만 말하고 명령은 말하지 않음), "뭐부터 봐요?"를 누르면 지훈이 지금 볼 단계를 말하고 history·💡를 가리킴, 💡 패널은 체크리스트 항목도 안내(방향 = 도구, 정답 = 명령).
 - **도구 안내**: 코치 마크 8개(터미널, 메신저, 메일, 💡, 메모장, 증거 보드, 대시보드, 보고서). 처음 세 아이콘은 시작할 때, 나머지는 그 아이콘이 해금되는 순간, 💡는 첫 체크 뒤 한 번씩 뜬다. 본 마크는 다른 사건에서도 다시 뜨지 않는다(`case-format.md` §13).
-- **다음 사건으로 잇는 끈**: 서진의 회신 "임시 정리 스크립트는 도윤님 숙제. 오늘 밤 cron으로." → Case 1에서 그 스크립트가 밤에 조용히 실패한다.
+- **다음 사건으로 잇는 끈**: 서진의 회신 "숙제: 위키 인증서 자동 갱신을 서버 cron 으로. 지금은 은재 선배 노트북에서 돌아요. 오늘 밤 걸어 봐요." → Case 1에서 그 갱신 스크립트가 밤에 조용히 실패한다.
 
 ### Case 1 — 밤에만 실패하는 스크립트 (플레이 가능, `src/cases/case-1-cron.ts`)
 
-`characters.md` §8-5의 도윤 훅. 도윤이 Case 0 숙제로 만든 wiki.log 정리 스크립트를 화요일 18:41 은재의 crontab에 매시 정각(`0 * * * *`)으로 걸었다(도윤 계정은 `/etc/cron.allow`에 없다). 터미널에선 됐다. 수요일 07:15 /var 80% 알림, 09:30 92%.
+`characters.md` §8-5의 도윤 훅. 위키의 TLS 인증서는 사내 CA에서 받는 30일짜리이고, `wikictl cert renew`가 만료 48시간 전부터 새로 받는다. 지금까지는 은재 노트북의 cron이 매일 아침 ssh로 돌렸는데, 은재가 노트북 반납을 앞두고 월요일 저녁에 껐다. Case 0 뒤 서진의 숙제: 갱신을 서버 cron으로. 도윤이 화요일 18:41 갱신 스크립트를 은재의 crontab에 매시 정각(`0 * * * *`)으로 걸었다(도윤 계정은 `/etc/cron.allow`에 없다). 터미널에서 `--dry-run`으로 됐다. 서버의 인증서는 수요일 09:00:04(notAfter 00:00:04 UTC)에 끝난다. 09:00 서진이 화요일에 건 https 헬스체크 알림이 울린다.
 
-- **한 가지 원인**: 스크립트가 부르는 `wikictl`은 `/opt/wiki/bin`에 있고, 그 PATH는 은재의 `~/.bashrc`만 늘려 준다. cron은 로그인 셸이 아니라 `PATH=/usr/bin:/bin`, `SHELL=/bin/sh`, 작업 디렉터리 = 홈으로 돌린다. 그래서 01:00부터 매시간 `wikictl: command not found` — 그런데도 스크립트는 "정리 끝 ✓"를 찍었고, 출력은 상대 경로(`>> wiki-clean.log`)라 홈의 `~/wiki-clean.log`로 갔다. 도윤이 본 `~/bin/wiki-clean.log`에는 화요일 테스트 한 줄뿐("cron이 아예 안 돈 것 같아요").
-- **왜 다시 찼나**: 화요일에 서진이 깨진 미리보기 작업을 "실패"로만 표시하고 재시도 간격 0은 목요일에 바꾸기로 했다. 위키는 실패 작업을 매일 00:00에 다시 큐에 넣는다(설정 파일에 없는 기본값). 00:00:05 Case 0의 재시도 폭주가 그대로 다시 시작됐다. 19:00~00:00에는 로그가 작아 스크립트가 할 일이 없었으니 실패할 일도 없었다 — 그래서 "밤에만" 실패한다.
-- **붉은 청어 1**: 같은 밤 23:12 지훈의 nginx 업로드 한도 변경(서진 승인).
+- **한 가지 원인**: 스크립트가 부르는 `wikictl`은 `/opt/wiki/bin`에 있고, 그 PATH는 은재의 `~/.bashrc`만 늘려 준다. cron은 로그인 셸이 아니라 `PATH=/usr/bin:/bin`, `SHELL=/bin/sh`, 작업 디렉터리 = 홈으로 돌린다. 그래서 19:00부터 매시간 `wikictl: command not found` — 같은 스크립트의 `openssl`은 `/usr/bin`에 있어 "인증서 14h 남음 … 0h 남음"은 제대로 찍혔고, 그런데도 스크립트는 "갱신 끝 ✓"를 찍었다. 출력은 상대 경로(`>> wiki-cert.log`)라 홈의 `~/wiki-cert.log`로 갔다. 도윤이 본 `~/bin/wiki-cert.log`에는 화요일 시험 한 번뿐("cron이 아예 안 돈 것 같아요").
+- **어떻게 드러나나**: 새 인증서는 밤새 한 번도 나오지 않았다. 서버의 인증서 파일(`openssl x509 -enddate -noout -in /etc/wiki/tls/wiki.crt`)과 서버가 내보내는 인증서(`curl -v https://wiki.nuricloud.example`, `curl: (60) … certificate has expired`)가 같은 10/12 인증서이고, 위키 기록은 화 00:00·수 00:00 "갱신 창 안" 경고 뒤 09:00:04 "certificate expired"를 남겼다. 대시보드는 `/var` 대신 TLS 핸드셰이크 실패(09:00부터)와 인증서 남은 시간(0까지 곧게 내려감)을 보여 준다. 이 사건에는 디스크 이야기가 없다(`/var` 43%).
+- **붉은 청어 1**: 같은 밤 23:12 지훈의 nginx TLS 설정 변경(`ssl_protocols TLSv1.2 TLSv1.3`, 옛 TLS 끄기, 서진 승인). TLS를 건드렸지만 헬스체크는 09:00까지 정상이었고, curl의 오류는 프로토콜이 아니라 인증서 만료다.
 - **단서와 결론**: crontab 주석, 도윤 메모의 넘어가는 줄, 결정적 단서 카드는 결론("cron은 로그인 셸이 아니다", "PATH가 /usr/bin:/bin 뿐")을 말하지 않는다. 주석은 "절대 경로로"와 증거 파일(`~/log/cron-env.txt`)만 가리키고, 메모는 "근데 터미널에선 왜 됐지? (?)"로 질문을 남긴다. 결론은 플레이어가 두 PATH를 나란히 놓고 내리거나 💡가 준다.
-- **화면 흐름**: `crontab -l` → `journalctl -u cron`(돌긴 돌았다) → `ls -l ~`, `cat ~/wiki-clean.log`(💡 결정적 단서) → `which wikictl` / `echo $PATH` 대 `cat ~/log/cron-env.txt` 또는 `env -i PATH=/usr/bin:/bin which wikictl` → `journalctl -u wiki --since 00:00`(재큐) → `df -h`.
+- **화면 흐름**: `crontab -l` → `journalctl -u cron`(돌긴 돌았다) → `ls -l ~`, `cat ~/wiki-cert.log`(💡 결정적 단서) → `which wikictl` / `echo $PATH` 대 `cat ~/log/cron-env.txt` 또는 `env -i PATH=/usr/bin:/bin which wikictl` → `journalctl -u wiki --since 00:00`(09:00:04 만료) → `openssl x509 -enddate -noout -in /etc/wiki/tls/wiki.crt`, `curl -v https://wiki.nuricloud.example`. 경위 칸의 증거 종류는 실행 기록 · 위키 서비스 기록 · 인증서 상태.
 - **도구 안내**: 도구 코치 마크는 Case 0으로 옮겼다(각 아이콘이 해금될 때 한 번씩). 이 사건은 새 도구가 없어 🎯 목표 마크 하나만 뜬다(`case-format.md` §13). 목표 카드는 Case 1~3 모두.
 - **다음 사건으로 잇는 끈**: 서진의 회신 "터미널에서 된 건 증거가 아니에요. 은재 선배 말." 도윤 메모장의 "cron ≠ 내 터미널" 쪽이 Case 2에 남아 있다.
 
@@ -71,7 +71,7 @@
 
 | | Case 0 | Case 1 | Case 2 | Case 3 | Case 4 |
 |---|---|---|---|---|---|
-| 쓸 수 있는 명령 수 | 12 (+man/help/clear) | 19 (+man/help/hint/clear) | 28 (+man/help/hint/clear) | 약 40 | 약 45 |
+| 쓸 수 있는 명령 수 | 12 (+man/help/clear) | 22 (+man/help/hint/clear) | 28 (+man/help/hint/clear) | 약 40 | 약 45 |
 | 호스트 | 1 | 1 | 2 | 4 | 5 |
 | 붉은 청어 (그럴듯한 오답 흔적) | 0 | 1 | 2 | 3 | 4 |
 | 보고서 칸 | 2 (원인/경위) | 2 | 3 | 3 | 3 |
@@ -126,7 +126,7 @@
 | Case | 칸 | 청어 보기 | 그럴듯하게 만드는 흔적 | 배제하는 명령 |
 |---|---|---|---|---|
 | 0 | 경위 | systemd 저널이 밤새 불어 /var를 채웠다 | `journalctl -u wiki`의 매시 "Suppressed … messages", `journalctl -u systemd-journald`의 밤사이 저널 회전 줄 | `du -sh /var/log/*`(저널 500M 남짓, wiki.log 11G), `cat /etc/systemd/journald.conf`(`SystemMaxUse=1G`), 같은 저널의 "Vacuuming done" — journald는 폭주를 버리고(rate limit) 상한에서 옛 파일을 지운다 |
-| 1 | 원인 | cron의 /bin/sh가 bash 문법(`[[ ]]`)을 못 읽어 첫 조건문에서 멈췄다 | `~/log/cron-env.txt`의 `SHELL=/bin/sh`, 이 모드에서만 `[[ … ]]`로 쓴 스크립트 9번째 줄 | `head -1 ~/bin/wiki-log-clean.sh`(`#!/bin/bash` — SHELL은 crontab 줄만 돌리고 스크립트는 shebang으로 돈다), `cat ~/wiki-clean.log`(매시간 "정리 시작" 뒤 15번째 줄에서 실패) |
+| 1 | 원인 | cron의 /bin/sh가 bash 문법(`[[ ]]`)을 못 읽어 첫 조건문에서 멈췄다 | `~/log/cron-env.txt`의 `SHELL=/bin/sh`, 이 모드에서만 `[[ … ]]`로 쓴 스크립트 9번째 줄 | `head -1 ~/bin/wiki-cert-renew.sh`(`#!/bin/bash` — SHELL은 crontab 줄만 돌리고 스크립트는 shebang으로 돈다), `cat ~/wiki-cert.log`(매시간 "갱신 시작" 뒤 15번째 줄에서 실패) |
 | 2 | 원인 | /data 아래 새 마운트가 원래 파일을 가려 du에 안 보인다 | `df -h`·`/etc/fstab`의 `/data/collector/spool` tmpfs(수 11:01 서진), systemd의 "to mount over is not empty, mounting anyway" | `journalctl -u logshipd --since "2026-11-11 11:00"`(마운트 1초 전 spool을 raw/로 비우고 잠금 파일만 남김) — 그리고 가려진 파일은 아무도 쓸 수 없어 늘지 않는데 /data는 밤새 시간당 3.7G씩 늘었다 |
 
 - **검토했지만 넣지 않은 것**: 시간 *보너스*(빨리 푸는 숙련자에게 더 쉬워진다), Case 3 청어 추가(이미 3개), 도윤 메모장 줄이기(은재가 아니라 플레이어 자신의 기록이다). 2차 때는 "README·주석의 해설 줄 숨기기"도 여기 있었지만(은재의 목소리가 모드마다 흔들린다), 3차 플레이테스트에서 숙련자가 Case 0~2를 각 2~3.5분에 S로 끝내 "짧은 기록"으로 넣었다. 은재의 말투는 그대로 두고 양만 줄였다.
