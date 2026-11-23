@@ -543,7 +543,7 @@ export function logRow(p: Pin, o: Pick<LogsOpts, 'query' | 'actions' | 'keyIds' 
     h(
       'div.obs-msg',
       null,
-      h('div.obs-src', null, h(`span.obs-kg.k-${kind}`, { title: KIND_LABEL[kind], 'aria-label': KIND_LABEL[kind] }, KIND_GLYPH[kind]), h('span', { 'aria-hidden': 'true' }, KIND_ICON[p.kind]), h('span', null, p.source), isKey ? h('span.star', { title: '핵심 증거', 'aria-label': '핵심 증거' }, '★') : null),
+      h('div.obs-src', null, h(`span.obs-kg.k-${kind}`, { title: KIND_LABEL[kind], 'aria-label': KIND_LABEL[kind] }, KIND_GLYPH[kind]), h('span', { 'aria-hidden': 'true' }, KIND_ICON[p.kind]), h('span', null, p.source), p.clock !== undefined ? h('span.obs-pinat', { title: '핀한 시각' }, `📌 ${fmtHM(p.clock)}`) : null, isKey ? h('span.star', { title: '핵심 증거', 'aria-label': '핵심 증거' }, '★') : null),
       h(`div.tx${prose ? '.prose' : ''}`, { title: p.text }, ...marked(p.text, o.query)),
       p.note ? h('div.nt', null, '📝 ', ...marked(p.note, o.query)) : null,
     ),

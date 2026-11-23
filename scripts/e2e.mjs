@@ -31,7 +31,9 @@
 // above it from the first line on, the newest line just over the prompt, focus kept in the prompt.
 // A twelfth round opens Case 0 and Case 1 at 390x844 and 768x1024 with touch: every taskbar control on screen
 // and one tap away (💡 힌트, 🔊), the terminal's ✕ and 📌 column inside the screen, "오늘 할 일" folded clear of it.
-// The last two rounds also run in WebKit (the Safari engine) when PW_WEBKIT names a WebKit launcher or is 1.
+// A thirteenth round pins one line straight from a long output in every case: Shift+↑ / P at 1280x800,
+// tap a line + 「⇡ 단서」 + 「📌 핀하기」 at 390x844, reduced motion on and off, 숙련자 모드 without marks.
+// The last three rounds also run in WebKit (the Safari engine) when PW_WEBKIT names a WebKit launcher or is 1.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
@@ -1732,16 +1734,35 @@ try {
   await cronPin10.focus();
   assert.ok(+(await cronPin10.evaluate((b) => getComputedStyle(b).opacity)) >= 0.8, 'keyboard focus shows the 📌 in full');
   await cron10.click({ position: { x: 40, y: 6 } });
-  await p10.locator('.toast', { hasText: '줄 오른쪽 끝의 📌' }).waitFor({ timeout: 2000 });
-  assert.equal(await pins10(), 0, 'a mouse click on the line itself pins nothing');
-  await cron10.tap({ position: { x: 40, y: 6 } });
+  const bar10 = term10.locator('.tpinbar');
+  await bar10.waitFor({ timeout: 2000 });
+  assert.equal(await pins10(), 0, 'a mouse click on the line picks it, pins nothing yet');
+  assert.match(await cron10.getAttribute('class'), /\bsel\b/);
+  assert.equal(await bar10.locator('.tpb-src').innerText(), 'wiki-01 $ crontab -l', 'the toolbar names the host and the command that printed the line');
+  assert.equal(await bar10.locator('.tpb-maybe').innerText(), '이 줄은 단서가 될 수 있어요', 'crontab -l found the schedule clue: its line says so');
+  const pinB10 = await bar10.locator('.tpb-pin').boundingBox();
+  assert.ok(pinB10.width >= 44 && pinB10.height >= 44, `touch: the toolbar's 📌 is a 44 px target (${Math.round(pinB10.width)}x${Math.round(pinB10.height)})`);
+  await bar10.locator('.tpb-pin').tap();
   await p10.locator('.toast.pintoast').waitFor({ timeout: 2000 });
-  assert.equal(await pins10(), 1, 'a tap on the line pins it');
+  assert.equal(await pins10(), 1, 'the toolbar 📌 pins the picked line');
   assert.equal(await cronPin10.getAttribute('aria-pressed'), 'true');
+  assert.equal(await bar10.locator('.tpb-pin').getAttribute('aria-pressed'), 'true');
+  assert.deepEqual(await p10.evaluate(() => (({ source, host, cmd }) => ({ source, host, cmd }))(window.__game.st.pins[0])), { source: 'wiki-01 · crontab -l', host: 'wiki-01', cmd: 'crontab -l' });
   await cronPin10.click();
   await p10.locator('.toast.pintoast', { hasText: '이미 핀한 줄이에요' }).waitFor({ timeout: 2000 });
   assert.equal(await pins10(), 1);
-  step('1280x800, touch: every 📌 shows faintly and is named "핀: <its line>"; a click on the line says where the 📌 is, a tap pins it, pinning it again says "이미 핀한 줄이에요"');
+  // a tap on another line picks it, a second tap on it pins it
+  const other10 = p10.locator('.tline[data-pin]', { hasText: /wiki-cert-renew|cron|#/ }).first();
+  await other10.tap({ position: { x: 40, y: 6 } });
+  assert.match(await other10.getAttribute('class'), /\bsel\b/);
+  assert.equal(await pins10(), 1);
+  await other10.tap({ position: { x: 40, y: 6 } });
+  await p10.waitForFunction(() => window.__game.st.pins.length === 2, null, { timeout: 2000 });
+  await bar10.locator('.tpb-close').click();
+  await bar10.waitFor({ state: 'hidden' });
+  assert.equal(await p10.evaluate(() => document.activeElement === document.querySelector('.tin input')), true, '✕ goes back to the prompt');
+  await p10.locator('.tin input').focus();
+  step('1280x800, touch: every 📌 shows faintly and is named "핀: <its line>"; a click or tap on a line picks it (toolbar with host · command and a 44 px 📌 핀하기), a second tap pins it, pinning it again says "이미 핀한 줄이에요"');
 
   await p10.locator('.icon[data-app="board"]').click();
   const board10 = p10.locator('.window[data-app="board"]');
@@ -1986,6 +2007,153 @@ try {
     }
   }
   step(`narrow screens (${engines12.map(([e]) => e).join(' + ')}; 390x844 and 768x1024; Case 0 and Case 1): every taskbar control on screen and one tap away (💡 힌트 opens a panel that fits, 🔊 mutes), the terminal with its ✕ and 📌 column inside the screen, "오늘 할 일" folded clear of it`);
+  // ---- thirteenth round: one line straight from long output, in every case ("로그가 많아서 핀이 어려워요").
+  // 1280x800 by keyboard (Shift+↑ picks the newest line, Shift+↑ again jumps run by run over the
+  // lines marked "이 줄은 단서가 될 수 있어요", P pins) and 390x844 by touch (tap a line, 「⇡ 단서」,
+  // 「📌 핀하기」, a 44 px target); with reduced motion on and off; the mark never before the command
+  // and never in 숙련자 모드; the pin keeps host and command; typing goes on at once after a pin.
+  const LINE13 = [
+    ['case0-wiki', 'journalctl -u wiki', 'c0_start', 'wiki-01', 'clue'],
+    ['case1-cron-env', 'journalctl -u cron', 'c1_cronran', 'wiki-01', 'maybe'],
+    ['case2-deleted-open', 'journalctl', 'c2_rm', 'logs-01', 'maybe'],
+    ['friday-1802', 'journalctl -u payment-api', 'c_emfile', 'pay-api-01', 'maybe'],
+  ];
+  const engines13 = [['chromium', browser]];
+  if (process.env.PW_WEBKIT) engines13.push(['webkit', await webkit.launch(process.env.PW_WEBKIT === '1' ? {} : { executablePath: process.env.PW_WEBKIT })]);
+  const jumps13 = {};
+  for (const [engine, b13] of engines13) {
+    try {
+      for (const [w, hgt, touch] of [[1280, 800, false], [390, 844, true]]) {
+        for (const reduced of [false, true]) {
+          for (const [id, cmd, clue, host, mark] of LINE13) {
+            // WebKit runs the touch screen (the Safari case), Chromium both; reduced motion in Case 0 and Case 3 only
+            if ((engine === 'webkit' && !touch) || (reduced && id !== 'case0-wiki' && id !== 'friday-1802')) continue;
+            const tag = `${engine} ${w}x${hgt}${reduced ? ' reduced' : ''} ${id}`;
+            const ctx13 = await b13.newContext({ viewport: { width: w, height: hgt }, deviceScaleFactor: 1, hasTouch: touch, reducedMotion: reduced ? 'reduce' : 'no-preference' });
+            const p13 = await ctx13.newPage();
+            p13.on('pageerror', (e) => errors.push(`${tag}: ${e}`));
+            p13.on('dialog', (d) => (nativeDialogs.push(`p13 ${d.type()}: ${d.message()}`), d.accept()));
+            await p13.goto(`${url}?fresh=1&briefing=0&case=${id}`);
+            await p13.locator('#boot .exp-familiar').click();
+            await p13.locator('#boot').waitFor({ state: 'detached' });
+            const term13 = p13.locator('.window[data-app="terminal"]');
+            if (!(await term13.count())) await (touch ? p13.locator('.icon[data-app="terminal"]').tap() : p13.locator('.icon[data-app="terminal"]').click());
+            const input13 = term13.locator('.tin input');
+            await input13.waitFor();
+            await p13.waitForTimeout(900);
+            assert.equal(await term13.locator('.tline.maybe, .tline.clue').count(), 0, `${tag}: no line is marked before a command`);
+            await input13.fill(cmd);
+            await input13.press('Enter');
+            await p13.waitForTimeout(150);
+            const marks13 = await p13.evaluate(() => [...document.querySelectorAll('.window[data-app="terminal"] .tline.maybe, .window[data-app="terminal"] .tline.clue')].map((l) => [l.className, window.__game.cluesFor(l.firstChild.textContent).length, l.title]));
+            assert.ok(marks13.length > 0, `${tag}: the command's clue lines are marked`);
+            assert.ok(marks13.every(([c, n, t]) => c.includes(mark) && n > 0 && t === '이 줄은 단서가 될 수 있어요'), `${tag}: only clue lines, as .${mark}, titled "이 줄은 단서가 될 수 있어요"`);
+            const proves13 = () => p13.evaluate((clue) => window.__game.cluesFor(document.querySelector('.tline.sel')?.firstChild?.textContent ?? '').includes(clue), clue);
+            const bar13 = term13.locator('.tpinbar');
+            let k = 0;
+            if (touch) {
+              await term13.locator('.tline[data-pin]').last().tap();
+              await bar13.waitFor();
+              const pb = await bar13.locator('.tpb-pin').boundingBox();
+              assert.ok(pb.width >= 44 && pb.height >= 44, `${tag}: 📌 핀하기 is a 44 px target`);
+              for (const b of await bar13.locator('.tpb-acts button').all()) {
+                const bb = await b.boundingBox();
+                assert.ok(bb.height >= 44 && bb.width >= 44 && bb.x >= 0 && bb.x + bb.width <= w, `${tag}: every toolbar button is a 44 px target on screen`);
+              }
+              while (!(await proves13()) && k < 12) await bar13.locator('.tpb-mark').tap(), k++;
+            } else {
+              await input13.press('Shift+ArrowUp');
+              await bar13.waitFor();
+              assert.equal(await p13.evaluate(() => document.activeElement?.classList.contains('sel')), true, `${tag}: Shift+↑ puts focus on the newest line`);
+              assert.equal(await p13.evaluate(() => document.querySelector('.tline.sel') === [...document.querySelectorAll('.window[data-app="terminal"] .tline[data-pin]')].at(-1)), true);
+              while (!(await proves13()) && k < 12) await p13.keyboard.press('Shift+ArrowUp'), k++;
+            }
+            assert.ok(await proves13(), `${tag}: ${k} jumps reach a line that proves ${clue}`);
+            jumps13[`${id} ${touch ? 'touch' : 'keys'}`] = k;
+            assert.equal(await bar13.locator('.tpb-src').innerText(), `${host} $ ${cmd}`);
+            assert.equal(await bar13.locator('.tpb-maybe').innerText(), '이 줄은 단서가 될 수 있어요');
+            if (touch) {
+              // toasts (new mail, the pin tip, "보고서에는 이 줄을 핀하세요") stay on screen and off the toolbar and the prompt
+              const cover13 = await p13.evaluate((w) => {
+                const bad = [];
+                for (const t of document.querySelectorAll('.toast')) {
+                  const r = t.getBoundingClientRect();
+                  if (r.left < 0 || r.right > w) bad.push(`toast off screen ${Math.round(r.left)}–${Math.round(r.right)}`);
+                }
+                for (const sel of ['.tpb-pin', '.tpb-mark', '.tin input']) {
+                  const c = document.querySelector(`.window[data-app="terminal"] ${sel}`);
+                  if (!c) continue;
+                  const r = c.getBoundingClientRect();
+                  const e = document.elementFromPoint(r.left + Math.min(20, r.width / 2), r.top + r.height / 2);
+                  if (!e || (e !== c && !c.contains(e))) bad.push(`${sel} covered by ${e?.closest('.toast') ? 'a toast' : e?.className}`);
+                }
+                return bad;
+              }, w);
+              assert.ok((await p13.locator('.toast').count()) > 0, `${tag}: toasts are up`);
+              assert.deepEqual(cover13, [], `${tag}: toasts keep off the 📌 toolbar and the prompt`);
+            }
+            const t0 = Date.now();
+            if (touch) await bar13.locator('.tpb-pin').tap();
+            else await p13.keyboard.press('p');
+            const pin13 = await p13.evaluate(() => (({ clueIds, host, cmd, source, clock }) => ({ clueIds, host, cmd, source, clock }))(window.__game.st.pins.at(-1) ?? {}));
+            assert.ok(pin13.clueIds?.includes(clue), `${tag}: pinned a line proving ${clue}`);
+            assert.deepEqual([pin13.host, pin13.cmd, pin13.source], [host, cmd, `${host} · ${cmd}`], `${tag}: the pin keeps host and command`);
+            assert.equal(typeof pin13.clock, 'number');
+            // the flash: under 1 s, and none with reduced motion
+            const fl13 = await p13.evaluate(() => {
+              const el = document.querySelector('.tline.sel');
+              return { on: el.classList.contains('pinflash'), dur: parseFloat(getComputedStyle(el).animationDuration) * (getComputedStyle(el).animationDuration.endsWith('ms') ? 1 : 1000) };
+            });
+            if (reduced) assert.ok(!fl13.on || fl13.dur <= 1, `${tag}: no flash with reduced motion`);
+            else assert.ok(fl13.on && fl13.dur > 0 && fl13.dur < 1000, `${tag}: the pinned line flashes for under 1 s (${fl13.dur} ms)`);
+            // non-blocking: the next command runs at once
+            if (touch) await bar13.locator('.tpb-close').tap();
+            else await p13.keyboard.press('Escape');
+            await input13.fill('pwd');
+            await input13.press('Enter');
+            await term13.locator('.tline.sys', { hasText: /\$ pwd$/ }).waitFor({ timeout: 1000 });
+            assert.ok(Date.now() - t0 < 2500, `${tag}: typing goes on right after the pin`);
+            if (!touch && !reduced && id === 'case0-wiki') {
+              // the one-time tip came with the first long output, not again
+              assert.equal(await p13.evaluate(() => window.__game.st.log.filter((e) => e.type === 'pin-tip').length), 1, 'the pin tip shows once');
+            }
+            if (shots && !reduced) await p13.screenshot({ path: join(shots, `linepin-${engine}-${w}-${id}.png`) });
+            await ctx13.close();
+          }
+        }
+      }
+    } finally {
+      if (b13 !== browser) await b13.close();
+    }
+  }
+  // 숙련자 모드: no mark and no 「⇡ 단서」, the line still pins by keyboard
+  {
+    const ctx13 = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    const p13 = await ctx13.newPage();
+    p13.on('pageerror', (e) => errors.push(`senior13: ${e}`));
+    await p13.goto(`${url}?fresh=1&briefing=0&case=friday-1802`);
+    await p13.locator('#boot .exp-expert').click(); // 익숙해요 · 숙련자 모드로
+    await p13.locator('#boot').waitFor({ state: 'detached' });
+    const term13 = p13.locator('.window[data-app="terminal"]');
+    if (!(await term13.count())) await p13.locator('.icon[data-app="terminal"]').click();
+    const input13 = term13.locator('.tin input');
+    await input13.waitFor();
+    await input13.fill('journalctl -u payment-api | grep "too many open files"');
+    await input13.press('Enter');
+    await p13.waitForTimeout(150);
+    assert.equal(await p13.evaluate(() => window.__game.st.settings.senior), true);
+    assert.equal(await term13.locator('.tline.maybe, .tline.clue').count(), 0, '숙련자 모드: no line is marked');
+    await input13.press('Shift+ArrowUp');
+    assert.equal(await term13.locator('.tpb-mark').count(), 0, '숙련자 모드: no 「⇡ 단서」');
+    assert.equal(await term13.locator('.tpb-maybe').count(), 0);
+    await p13.keyboard.press('ArrowUp');
+    await p13.keyboard.press('p');
+    const pin13 = await p13.evaluate(() => window.__game.st.pins.at(-1));
+    assert.ok(pin13.clueIds.includes('c_emfile') && pin13.cmd === 'journalctl -u payment-api | grep "too many open files"', 'a grep result pins with its pipeline');
+    await ctx13.close();
+  }
+  step(`line pin in every case (${engines13.map(([e]) => e).join(' + ')}; 1280x800 keys, 390x844 touch; reduced motion on and off): marks only on clue lines after the command, run-by-run jumps (${Object.entries(jumps13).map(([k, v]) => `${k} ${v}`).join(', ')}), P / 44 px 📌 핀하기, host and command kept, flash under 1 s, typing goes on; 숙련자 모드 marks nothing`);
+
   assert.deepEqual(nativeDialogs, [], 'no browser confirm()/alert() anywhere');
 
   assert.deepEqual(errors, []);

@@ -17,7 +17,9 @@ export interface UiCtx {
   game: Game;
   wm: WM;
   toast(html: string | Node, onClick?: () => void): HTMLElement;
-  pinBtn(p: Omit<Pin, 'id' | 'ts' | 'onTimeline' | 'clueIds' | 'at'> & { sourceKey?: string; ts?: number | null }): HTMLElement;
+  pinBtn(p: Omit<Pin, 'id' | 'ts' | 'onTimeline' | 'clueIds' | 'at' | 'clock'> & { sourceKey?: string; ts?: number | null }): HTMLElement;
+  /** Pin with the same feedback as a 📌 click (toast, "already pinned"); returns the pin, or null when it was already there. */
+  pinNow(p: Parameters<Game['pin']>[0]): Pin | null;
   avatar(personId: string, size?: number): HTMLElement;
   name(personId: string): string;
   /** The next playable case in the campaign, if any (debrief "다음 사건 →" button). */
