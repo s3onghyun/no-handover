@@ -6,8 +6,9 @@ import { evidencePins, hasEvidence, slotProgress, uncoveredSlots } from './engin
 import { fmtHM, fmtKoShort, parseLocal } from './engine/time.ts';
 import { getLang, setLang, t, type Lang } from './i18n.ts';
 import { clear, h, storage } from './ui/dom.ts';
-import { WM, type UiCtx } from './ui/wm.ts';
-import { terminalApp } from './ui/apps/terminal.ts';
+import { NARROW, WM, type UiCtx } from './ui/wm.ts';
+import { lineContext } from './engine/linepin.ts';
+import { PIN_TIP_KEY, terminalApp } from './ui/apps/terminal.ts';
 import { messengerApp } from './ui/apps/messenger.ts';
 import { mailApp } from './ui/apps/mail.ts';
 import { notesApp } from './ui/apps/notes.ts';
@@ -50,6 +51,7 @@ if (params.has('fresh')) {
     storage.remove(tourKey(e.id));
   }
   storage.remove(TOUR_SEEN_KEY);
+  storage.remove(PIN_TIP_KEY);
   storage.remove(EXPERIENCE_KEY); // asked again on the lock screen
   storage.remove(EXPERT_KEY);
   storage.remove(PROGRESS_KEY);
@@ -236,7 +238,8 @@ const ctx: UiCtx = {
     for (const old of [...toasts.children]) if (old.textContent === el.textContent) old.remove();
     toasts.appendChild(el);
     setTimeout(() => el.remove(), 9000);
-    while (toasts.childElementCount > 4) toasts.firstElementChild?.remove();
+    // a phone shows two at most: they sit over the terminal there (placeToasts)
+    while (toasts.childElementCount > (matchMedia(NARROW).matches ? 2 : 4)) toasts.firstElementChild?.remove();
     placeToasts();
     return el;
   },
@@ -253,18 +256,21 @@ const ctx: UiCtx = {
     b.addEventListener('sync', sync);
     b.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (isPinned()) {
-        sync();
-        for (const old of toasts.querySelectorAll('.toast.pintoast')) old.remove();
-        ctx.toast(h('div', null, `📌 ${t('pin.already')}`), () => wm.open('board')).classList.add('pintoast');
-        return;
-      }
-      const pin = game.pin(p);
+      ctx.pinNow({ ...p, via: p.kind === 'line' ? 'line-btn' : 'btn' });
       sync();
-      pinToast(pin);
     });
     sync();
     return b;
+  },
+  pinNow(p) {
+    if (game.st.pins.some((x) => x.text === p.text && x.source === p.source)) {
+      for (const old of toasts.querySelectorAll('.toast.pintoast')) old.remove();
+      ctx.toast(h('div', null, `📌 ${t('pin.already')}`), () => wm.open('board')).classList.add('pintoast');
+      return null;
+    }
+    const pin = game.pin(p);
+    pinToast(pin);
+    return pin;
   },
   avatar(id, size = 34) {
     const p = game.cs.people[id];
@@ -310,7 +316,13 @@ function pinToast(pin: Pin): void {
     : t(ready ? 'pin.toastReady' : 'pin.toast', { n: n > goal ? t('pin.nth', { n: String(n) }) : `${n}/${goal}` });
   const text = pin.text.replace(/\s+/g, ' ').trim();
   const el = ctx.toast(
-    h('div', null, h(`div.pintoast-head${ready ? '.ready' : ''}`, null, `📌 ${head}`), h('div.pintoast-line', { title: text }, text.length > 90 ? `${text.slice(0, 89)}…` : text)),
+    h(
+      'div',
+      null,
+      h(`div.pintoast-head${ready ? '.ready' : ''}`, null, `📌 ${head}`),
+      h('div.pintoast-line', { title: text }, text.length > 90 ? `${text.slice(0, 89)}…` : text),
+      pin.cmd ? h('div.pintoast-src', null, `${pin.host} $ ${pin.cmd}`) : null,
+    ),
     () => wm.open('board'),
   );
   el.classList.add('pintoast');
@@ -332,10 +344,7 @@ function pinPrompt(c: ClueDef): boolean {
     let i = tb.lines.length - 1;
     while (i >= 0 && !(tb.lines[i].cls !== 'sys' && tb.lines[i].text.trim() && game.cluesFor(tb.lines[i].text).includes(c.id))) i--;
     if (i < 0) continue;
-    let j = i - 1;
-    while (j >= 0 && tb.lines[j].cls !== 'sys') j--;
-    const sys = j >= 0 ? tb.lines[j] : null;
-    const source = sys ? `${game.shell.frame(tb.session).host} · ${sys.text.replace(/^\S+\$ /, '')}` : tb.label;
+    const { source, host, cmd } = lineContext(tb.lines, i, { host: game.shell.frame(tb.session).host, label: tb.label });
     const text = tb.lines[i].text;
     for (const old of toasts.querySelectorAll('.toast.pinprompt')) old.remove();
     const line = text.replace(/\s+/g, ' ').trim();
@@ -349,7 +358,7 @@ function pinPrompt(c: ClueDef): boolean {
       ),
       () => {
         if (game.st.pins.some((p) => p.text === text && p.source === source)) return;
-        pinToast(game.pin({ kind: 'line', text, source }));
+        pinToast(game.pin({ kind: 'line', text, source, host, cmd, via: 'prompt' }));
       },
     );
     el.classList.add('pinprompt');
@@ -380,12 +389,24 @@ const meets = (a: Box, b: Box) => a.left < b.right && a.right > b.left && a.top 
 function placeToasts(): void {
   toasts.style.bottom = '';
   toasts.style.right = '';
+  toasts.style.top = '';
   toasts.style.maxWidth = '';
   if (!toasts.childElementCount) return;
-  const cols = [...desktop.querySelectorAll<HTMLElement>('.window:not(.min)')].map((w) => w.getBoundingClientRect()).map((r) => ({ left: r.right - PIN_COL, right: r.right, top: r.top, bottom: r.bottom }));
+  const wins = [...desktop.querySelectorAll<HTMLElement>('.window:not(.min)')];
+  const cols = wins.map((w) => w.getBoundingClientRect()).map((r) => ({ left: r.right - PIN_COL, right: r.right, top: r.top, bottom: r.bottom }));
   for (let pass = 0; pass < 2; pass++) {
     const hits = cols.filter((c) => meets(c, toasts.getBoundingClientRect()));
     if (!hits.length) break;
+    if (matchMedia(NARROW).matches) {
+      // a phone or a small tablet: the windows fill the width, so there is no room beside them (left
+      // of the column the toasts ran off the screen and covered the prompt and the picked line's 📌
+      // toolbar). Over the top of the window, under its title bar, instead.
+      const bars = wins.map((w) => w.querySelector('.titlebar')?.getBoundingClientRect().bottom ?? 0);
+      toasts.style.top = `${Math.max(8, ...bars) + 6}px`;
+      toasts.style.bottom = 'auto';
+      toasts.style.maxWidth = `${window.innerWidth - 24}px`;
+      return;
+    }
     const room = window.innerWidth - Math.max(...hits.map((c) => c.right)) - 8 - 12;
     if (room >= 220 && !toasts.style.right) toasts.style.maxWidth = `${room}px`;
     else {

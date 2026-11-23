@@ -27,6 +27,11 @@ export interface Pin {
   clueIds: string[];
   note?: string;
   at: number;
+  /** A terminal line's context: the host and the command that printed it (src/engine/linepin.ts). */
+  host?: string;
+  cmd?: string;
+  /** In-game clock (local ms) when it was pinned. */
+  clock?: number;
 }
 
 export interface TabState {
@@ -593,7 +598,7 @@ export class Game {
 
   // ---------------------------------------------------------------- evidence board
 
-  pin(p: Omit<Pin, 'id' | 'ts' | 'onTimeline' | 'clueIds' | 'at'> & { ts?: number | null; sourceKey?: string }): Pin {
+  pin(p: Omit<Pin, 'id' | 'ts' | 'onTimeline' | 'clueIds' | 'at' | 'clock'> & { ts?: number | null; sourceKey?: string; /** How the player pinned it, for the playtest log ('line-key', 'line-bar', …). */ via?: string }): Pin {
     const existing = this.st.pins.find((x) => x.text === p.text && x.source === p.source);
     if (existing) return existing;
     const pin: Pin = {
@@ -605,10 +610,13 @@ export class Game {
       onTimeline: false,
       clueIds: this.cluesFor(p.text, p.sourceKey),
       at: this.st.playMs,
+      clock: this.now(),
     };
+    if (p.host) pin.host = p.host;
+    if (p.cmd !== undefined) pin.cmd = p.cmd;
     pin.onTimeline = pin.ts !== null;
     this.st.pins.push(pin);
-    this.log('pin', { kind: pin.kind, source: pin.source, clues: pin.clueIds, text: pin.text.slice(0, 160) });
+    this.log('pin', { kind: pin.kind, source: pin.source, clues: pin.clueIds, text: pin.text.slice(0, 160), via: p.via });
     this.emit('pinned', pin);
     this.emit('pins');
     this.observe({ type: 'pins', count: this.evidencePins().length, uncovered: uncoveredSlots(this.cs, this.st.pins) });

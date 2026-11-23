@@ -103,11 +103,12 @@ input, textarea, select { font: inherit; }
 .notif { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 6px; cursor: pointer; position: relative; }
 .notif:hover { background: #f6f4ef; }
 .notif .meta { font-size: 11.5px; color: var(--ink-3); }
-.toasts { position: fixed; right: 12px; bottom: calc(var(--tb-h) + 12px); display: flex; flex-direction: column; gap: 8px; z-index: 100002; max-width: 380px; }
+.toasts { position: fixed; right: 12px; bottom: calc(var(--tb-h) + 12px); display: flex; flex-direction: column; gap: 8px; z-index: 100002; max-width: min(380px, calc(100vw - 24px)); }
 .toast { background: #2a2e33; color: #f1efe9; padding: 10px 14px; border-radius: 10px; box-shadow: var(--shadow); cursor: pointer; animation: slidein 0.25s ease-out; font-size: 13px; }
 .toast b { color: #fff; }
 .pintoast-head { font-weight: 600; }
 .pintoast-head.ready { color: #b9e4a8; }
+.pintoast-src { font: 11.5px var(--mono); opacity: 0.7; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pintoast-line { margin-top: 4px; font: 11.5px/1.4 var(--mono); opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @keyframes slidein { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
 
@@ -157,14 +158,39 @@ input, textarea, select { font: inherit; }
 .tout { flex: 1; min-height: 0; overflow: auto; padding: 8px 10px 4px; white-space: pre-wrap; word-break: break-all; display: flex; flex-direction: column; }
 .tout > * { flex: none; }
 .tout > :first-child { margin-top: auto; }
-.tline { position: relative; min-height: 1.45em; padding-right: 22px; }
-.tline .pinbtn { position: absolute; right: 0; top: 0; }
+.tline { position: relative; min-height: 1.45em; padding-right: 30px; }
+/* a pinnable line is one click from being picked; its 📌 spans the row's height on the right */
+.tline[data-pin] { cursor: pointer; }
+.tline .pinbtn { position: absolute; right: 0; top: 0; bottom: 0; width: 28px; font-size: 14px; }
+/* "이 줄은 단서가 될 수 있어요": a faint left edge, never the tutorial's yellow block */
+.tline.maybe { box-shadow: inset 2px 0 0 rgba(242, 217, 78, 0.55); }
+.tline.sel, .tline.sel:hover { background: rgba(242, 217, 78, 0.13); outline: 1px solid rgba(242, 217, 78, 0.85); outline-offset: -1px; }
+.tline.sel .pinbtn { opacity: 1; }
+.tline.pinflash { animation: pinflash var(--motion-base) ease-out; }
+@keyframes pinflash { from { background: rgba(242, 217, 78, 0.5); } }
+/* the picked line's toolbar, between the output and the prompt */
+.tpinbar { order: 1; flex: none; display: flex; flex-direction: column; gap: 4px; padding: 6px 10px; border-top: 1px solid #2b3037; background: #111317; }
+.tpinbar[hidden] { display: none; }
+.tpb-line { display: flex; gap: 10px; align-items: baseline; min-width: 0; color: var(--term-dim); font-size: 12px; }
+.tpb-src { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tpb-maybe { flex: none; color: var(--hl); font: 12px var(--sans); }
+.tpb-acts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.tpb-acts button { min-height: 30px; min-width: 34px; padding: 0 10px; border: 1px solid #3a4048; border-radius: 6px; background: #1f2328; color: #e9ece4; font: 13px var(--sans); cursor: pointer; }
+.tpb-acts button:hover { border-color: #6a7380; }
+.tpb-acts button:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
+.tpb-acts .tpb-pin { background: var(--hl); border-color: var(--hl); color: #23262b; font-weight: 600; }
+.tpb-acts .tpb-pin.pinned { background: transparent; color: var(--hl); }
+.tpb-keys { margin-left: auto; color: var(--term-dim); font: 11.5px var(--sans); }
+@media (pointer: coarse), (max-width: 900px) {
+  .tpb-acts button { min-height: 44px; min-width: 44px; }
+  .tpb-keys { display: none; }
+}
 .tline.err { color: var(--term-err); }
 .tline.dim { color: var(--term-dim); }
 .tline.sys { color: var(--term-sys); }
 .tline:hover { background: rgba(255,255,255,0.04); }
-/* order: 1 puts the prompt under the output on screen though it comes first in the document */
-.tin { display: flex; gap: 8px; padding: 2px 10px 10px; align-items: baseline; flex: none; order: 1; }
+/* order: 2 puts the prompt under the output (and the picked-line toolbar) on screen though it comes first in the document */
+.tin { display: flex; gap: 8px; padding: 2px 10px 10px; align-items: baseline; flex: none; order: 2; }
 .tin .ps1 { color: var(--term-sys); white-space: nowrap; }
 .tin input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--term-fg); font: 13px/1.45 var(--mono); caret-color: #f2d94e; }
 .tin input.frozen { color: #f2d94e; text-shadow: 0 0 6px rgba(242, 217, 78, 0.35); }
@@ -658,6 +684,7 @@ span.crit.miss { color: var(--obs-ink-2); border-style: dashed; }
 .obs-msg { min-width: 0; }
 .obs-src { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 11px; color: var(--obs-ink-2); }
 .obs-src .star { color: #f0c548; font-weight: 700; }
+.obs-src .obs-pinat { opacity: 0.8; }
 .obs-kg { color: var(--k); font-size: 11px; }
 .obs-row .tx { font: 12.5px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; margin: 2px 0 0; max-height: 7.5em; overflow: hidden; color: var(--obs-ink); }
 .obs-row .tx.prose { font-family: var(--sans); font-size: 13px; }
