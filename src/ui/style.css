@@ -466,6 +466,9 @@ input, textarea, select { font: inherit; }
 .hp-body small { display: block; color: var(--ink-3); font-size: 11px; }
 .hp-body ul { margin: 2px 0 0; padding-left: 16px; }
 .hp-dir { background: #fff6d6; border: 1px solid #ecd98c; border-radius: 6px; padding: 4px 8px; margin: 2px 0 4px; }
+.hp-part { display: inline-block; font-size: 11px; font-weight: 600; color: #6b5a12; background: #f3e4a3; border-radius: 4px; padding: 0 5px; margin-right: 6px; }
+.hp-dir[data-part="compare"] { background: #eef4ff; border-color: #b9cdf0; }
+.hp-dir[data-part="compare"] .hp-part { color: #24467d; background: #d6e3fa; }
 .hp-answer { background: #fdeeea; border: 1px solid #efb9ad; border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; }
 .hp-confirm { font-size: 12.5px; color: var(--warn); margin-bottom: 4px; }
 .hp-body .hint-btn, .hp-body .ghost-btn { margin-right: 6px; }

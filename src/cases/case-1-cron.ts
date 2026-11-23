@@ -750,11 +750,41 @@ export const caseOneCron: CaseFile = {
       sequence: '화 10:38 깨진 미리보기 작업을 "실패"로 표시 (재시도 간격 0 은 그대로) → 18:41 정리 스크립트를 매시 정각 cron 에 등록, 터미널에서만 시험 → 19:00~00:00 매시간 돌았지만 로그가 작아 할 일이 없었다 → 수 00:00:05 위키가 실패 작업을 자동으로 다시 큐에 넣어 재시도 폭주 재개 → 01:00 부터 매시간 "wikictl: command not found", 그래도 "정리 끝 ✓" → 07:15 /var 80% 알림 → 09:30 92%',
     },
     explicit: [
-      { slot: 'cause', cost: 5, unlessClues: ['c1_cronran'], text: 'journalctl -u cron 에서 01:00, 02:00 … 에 "(eunjae) CMD (~/bin/wiki-log-clean.sh" 줄이 있는지 보세요. 있으면 cron 은 돌았어요.' },
-      { slot: 'cause', cost: 5, unlessClues: ['c1_notfound'], text: 'crontab 줄의 ">> wiki-clean.log" 는 상대 경로예요. cron 은 홈 디렉터리에서 시작해요: ls -l ~, cat ~/wiki-clean.log' },
-      { slot: 'cause', cost: 5, unlessClues: ['c1_where', 'c1_cronpath'], text: '내 터미널: which wikictl, echo $PATH. cron: cat ~/log/cron-env.txt (은재님이 2024년에 남긴 cron 의 환경). 둘의 PATH 를 비교해 보세요.' },
-      { slot: 'sequence', cost: 5, unlessClues: ['c1_requeue'], text: 'journalctl -u wiki --since "2026-11-11 00:00" — 자정에 무엇이 다시 시작됐나요? 은재님 메일함의 위키 알림 메일도.' },
-      { slot: 'sequence', cost: 5, unlessClues: ['c1_df'], text: 'df -h 로 지금 /var 를. 그리고 ~/wiki-clean.log 의 시각과 크기(M)를 시간순으로 읽어 보세요.' },
+      {
+        slot: 'cause', cost: 5, unlessClues: ['c1_cronran'],
+        text: 'journalctl -u cron 에서 01:00, 02:00 … 에 "(eunjae) CMD (~/bin/wiki-log-clean.sh" 줄이 있는지 보세요. 있으면 cron 은 돌았어요.',
+        compare: '보기 중 "cron 이 한 번도 실행하지 않았다"와 "실행 자체가 거부됐다"는 이 CMD 줄들과 맞나요? 돌았다면 남은 질문은 "돌고 나서 안에서 무엇이 실패했나"예요.',
+      },
+      {
+        slot: 'cause', cost: 5, unlessClues: ['c1_notfound'],
+        text: 'crontab 줄의 ">> wiki-clean.log" 는 상대 경로예요. cron 은 홈 디렉터리에서 시작해요: ls -l ~, cat ~/wiki-clean.log → 실패가 찍힌 줄을 📌 (근거: 스크립트가 남긴 출력).',
+        compare: '그 줄이 말하는 실패 이유를 보기에 대 보세요: Permission denied 인가요, 다른 말인가요? 그리고 실패한 줄 바로 다음에 스크립트가 무엇을 찍었나요?',
+      },
+      {
+        slot: 'cause', cost: 5, unlessClues: ['c1_where', 'c1_cronpath'],
+        text: '내 터미널: which wikictl, echo $PATH. cron: cat ~/log/cron-env.txt (은재님이 2024년에 떠 둔 cron 의 환경). 둘 중 하나를 📌 (근거: 실행 환경 비교).',
+        compare: '두 PATH 를 나란히 놓고, which wikictl 이 알려 준 디렉터리가 양쪽에 다 있는지 보세요. 은재님 disk-report.sh 가 wikictl 을 어떻게 부르는지도요.',
+      },
+      {
+        slot: 'cause', cost: 5, unlessClues: ['c1_crontab'],
+        text: 'crontab -l — 도윤님 줄(0 * * * *)과 맨 위 은재님 주석 두 줄을 보고, 도윤님 줄을 📌 (근거: 예약 설정).',
+        compare: '도윤님 줄과 은재님 줄(0 9 * * 1)을 나란히: 명령과 >> 출력이 각각 어떻게 적혀 있나요? 시간 필드가 틀렸다면 journalctl -u cron 에 무엇이 남았을까요?',
+      },
+      {
+        slot: 'sequence', cost: 5, unlessClues: ['c1_requeue'],
+        text: 'journalctl -u wiki --since "2026-11-11 00:00" — 자정 직후 줄을 📌 (근거: 위키 서비스 기록). 은재님 메일함의 위키 알림 메일도.',
+        compare: '로그가 다시 늘기 시작한 시각이 자정 직후인가요, 23:12 nginx 변경 직후인가요? 두 시각 사이에 둘을 잇는 로그 줄이 있는지 보세요.',
+      },
+      {
+        slot: 'sequence', cost: 5, unlessClues: ['c1_df'],
+        text: 'df -h 로 지금 /var 를 📌 (근거: 디스크 사용량). 대시보드의 /var 사용량 패널도 같은 숫자예요.',
+        compare: '~/wiki-clean.log 의 줄을 시각순으로 읽고 대시보드 /var 그래프와 나란히 놓으세요. "괜찮음"은 언제까지, 실패는 언제부터인가요? 그래프가 오르기 시작한 시각과 맞나요?',
+      },
+      {
+        slot: 'sequence', cost: 5, unlessClues: ['c1_cronran', 'c1_quiet'],
+        text: 'journalctl -u cron (어제 19:00 부터 매시 정각 CMD 줄)과 cat ~/wiki-clean.log → 하나를 📌 (근거: 실행 기록).',
+        compare: '보기 중 "밤새 한 번도 돌지 않았다"는 CMD 줄과 맞나요? 돌았다면 매시간 남긴 줄이 자정 앞뒤로 어떻게 달라지는지 보세요.',
+      },
       { slot: 'sequence', cost: 5, text: '23:12 nginx 변경과 00:00:05 로그 폭주 사이에는 48분이 있어요. 둘을 잇는 로그 줄이 있나요?' },
     ],
     ask: {

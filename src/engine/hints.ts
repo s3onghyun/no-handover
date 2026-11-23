@@ -22,6 +22,8 @@ export interface PanelUse {
   rung: PanelRung;
   /** Direction: index into hints.explicit (slots) or 0 (objectives). */
   index: number;
+  /** Direction: which part of it (absent = 'look', the first part; old saves). */
+  part?: 'look' | 'compare';
   at: number;
   /** 숙련자-mode cost of this step (summaries: 0, or SUMMARY_COST in a case with an overlay). */
   cost: number;

@@ -674,12 +674,52 @@ export const caseTwoDeleted: CaseFile = {
       responsibility: '지훈은 rm 1분 뒤 접속 종료, df 확인 없음 · 열린 로그는 rm 대신 : > 파일 로 비우거나 HUP 으로 다시 열게 · payment-api 의 debug 는 "끌 때까지" — 만료 없음 · logshipd.conf: max_source_bytes = 0 (서버별 상한 없음), on_low_disk_notify = none',
     },
     explicit: [
-      { slot: 'cause', cost: 10, unlessClues: ['c2_df', 'c2_du'], text: 'df -h 의 /data Used 와 du -sh /data/collector/* 의 합을 비교해 보세요. 같아야 정상이에요.' },
-      { slot: 'cause', cost: 10, unlessClues: ['c2_pid', 'c2_deleted'], text: '파일을 쓰는 프로세스를 찾고(pgrep -f logshipd), 그 프로세스가 연 파일 목록을 보세요: ls -l /proc/<PID>/fd | grep deleted' },
-      { slot: 'sequence', cost: 10, unlessClues: ['c2_rm'], text: 'journalctl -t sudo --since "2026-11-11 14:00" --until "2026-11-11 15:00" — 누가 언제 무엇을 지웠는지 sudo 줄만 골라 보여요. /var/log/auth.log 에도.' },
-      { slot: 'sequence', cost: 10, unlessClues: ['c2_debug', 'c2_growth'], text: '수신량이 언제부터 늘었나: journalctl -u logshipd 의 stats 줄. 그 서버로 가서(ssh pay-api-01) journalctl -u payment-api --since "2026-11-11 14:00".' },
+      {
+        slot: 'cause', cost: 10, unlessClues: ['c2_df', 'c2_du'],
+        text: 'logs-01 에서 df -h (/data 줄의 Used)와 du -sh /data/collector/* 를 쳐서, 두 결과를 📌 (근거: 디스크 사용량).',
+        compare: 'df -h 의 /data Used 와 du -sh /data/collector/* 의 합을 비교해 보세요. 같아야 정상이에요. 몇 G 가 다른가요? 보기마다 "그 차이가 왜 du 에는 안 보이는지" 설명할 수 있는지 대 보세요.',
+      },
+      {
+        slot: 'cause', cost: 10, unlessClues: ['c2_pid', 'c2_deleted'],
+        text: '파일을 쓰는 프로세스를 찾고(pgrep -f logshipd), 그 프로세스가 연 파일 목록을 보세요: ls -l /proc/<PID>/fd | grep deleted → 나온 줄을 📌 (근거: 프로세스 · 서비스 상태).',
+        compare: '화살표(->) 끝에 붙은 꼬리표와 그 파일의 크기(ls -lL /proc/<PID>/fd/<번호>)를, df 와 du 의 차이와 나란히 놓아 보세요.',
+      },
+      {
+        slot: 'cause', cost: 10, unlessClues: ['c2_reopen'],
+        text: 'systemctl status logshipd (언제부터 떠 있나)와 journalctl -u logshipd | grep SIGHUP (파일을 마지막으로 다시 연 때).',
+        compare: '파일을 마지막으로 다시 연 시각과 rm 시각, 어느 쪽이 먼저인가요? rm 뒤에 한 번도 다시 열지 않았다면 프로세스는 어느 파일에 쓰고 있을까요?',
+      },
+      {
+        slot: 'sequence', cost: 10, unlessClues: ['c2_rm'],
+        text: 'journalctl -t sudo --since "2026-11-11 14:00" --until "2026-11-11 15:00" — 누가 언제 무엇을 지웠는지 sudo 줄만 골라 보여요. /var/log/auth.log 에도. rm 줄을 📌 (근거: 명령 · 변경 기록).',
+        compare: 'rm 시각을 적어 두세요. 보기들은 "rm"과 "한 서버의 로그가 늘기 시작"의 순서가 서로 달라요. 다음 방향의 시각과 어느 쪽이 먼저인지가 이 칸의 핵심이에요.',
+      },
+      {
+        slot: 'sequence', cost: 10, unlessClues: ['c2_debug', 'c2_growth'],
+        text: '수신량이 언제부터 늘었나: journalctl -u logshipd 의 stats 줄. 그 서버로 가서(ssh pay-api-01) journalctl -u payment-api --since "2026-11-11 14:00" → 각각 📌 (근거: 들어온 양의 변화 · 명령 · 변경 기록).',
+        compare: '로그 레벨이 바뀐 시각, rm 시각, stats 의 GB/h 가 뛴 시각을 시간순으로 나란히 놓으세요. rm 뒤에도 GB/h 가 그대로라면 그 양은 어느 파일로 갔을까요?',
+      },
+      {
+        slot: 'sequence', cost: 10, unlessClues: ['c2_drop'],
+        text: 'journalctl -u logshipd | grep dropping — 버리기 시작한 줄을 📌 (근거: 들어온 양의 변화).',
+        compare: '대시보드 /data 그래프와 그 줄의 시각을 나란히 놓으세요. 공간이 rm 직후 한 번이라도 내려갔나요?',
+      },
       { slot: 'sequence', cost: 10, text: '서진님의 두 변경(wiki-01, 보관 주기)은 언제 효과가 나나요? logrotate 는 언제 돌고, wiki-01 은 시간당 얼마나 보내나요?' },
-      { slot: 'responsibility', cost: 10, unlessClues: ['r2_quota'], text: 'cat /etc/logshipd/logshipd.conf — 한 서버가 보낼 수 있는 양과, 디스크가 모자랄 때 누구에게 알리는지.' },
+      {
+        slot: 'responsibility', cost: 10, unlessClues: ['r2_quota'],
+        text: 'logs-01 에서 cat /etc/logshipd/logshipd.conf → 값이 적힌 줄을 📌 (근거: 설정 파일).',
+        compare: 'max_source_bytes 와 on_low_disk_notify 두 값을 보세요. 한 서버가 보낼 수 있는 양에 끝이 있나요? 디스크가 모자랄 때 누가 알게 되나요? 보기 중 이 값으로 설명되는 것을 고르세요.',
+      },
+      {
+        slot: 'responsibility', cost: 10, unlessClues: ['r2_noverify'],
+        text: '메신저 #로그서버 채널(은재 PC 세션), 그리고 logs-01 의 /var/log/auth.log 에서 session closed for user jhpark 줄 → 📌 (근거: 사람이 남긴 기록).',
+        compare: 'rm 시각과 접속을 끊은 시각 사이에 df 를 친 기록이 있나요? "지웠으니 됐다" 말고 다른 확인이 있었는지가 질문이에요.',
+      },
+      {
+        slot: 'responsibility', cost: 10, unlessClues: ['r2_expiry', 'r2_silent'],
+        text: 'ssh pay-api-01 → journalctl -u payment-api 의 로그 레벨 변경 줄 끝부분, 그리고 logs-01 의 journalctl -u logshipd | grep notify → 📌 (근거: 서비스가 남긴 기록).',
+        compare: '디버그는 언제 꺼진다고 적혀 있나요? 로그를 버릴 때 누구에게 알렸나요? 둘 다 "사람이 기억해야만" 멈추는 구조인지 보세요.',
+      },
       { slot: 'responsibility', cost: 10, text: '이 칸은 "누가"가 아니라 "무엇이 그걸 가능하게 했나"입니다. 사람을 범인으로 고르면 틀린 칸이 돼요.' },
     ],
     ask: {

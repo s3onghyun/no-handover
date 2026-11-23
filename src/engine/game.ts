@@ -668,7 +668,7 @@ export class Game {
     if (!r) return null;
     const slot = key.startsWith('obj:') ? undefined : (key as SlotId);
     if (rung === 'summary') this.log('hint-summary', { key });
-    else this.log('rung3', { key, slot, rung, index: r.index, cost: r.cost, hints: this.ladder.hintCount() });
+    else this.log('rung3', { key, slot, rung, index: r.index, ...(r.part ? { part: r.part } : {}), cost: r.cost, hints: this.ladder.hintCount() });
     this.emit('hint', { key, rung });
     this.emit('save');
     return r;

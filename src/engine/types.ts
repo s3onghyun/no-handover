@@ -345,6 +345,13 @@ export interface DirectionDef {
   cost: number;
   /** Shown first while these clues are not all found yet ("where to look next"). */
   unlessClues?: string[];
+  /**
+   * Second part of the same direction: what to put side by side once you are there (two facts,
+   * or a fact against the report's options), never the conclusion. `text` is the first part: the
+   * concrete place (host or tab, command, file, panel, pin). The panel opens `text` first, then
+   * this; when `unlessClues` are already found it opens this straight away (src/engine/hintpanel.ts).
+   */
+  compare?: string;
 }
 
 export interface HintsDef {
