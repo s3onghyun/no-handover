@@ -6,7 +6,7 @@
 import { clear, h } from './dom.ts';
 import { t } from '../i18n.ts';
 import type { AudioManager } from '../audio/audio.ts';
-import type { UiCtx } from './wm.ts';
+import { NARROW, type UiCtx } from './wm.ts';
 import type { ObjectiveDef } from '../engine/types.ts';
 import { hasEvidence, kindsFor, uncoveredSlots } from '../engine/evidence.ts';
 import { slotName } from '../engine/scoring.ts';
@@ -16,7 +16,8 @@ export function mountObjectives(desktop: HTMLElement, ctx: UiCtx, audio: AudioMa
   const g = ctx.game;
   const def = g.cs.opening?.objectives;
   const el = h('section.todo', { 'aria-label': def?.title ?? '' });
-  let collapsed = false;
+  // narrow screens: folded to its header at the bottom-left, so it does not cover the terminal (style.css)
+  let collapsed = matchMedia(NARROW).matches;
   /** Steps unfolded by hand on the goals-only sticky (this page only). */
   let stepsShown = false;
   let folding = false;

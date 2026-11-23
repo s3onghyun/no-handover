@@ -1,4 +1,5 @@
 :root {
+  --tb-h: 40px; /* taskbar height: two rows on a phone */
   --ink: #23262b;
   --ink-2: #5b6770;
   --ink-3: #8a8580;
@@ -29,7 +30,7 @@ input, textarea, select { font: inherit; }
 
 /* ---------- desktop ---------- */
 #desktop {
-  position: fixed; inset: 0 0 40px 0; overflow: hidden;
+  position: fixed; inset: 0 0 var(--tb-h) 0; overflow: hidden;
   background:
     radial-gradient(1200px 700px at 70% 80%, rgba(160, 120, 76, 0.35), transparent 60%),
     radial-gradient(900px 600px at 20% 10%, rgba(94, 140, 74, 0.25), transparent 60%),
@@ -76,7 +77,7 @@ input, textarea, select { font: inherit; }
 
 /* ---------- taskbar ---------- */
 #taskbar {
-  position: fixed; left: 0; right: 0; bottom: 0; height: 40px; display: flex; align-items: center; gap: 6px; padding: 0 8px;
+  position: fixed; left: 0; right: 0; bottom: 0; height: var(--tb-h); display: flex; align-items: center; gap: 6px; padding: 0 8px;
   background: rgba(28, 31, 34, 0.94); color: #e8e6e1; border-top: 1px solid #000; z-index: 100000;
 }
 #taskbar .brand { font-weight: 700; letter-spacing: 0.02em; padding: 0 10px 0 4px; white-space: nowrap; }
@@ -97,12 +98,12 @@ input, textarea, select { font: inherit; }
 .clock .due.over { color: #ff9c8c; }
 
 /* ---------- popovers / toasts ---------- */
-.popover { position: fixed; right: 8px; bottom: 48px; width: 360px; max-height: 60vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); z-index: 100001; padding: 10px; }
+.popover { position: fixed; right: 8px; bottom: calc(var(--tb-h) + 8px); width: 360px; max-height: 60vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); z-index: 100001; padding: 10px; }
 .popover h3 { margin: 2px 4px 8px; font-size: 13px; color: var(--ink-2); }
 .notif { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 6px; cursor: pointer; position: relative; }
 .notif:hover { background: #f6f4ef; }
 .notif .meta { font-size: 11.5px; color: var(--ink-3); }
-.toasts { position: fixed; right: 12px; bottom: 52px; display: flex; flex-direction: column; gap: 8px; z-index: 100002; max-width: 380px; }
+.toasts { position: fixed; right: 12px; bottom: calc(var(--tb-h) + 12px); display: flex; flex-direction: column; gap: 8px; z-index: 100002; max-width: 380px; }
 .toast { background: #2a2e33; color: #f1efe9; padding: 10px 14px; border-radius: 10px; box-shadow: var(--shadow); cursor: pointer; animation: slidein 0.25s ease-out; font-size: 13px; }
 .toast b { color: #fff; }
 .pintoast-head { font-weight: 600; }
@@ -799,3 +800,23 @@ html.reduce-motion .modal-back { animation: none; }
 .pinprompt-btn:hover, .pinprompt-btn:focus-visible { background: rgba(255,255,255,0.12); }
 .todo .todo-report { grid-column: 2; justify-self: start; margin-top: 4px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; padding: 3px 10px; font: 600 12.5px/1.4 var(--sans); cursor: pointer; }
 .todo.goals-only .todo-report { display: block; margin: 6px 0 2px; }
+
+/* ---------- narrow screens (NARROW in wm.ts): every taskbar control stays on screen in one tap; the checklist folds away bottom-left ---------- */
+@media (max-width: 900px) {
+  #taskbar .brand { display: none; }
+  /* icon only; the words stay as the button's name */
+  .tray-btn .tb-label:not(.keep) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .todo { top: auto; right: auto; bottom: 8px; left: 8px; max-height: calc(100% - 16px); overflow: auto; }
+}
+@media (max-width: 600px) {
+  /* window entries on top (they scroll sideways), tray controls below */
+  :root { --tb-h: 80px; }
+  #taskbar { flex-wrap: wrap; align-content: space-evenly; gap: 0 2px; padding: 0 4px; }
+  #taskbar .tasks { order: -1; flex: 1 0 100%; overflow-x: auto; scrollbar-width: none; }
+  .tray-btn { padding: 4px 6px; }
+  .tray-btn .tb-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .clock { margin-left: auto; padding: 0 2px; }
+  .clock-date { display: none; }
+  .popover, .popover.hints { left: 8px; right: 8px; width: auto; }
+  body:has(.popover.hints) .toasts, body:has(.popover.goalpop) .toasts { right: 12px; }
+}

@@ -503,7 +503,7 @@ export interface LogsOpts {
   onShowAll?: () => void;
 }
 
-const KIND_ICON: Record<Pin['kind'], string> = { line: '⌨', message: '💬', mail: '✉', file: '📄', commit: '⎇', note: '📒', notification: '🔔' };
+const KIND_ICON: Record<Pin['kind'], string> = { line: '⌨️', message: '💬', mail: '✉', file: '📄', commit: '⎇', note: '📒', notification: '🔔' };
 
 function marked(text: string, q: string): (string | HTMLElement)[] {
   const needle = q.trim().toLowerCase();

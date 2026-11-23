@@ -149,12 +149,14 @@ const save = () => {
 const desktop = h('div#desktop');
 const tasks = h('div.tasks');
 const clock = h('div.clock');
+/** A tray button's words: icon-only on narrow screens (the name stays for screen readers and tools). */
+const tbLabel = (text: string, keep = false) => h(`span.tb-label${keep ? '.keep' : ''}`, null, text);
 const notifBtn = h('button.tray-btn', { title: t('tb.notifications'), 'aria-label': t('tb.notifications') }, '🔔');
 const hintBtn = h('button.tray-btn', { title: t('tb.hint'), dataset: { tour: 'hint' } }, `💡 ${t('tb.hint')}`);
-const goalBtn = h('button.tray-btn.goalbtn', { title: t('goal.title'), 'aria-label': t('goal.title'), dataset: { tour: 'goal' } }, `🎯 ${t('goal.short')}`);
+const goalBtn = h('button.tray-btn.goalbtn', { title: t('goal.title'), 'aria-label': t('goal.title'), dataset: { tour: 'goal' } }, '🎯 ', tbLabel(t('goal.short')));
 const ptBtn = h('button.tray-btn', { title: t('app.playtest') }, '📋');
 // "터미널이 익숙해요": the coach marks fold into this one entry (only in cases that have a tour)
-const guideBtn = h('button.tray-btn.guidebtn', { title: t('guide.open'), 'aria-label': t('guide.open'), dataset: { tour: 'guide' } }, `🧭 ${t('guide.short')}`);
+const guideBtn = h('button.tray-btn.guidebtn', { title: t('guide.open'), 'aria-label': t('guide.open'), dataset: { tour: 'guide' } }, '🧭 ', tbLabel(t('guide.short')));
 const syncGuideBtn = () => (guideBtn.hidden = !(game.cs.tour?.steps.length && !rules().coachMarks));
 const helpBtn = h('button.tray-btn', { title: t('tb.help'), 'aria-label': t('tb.help'), dataset: { tour: 'help' } }, '❓');
 const soundBtn = h('button.tray-btn.sound', { 'aria-pressed': 'false' });
@@ -194,11 +196,11 @@ async function skipTutorial(): Promise<void> {
 }
 const skipBtn =
   nextAfterTutorial && !progress.solved.includes(CASE.id)
-    ? h('button.tray-btn.skiptut', { title: `${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」`, onclick: () => void skipTutorial() }, `⏭ ${t('case.skipShort')}`)
+    ? h('button.tray-btn.skiptut', { title: `${caseLabel(nextAfterTutorial)} 「${nextAfterTutorial.title}」`, onclick: () => void skipTutorial() }, '⏭ ', tbLabel(t('case.skipShort')))
     : null;
 // a finished case: the way on to the next one stays in the taskbar (the debrief has the same button)
 const nextEntry = campaign.next(CASE.id);
-const nextBtn = h('button.tray-btn.nextcase-btn', { type: 'button', hidden: true, onclick: () => nextEntry && goCase(nextEntry.id) }, nextEntry ? `${t('case.next')} → ${caseLabel(nextEntry)}` : '');
+const nextBtn = h('button.tray-btn.nextcase-btn', { type: 'button', hidden: true, onclick: () => nextEntry && goCase(nextEntry.id) }, ...(nextEntry ? [tbLabel(`${t('case.next')} `, true), `→ ${caseLabel(nextEntry)}`] : []));
 if (nextEntry) nextBtn.title = `${caseLabel(nextEntry)} 「${nextEntry.title}」`;
 function syncNextBtn(): void {
   nextBtn.hidden = !(nextEntry && game.st.finished);
@@ -396,7 +398,7 @@ function placeToasts(): void {
   if (!mark) return;
   const m = mark.getBoundingClientRect();
   if (!meets(m, toasts.getBoundingClientRect())) return;
-  toasts.style.bottom = `${Math.max(52, window.innerHeight - m.top + 8)}px`;
+  toasts.style.bottom = `${Math.max(taskbar.offsetHeight + 12, window.innerHeight - m.top + 8)}px`;
 }
 /** A desktop icon under an open window leaves the accessibility tree (a click at its centre would reach the window). */
 function exposeIcons(): void {
@@ -412,7 +414,9 @@ wm.reserveRight = () => {
   const todo = desktop.querySelector('.todo');
   if (!todo) return 0;
   const r = todo.getBoundingClientRect();
-  return r.width ? Math.max(0, desktop.getBoundingClientRect().right - r.left) : 0;
+  const d = desktop.getBoundingClientRect();
+  // narrow screens keep the checklist bottom-left, clear of the windows' right edge
+  return r.width && r.left > d.left + d.width / 2 ? Math.max(0, d.right - r.left) : 0;
 };
 wm.onFocus = (id) => game.focus(id);
 wm.onLayout = () => {
@@ -774,7 +778,10 @@ function renderClock() {
   if (sig === clockSig) return;
   clockSig = sig;
   clear(clock);
-  clock.append(h('div', null, fmtKoShort(now)), h(`div.due${over ? '.over' : ''}`, null, over ? t('tb.overdue') : `${t('tb.deadline')} ${fmtHM(game.deadline())}`));
+  // "11/10 (화) 09:30": narrow screens show the time only
+  const stamp = fmtKoShort(now);
+  const cut = stamp.lastIndexOf(' ') + 1;
+  clock.append(h('div', null, h('span.clock-date', null, stamp.slice(0, cut)), stamp.slice(cut)), h(`div.due${over ? '.over' : ''}`, null, over ? t('tb.overdue') : `${t('tb.deadline')} ${fmtHM(game.deadline())}`));
 }
 
 let last = performance.now();
@@ -878,7 +885,7 @@ const expChoice = h(
   h(
     'div.expq-opts',
     null,
-    h('button.exp-familiar', { type: 'button', dataset: { exp: 'familiar' }, onclick: () => choose('familiar') }, h('span', null, `⌨ ${t('exp.familiar')}`), h('small', null, t('exp.familiarSub'))),
+    h('button.exp-familiar', { type: 'button', dataset: { exp: 'familiar' }, onclick: () => choose('familiar') }, h('span', null, `⌨️ ${t('exp.familiar')}`), h('small', null, t('exp.familiarSub'))),
     h('button.primary.exp-new', { type: 'button', dataset: { exp: 'new' }, onclick: () => choose('new'), autofocus: true }, h('span', null, `🌱 ${t('exp.new')}`), h('small', null, t('exp.newSub'))),
   ),
   // the harder way for terminal-savvy players: 익숙해요 plus 숙련자 모드 (src/engine/expert.ts)

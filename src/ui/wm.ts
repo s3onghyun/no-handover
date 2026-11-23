@@ -4,6 +4,9 @@ import { h } from './dom.ts';
 import type { Game, Pin } from '../engine/game.ts';
 import { t } from '../i18n.ts';
 
+/** Phones and small tablets: the taskbar goes icon-only, "오늘 할 일" folds bottom-left, windows open inside the screen (style.css has the same width). */
+export const NARROW = '(max-width: 900px)';
+
 export interface AppInstance {
   refresh?(type?: string): void;
   open?(arg?: unknown): void;
@@ -128,11 +131,14 @@ export class WM {
     const vh = this.root.clientHeight || window.innerHeight - 40;
     let w = Math.min(def.w, vw - 16);
     const hh = Math.min(def.h, vh - 16);
-    const x = def.x ?? Math.max(8, Math.min(vw - w - 8, 120 + (this.cascade % 6) * 28));
+    let x = def.x ?? Math.max(8, Math.min(vw - w - 8, 120 + (this.cascade % 6) * 28));
+    // narrow screens: a window starts where it fits whole (on a phone the terminal's ✕ and 📌 column were past the right edge)
+    if (w < def.w || matchMedia(NARROW).matches) x = Math.max(8, Math.min(x, vw - w - 8));
     // stop short of the sticky so the right edge (pin buttons, ✕) stays clickable, unless that leaves a sliver
     const limit = vw - this.reserveRight() - 8;
     if (x + w > limit && limit - x >= Math.min(def.w, 480)) w = limit - x;
-    const y = def.y ?? Math.max(8, Math.min(vh - hh - 8, 20 + (this.cascade % 6) * 24));
+    let y = def.y ?? Math.max(8, Math.min(vh - hh - 8, 20 + (this.cascade % 6) * 24));
+    if (hh < def.h || matchMedia(NARROW).matches) y = Math.max(8, Math.min(y, vh - hh - 8));
     this.cascade++;
     const title = h('span.title', null, def.title());
     const body = h('div.wbody');

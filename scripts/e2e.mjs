@@ -29,7 +29,9 @@
 // An eleventh round opens the terminal in Case 0 (처음이에요) and Case 1 (익숙해요) at 1280x800 and 1024x768,
 // with and without reduced motion: the prompt sits at the bottom of the terminal, the output right
 // above it from the first line on, the newest line just over the prompt, focus kept in the prompt.
-// It also runs in WebKit (the Safari engine) when PW_WEBKIT names a WebKit launcher or is 1.
+// A twelfth round opens Case 0 and Case 1 at 390x844 and 768x1024 with touch: every taskbar control on screen
+// and one tap away (💡 힌트, 🔊), the terminal's ✕ and 📌 column inside the screen, "오늘 할 일" folded clear of it.
+// The last two rounds also run in WebKit (the Safari engine) when PW_WEBKIT names a WebKit launcher or is 1.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
@@ -1887,6 +1889,103 @@ try {
     if (b11 !== browser) await b11.close();
   }
   step(`terminal: the prompt at the bottom, the output right above it from the first line, the newest line over the prompt, focus kept (${engines11.map(([e]) => e).join(' + ')}; 1280x800 and 1024x768; reduced motion on and off; Case 0 and Case 1)`);
+
+  // ---- twelfth round: a phone and a tablet (a 390px screen clipped the taskbar at 💡 힌트: hint, alerts,
+  // help, mute and 📋 were past the right edge; the "오늘 할 일" sticky covered half the terminal; the
+  // terminal opened at x=130 with its ✕ and 📌 column off screen)
+  const engines12 = [['chromium', browser]];
+  if (process.env.PW_WEBKIT) engines12.push(['webkit', await webkit.launch(process.env.PW_WEBKIT === '1' ? {} : { executablePath: process.env.PW_WEBKIT })]);
+  for (const [engine, b12] of engines12) {
+    try {
+      for (const [w, hgt] of [[390, 844], [768, 1024]]) {
+        for (const [q, choice] of [['', 'exp-new'], ['&case=case1-cron-env', 'exp-familiar']]) {
+          const tag = `${engine} ${w}x${hgt} ${choice}`;
+          const ctx12 = await b12.newContext({ viewport: { width: w, height: hgt }, deviceScaleFactor: 1, hasTouch: true });
+          const p12 = await ctx12.newPage();
+          p12.on('pageerror', (e) => errors.push(`${tag}: ${e}`));
+          p12.on('dialog', (d) => (nativeDialogs.push(`p12 ${d.type()}: ${d.message()}`), d.accept()));
+          await p12.goto(`${url}?fresh=1&briefing=0${q}`);
+          await p12.locator(`#boot .${choice}`).click();
+          await p12.locator('#boot').waitFor({ state: 'detached' });
+          const term12 = p12.locator('.window[data-app="terminal"]');
+          if (!(await term12.count())) await p12.locator('.icon[data-app="terminal"]').tap();
+          await term12.locator('.tin input').waitFor();
+          await p12.waitForTimeout(1000); // the window-open animation (under 1 s) has settled
+          /** Every visible taskbar control that is off screen or not the element at its own centre. */
+          const unreachable12 = () =>
+            p12.evaluate(() => {
+              const bad = [];
+              for (const c of document.querySelectorAll('#taskbar button, #taskbar input')) {
+                const r = c.getBoundingClientRect();
+                if (!r.width || !r.height) continue;
+                const name = c.getAttribute('aria-label') ?? c.textContent;
+                if (r.left < 0 || r.right > innerWidth || r.top < 0 || r.bottom > innerHeight) bad.push(`${name} at ${Math.round(r.left)}–${Math.round(r.right)}`);
+                else if (document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('button, input') !== c) bad.push(`${name} covered`);
+              }
+              const tb = document.querySelector('#taskbar');
+              if (tb.scrollWidth > tb.clientWidth + 1) bad.push(`taskbar ${tb.scrollWidth}px in ${tb.clientWidth}px`);
+              return bad;
+            });
+          assert.deepEqual(await unreachable12(), [], `${tag}: every taskbar control is on screen and takes a tap at its centre`);
+          // the widest tray this page can show: the next-case button joins the rest
+          await p12.evaluate(() => (document.querySelector('#taskbar .nextcase-btn').hidden = false));
+          assert.deepEqual(await unreachable12(), [], `${tag}: with "다음 사건" shown too`);
+          await p12.evaluate(() => (document.querySelector('#taskbar .nextcase-btn').hidden = true));
+
+          await p12.locator('#taskbar button[data-tour="hint"]').tap();
+          const hints12 = p12.locator('.popover.hints');
+          await hints12.waitFor();
+          const hb12 = await hints12.boundingBox();
+          assert.ok(hb12.x >= 0 && hb12.x + hb12.width <= w, `${tag}: the 💡 panel fits the screen`);
+          await p12.locator('#taskbar button[data-tour="hint"]').tap();
+          await hints12.waitFor({ state: 'detached' });
+          const sound12 = p12.locator('#taskbar .tray-btn.sound');
+          await sound12.tap();
+          assert.equal(await sound12.getAttribute('aria-pressed'), 'true', `${tag}: one tap mutes`);
+          await sound12.tap();
+          assert.equal(await sound12.getAttribute('aria-pressed'), 'false');
+
+          const geo12 = () =>
+            p12.evaluate(() => {
+              const box = (el) => el && (({ left, right, top, bottom }) => ({ left, right, top, bottom }))(el.getBoundingClientRect());
+              const term = document.querySelector('.window[data-app="terminal"]');
+              const close = term.querySelector('.titlebar button.close');
+              const c = box(close);
+              const pins = [...term.querySelectorAll('.tline .pinbtn')];
+              return {
+                term: box(term),
+                close: c,
+                closeHit: document.elementFromPoint((c.left + c.right) / 2, (c.top + c.bottom) / 2) === close,
+                pin: box(pins[pins.length - 1]),
+                todo: box(document.querySelector('.todo')),
+                todoCollapsed: !!document.querySelector('.todo.collapsed'),
+              };
+            });
+          const g12 = await geo12();
+          assert.ok(g12.term.left >= 0 && g12.term.right <= w, `${tag}: the terminal fits the screen (${Math.round(g12.term.left)}–${Math.round(g12.term.right)})`);
+          assert.ok(g12.close.right <= w && g12.closeHit, `${tag}: the terminal's ✕ is on screen and takes the tap`);
+          assert.ok(g12.pin.right <= w, `${tag}: the 📌 column is on screen`);
+          if (g12.todo) {
+            assert.ok(g12.todoCollapsed, `${tag}: the "오늘 할 일" sticky starts folded`);
+            const t = g12.todo;
+            const over = t.left < g12.term.right && t.right > g12.term.left && t.top < g12.term.bottom && t.bottom > g12.term.top;
+            assert.equal(over, false, `${tag}: the folded sticky does not cover the terminal`);
+            await p12.locator('.todo .todo-toggle').tap();
+            const open12 = await p12.locator('.todo').boundingBox();
+            assert.ok(!(await p12.locator('.todo.collapsed').count()) && open12.y >= 0 && open12.x + open12.width <= w, `${tag}: a tap unfolds it on screen`);
+            if (shots && w === 390) await p12.screenshot({ path: join(shots, `narrow-${engine}-${choice}-todo.png`) });
+            await p12.locator('.todo .todo-toggle').tap();
+            await p12.locator('.todo.collapsed').waitFor();
+          }
+          if (shots) await p12.screenshot({ path: join(shots, `narrow-${engine}-${w}-${choice}.png`) });
+          await ctx12.close();
+        }
+      }
+    } finally {
+      if (b12 !== browser) await b12.close();
+    }
+  }
+  step(`narrow screens (${engines12.map(([e]) => e).join(' + ')}; 390x844 and 768x1024; Case 0 and Case 1): every taskbar control on screen and one tap away (💡 힌트 opens a panel that fits, 🔊 mutes), the terminal with its ✕ and 📌 column inside the screen, "오늘 할 일" folded clear of it`);
   assert.deepEqual(nativeDialogs, [], 'no browser confirm()/alert() anywhere');
 
   assert.deepEqual(errors, []);
