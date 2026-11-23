@@ -9,7 +9,7 @@ import { DUR, reducedMotion } from '../motion.ts';
 import type { Pin } from '../../engine/game.ts';
 import type { AnnotationKind, StatPanelDef, TimeSeriesPanelDef } from '../../engine/types.ts';
 import {
-  changePoints, fmtDayHM, fmtHM, fmtLogTs, fmtRange, fmtValue, KIND_GLYPH, KIND_LABEL, KIND_SHAPE, LEVEL_LABEL, pinKind, pinLevel,
+  changePoints, dayLines, fmtDayHM, fmtHM, fmtLogTs, fmtRange, fmtValue, spansYears, KIND_GLYPH, KIND_LABEL, KIND_SHAPE, LEVEL_LABEL, pinKind, pinLevel,
   lastSample, placeAnnotations, sampleSeries, spansAbove, summarizePanel, timeTicks, xOf, yExtent,
   type Annotation, type Level, type Range, type RangeId, type RangeOption, type Sample,
 } from './derive.ts';
@@ -196,10 +196,15 @@ function xAxis(svg: SVGElement, r: Range, x0: number, w: number, y: number, top:
     // a labelled mark (03:15) wins over a nearby round tick label
     if (!markX.some((mx) => Math.abs(mx - tx) < 40)) svg.append(s('text', { class: 'obs-ax', x, y: y + 14, 'text-anchor': 'middle' }, t.label));
   }
-  for (const m of marks) {
+  // marks closer than a label apart keep their tick, the later one loses its label
+  let lastLabel = -Infinity;
+  for (const m of [...marks].sort((a, b) => a - b)) {
     const x = xOf(m, r, w);
     if (x === null) continue;
-    svg.append(s('line', { class: 'obs-mark', x1: x0 + x, x2: x0 + x, y1: y, y2: y + 4 }), s('text', { class: 'obs-ax obs-axm', x: x0 + x, y: y + 14, 'text-anchor': 'middle' }, fmtHM(m)));
+    svg.append(s('line', { class: 'obs-mark', x1: x0 + x, x2: x0 + x, y1: y, y2: y + 4 }));
+    if (x - lastLabel < 40) continue;
+    lastLabel = x;
+    svg.append(s('text', { class: 'obs-ax obs-axm', x: x0 + x, y: y + 14, 'text-anchor': 'middle' }, fmtHM(m)));
   }
 }
 
@@ -215,7 +220,7 @@ function annLines(svg: SVGElement, anns: Annotation[], r: Range, x0: number, w: 
   for (const p of placed) {
     const x = x0 + p.x;
     const y = stripTop + 6 + p.row * 12;
-    const g = s('g', { class: `obs-ann k-${p.item.kind}${p.item.recurring ? ' rec' : ''}` }, s('title', {}, `${fmtDayHM(p.item.ts)} · ${KIND_LABEL[p.item.kind]} · ${p.item.label}`), s('line', { x1: x, x2: x, y1: y, y2: plotBottom }), shape(p.item.kind, x, y, 4));
+    const g = s('g', { class: `obs-ann k-${p.item.kind}${p.item.recurring ? ' rec' : ''}` }, s('title', {}, `${fmtDayHM(p.item.ts, spansYears(r))} · ${KIND_LABEL[p.item.kind]} · ${p.item.label}`), s('line', { x1: x, x2: x, y1: y, y2: plotBottom }), shape(p.item.kind, x, y, 4));
     if (onAnn && p.item.pinId) g.addEventListener('click', () => onAnn(p.item));
     svg.append(g);
   }
@@ -363,7 +368,7 @@ export function timeSeriesPanel(o: TimeSeriesOpts): HTMLElement {
       cross.setAttribute('x2', String(x));
       cross.setAttribute('visibility', 'visible');
       clear(tip);
-      tip.append(h('b', null, fmtDayHM(at)), ...def.series.map((sr, i) => h('div', null, `${sr.name}: ${st.samples[i][idx]?.v == null ? '—' : fmtValue(st.samples[i][idx].v!, unit)}`)));
+      tip.append(h('b', null, fmtDayHM(at, spansYears(st.range))), ...def.series.map((sr, i) => h('div', null, `${sr.name}: ${st.samples[i][idx]?.v == null ? '—' : fmtValue(st.samples[i][idx].v!, unit)}`)));
       tip.hidden = false;
       tip.style.left = `${Math.min(W - 170, x + 10)}px`;
     });
@@ -381,8 +386,8 @@ export function timeSeriesPanel(o: TimeSeriesOpts): HTMLElement {
       null,
       h('caption', null, `${def.title} — 값이 바뀌는 시각`),
       h('tr', null, h('th', { scope: 'col' }, '시각'), h('th', { scope: 'col' }, '시리즈'), h('th', { scope: 'col' }, '값')),
-      ...def.series.flatMap((sr) => changePoints(sr, st.range).map((p) => h('tr', null, h('td', null, fmtDayHM(p.ts)), h('td', null, sr.name), h('td', null, p.v === null ? '데이터 없음' : fmtValue(p.v, unit))))),
-      ...o.anns.filter((a) => a.ts >= st.range.from && a.ts <= st.range.to).map((a) => h('tr', null, h('td', null, fmtDayHM(a.ts)), h('td', null, `${KIND_GLYPH[a.kind]} ${KIND_LABEL[a.kind]}`), h('td', null, a.label))),
+      ...def.series.flatMap((sr) => changePoints(sr, st.range).map((p) => h('tr', null, h('td', null, fmtDayHM(p.ts, spansYears(st.range))), h('td', null, sr.name), h('td', null, p.v === null ? '데이터 없음' : fmtValue(p.v, unit))))),
+      ...o.anns.filter((a) => a.ts >= st.range.from && a.ts <= st.range.to).map((a) => h('tr', null, h('td', null, fmtDayHM(a.ts, spansYears(st.range))), h('td', null, `${KIND_GLYPH[a.kind]} ${KIND_LABEL[a.kind]}`), h('td', null, a.label))),
     );
   const el = panel(
     { title: def.title, span: o.span ?? def.width ?? 'full', cls: 'obs-tsp', description: def.description, table },
@@ -428,6 +433,7 @@ export function laneChart(o: LaneOpts): HTMLElement {
   const { range, anns } = o;
   const shown = anns.filter((a) => a.ts >= range.from && a.ts <= range.to);
   const counts = LANES.map((k) => [k, shown.filter((a) => a.kind === k).length] as const).filter(([, n]) => n);
+  const year = spansYears(range);
   const label = `증거 타임라인, ${fmtRange(range)}. ${shown.length ? `주석 ${shown.length}개: ${counts.map(([k, n]) => `${KIND_LABEL[k]} ${n}`).join(', ')}.` : '이 구간에 핀한 증거가 없어요.'}`;
   const host = h('div.obs-chart.obs-lanes', { role: 'group', 'aria-label': label });
   sized(host, (W) => {
@@ -449,11 +455,11 @@ export function laneChart(o: LaneOpts): HTMLElement {
       );
     });
     xAxis(svg, range, left, w, bottom, top, o.marks ?? []);
-    // day boundaries
-    const DAY = 86_400_000;
-    for (let t = Math.ceil(range.from / DAY) * DAY; t <= range.to; t += DAY) {
-      const x = left + xOf(t, range, w)!;
-      svg.append(s('line', { class: 'obs-day', x1: x, x2: x, y1: top, y2: bottom }), s('text', { class: 'obs-dayt', x: x + 3, y: top + 9 }, fmtDayHM(t).replace(/ 00:00$/, '')));
+    // day boundaries (only while a day is wide enough for its label; the ticks carry longer ranges)
+    for (const dl of dayLines(range, w, o.now)) {
+      const x = left + xOf(dl.ts, range, w)!;
+      svg.append(s('line', { class: 'obs-day', x1: x, x2: x, y1: top, y2: bottom }));
+      if (dl.label) svg.append(s('text', { class: 'obs-dayt', x: x + 3, y: top + 9 }, dl.label));
     }
     // markers: same-lane markers closer than 14 px stack vertically inside the lane
     for (const [li, k] of LANES.entries()) {
@@ -462,7 +468,7 @@ export function laneChart(o: LaneOpts): HTMLElement {
         const x = left + p.x;
         const cy = top + laneH * li + laneH / 2 + (p.row - (placed.some((q) => q.row) ? 1 : 0)) * 8;
         const a = p.item;
-        const name = `${fmtDayHM(a.ts)} ${KIND_LABEL[a.kind]}${a.recurring ? ' (반복)' : ''}: ${a.label}`;
+        const name = `${fmtDayHM(a.ts, year)} ${KIND_LABEL[a.kind]}${a.recurring ? ' (반복)' : ''}: ${a.label}`;
         if (a.recurring) svg.append(s('line', { class: `obs-recline k-${a.kind}`, x1: x, x2: x, y1: top, y2: bottom }));
         const g = s('g', { class: `obs-mk k-${a.kind}${a.pinId && o.snap?.has(a.pinId) && !reducedMotion() ? ' snap' : ''}`, tabindex: a.pinId && o.onAnn ? 0 : undefined, role: a.pinId && o.onAnn ? 'button' : 'img', 'aria-label': name, 'data-pin': a.pinId }, s('title', {}, name), s('circle', { class: 'obs-halo', cx: x, cy, r: 9 }), shape(a.kind, x, cy, 5));
         if (a.pinId && o.onAnn) {

@@ -699,6 +699,9 @@ export const caseZeroWiki: CaseFile = {
           id: 'tail', text: '누가 채웠나 — 제일 큰 파일의 끝', hint: '찬 곳 안에서 제일 큰 것을 찾고, 그 파일의 끝을 읽어 보세요.', any: [{ clue: 'c0_loop' }],
           direction: 'du -sh /var/log/* 로 가장 큰 것을 찾고, tail -n 20 <그 안의 파일> 로 끝을 보세요.',
           say: '/var 100% ㅋㅋㅋ 꽉 찼네요. 근데 누가 채운 거예요?? 👍', next: '/var 안에서 제일 큰 것',
+          // the direction's own way down: any du over /var, /var/log or /var/log/wiki (flags, globs,
+          // relative paths, | sort …) is on track even when it finds nothing new
+          onTrack: ['^\\s*du(\\s+(-\\S+|/var(/\\S*)?|[^/~\\s|;&]\\S*))*\\s*([|;&].*)?$'],
           answer: '터미널에 그대로: du -sh /var/log/* → 가장 큰 wiki 폴더 → tail -n 20 /var/log/wiki/wiki.log',
         },
         {

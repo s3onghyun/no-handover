@@ -755,6 +755,7 @@ export class Game {
     const cur = this.objectives.current();
     const st = this.st.rail!;
     if (!cur?.next || st.redirected.includes(cur.id)) return;
+    if (cur.onTrack?.some((re) => new RegExp(re).test(line))) return;
     st.redirected.push(cur.id);
     this.log('rail-redirect', { item: cur.id, line });
     this.queueMessage({ channel: rail.channel, from: rail.from, text: rail.offRail.replace(/\{next\}/g, cur.next) }, `rail-off:${cur.id}`, 200);

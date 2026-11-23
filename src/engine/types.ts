@@ -635,6 +635,11 @@ export interface ObjectiveDef {
   say?: string;
   /** Rail: what to look at next, named in the off-rail redirect and the ask reply ("{next}부터 봐요"); a nudge, not the command. */
   next?: string;
+  /**
+   * Rail: command lines (regex) that are on the way to this item even when they find no new clue
+   * (e.g. a second `du` one level down), so they never get the off-rail redirect.
+   */
+  onTrack?: string[];
   /** 💡 panel "정답" for this item (`hints.objectivePanel`): the exact command; default: "터미널에 그대로 치세요: {next}". */
   answer?: string;
 }

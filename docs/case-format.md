@@ -244,11 +244,11 @@ shell: {
 rail: { from: 'jihoon', channel: 'me-dm-jihoon', offRail: '그건 나중에요 ㅋㅋ {next}부터 봐요!!', quiet: ['help', 'man'], done: '…', highlightClues: true },
 desktop: { icons: [{ app: 'terminal' }, { app: 'messenger' }, { app: 'mail' }, { app: 'notes', after: 'df' }, …] },
 // opening.objectives.items[] 에 say(그 항목 차례가 되면 레일 동료가 보내는 말), next(되돌림·답에 넣을 단계 이름, 명령 아님),
-// direction(💡 방향: 도구 이름), answer(💡 정답: 명령)
+// direction(💡 방향: 도구 이름), answer(💡 정답: 명령), onTrack(단서가 새로 안 나와도 그 단계로 가는 중인 명령 줄 정규식)
 ```
 
 - `shell.allow`: 이 명령만 돈다. 목록 밖의 **진짜** 명령은 `refuse` 문장으로 답하고(`blocked` 마찰로 기록), 없는 명령은 예전처럼 `command not found` + 목록 안에서 고른 "혹시 …인가요?". Tab 자동완성도 목록만.
-- `rail`: 항목이 체크돼 다음 항목이 차례가 되면 1.5초 뒤 그 항목의 `say`가 `from`의 메시지로 온다(모두 끝나면 `done`). 단서도 체크도 못 만든 명령에는 차례인 항목마다 **한 번만** `offRail`(`{next}` = 그 항목의 `next`)이 온다(`rail-redirect` 이벤트). `quiet` 명령은 세지 않는다. `highlightClues`면 단서 정규식에 걸리는 터미널 줄이 노랗게 표시된다.
+- `rail`: 항목이 체크돼 다음 항목이 차례가 되면 1.5초 뒤 그 항목의 `say`가 `from`의 메시지로 온다(모두 끝나면 `done`). 단서도 체크도 못 만든 명령에는 차례인 항목마다 **한 번만** `offRail`(`{next}` = 그 항목의 `next`)이 온다(`rail-redirect` 이벤트). `quiet` 명령과 그 항목의 `onTrack` 정규식에 맞는 명령 줄(예: Case 0 "누가 채웠나"의 `du -sh /var/log/wiki/*`)은 세지 않는다. `highlightClues`면 단서 정규식에 걸리는 터미널 줄이 노랗게 표시된다.
 - `desktop.icons`: 아이콘 순서와 해금 조건. `after`가 없는 아이콘만 처음에 보이고, 나머지는 그 항목이 체크되거나 체크리스트가 접히면 나타난다. 아이콘이 없어도 메시지 알림이나 보드의 "보고서 쓰기"로는 창이 열린다.
 - 은재는 레일 동료가 될 수 없다(§8-3, 실시간 대사 없음). `tests/case0.test.ts`가 검사한다.
 

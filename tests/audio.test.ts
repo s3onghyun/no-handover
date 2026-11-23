@@ -6,6 +6,8 @@ import { AudioManager, PENDING_MS, defaultFetch, type CtxLike, type StorageLike 
 import { MANIFEST, cueFiles, cueFolder, type CueDef } from '../src/audio/manifest.ts';
 import { CAMPAIGN } from '../src/cases/index.ts';
 import { voiceManifest } from '../src/engine/voices.ts';
+import { applyExpert } from '../src/engine/expert.ts';
+import { existsSync, readdirSync } from 'node:fs';
 
 function fakeCtx(initial = 'suspended') {
   const log: string[] = [];
@@ -60,20 +62,22 @@ function memStorage(init: Record<string, string> = {}): StorageLike & { data: Re
 const tick = () => new Promise((r) => setTimeout(r, 0));
 const ZZ = [0.2, 0, 440, 0.001, 0, 0.02];
 const M: Record<string, CueDef> = {
-  'sfx.ding': { class: 'ui', zzfx: ZZ, where: '' },
-  'sfx.quiet': { class: 'sfx', where: '' },
-  'voice.v': { class: 'voice', where: '' },
+  'sfx.ding': { class: 'ui', file: true, zzfx: ZZ, where: '' },
+  'sfx.quiet': { class: 'sfx', file: true, where: '' },
+  'voice.v': { class: 'voice', file: true, where: '' },
+  'sfx.synthonly': { class: 'ui', zzfx: ZZ, where: '' },
   'sfx.custom': { src: ['x/one.ogg', 'x/one.mp3'], class: 'sfx', zzfx: ZZ, where: '' },
-  'amb.a': { class: 'ambience', loop: true, where: '' },
+  'amb.a': { class: 'ambience', file: true, loop: true, where: '' },
   'sfx.loopy': { class: 'sfx', loop: true, loopLen: 0.5, zzfx: ZZ, hits: [[0], [0.25]], where: '' },
-  'music.sting': { class: 'music', where: '' },
+  'music.sting': { class: 'music', file: true, where: '' },
 };
 
-test('audio: default file paths per cue folder; explicit src wins', () => {
+test('audio: default file paths per cue folder for cues that ship files; explicit src wins; others fetch nothing', () => {
   assert.deepEqual(cueFiles('amb.office', MANIFEST['amb.office']), ['audio/music/amb.office.ogg', 'audio/music/amb.office.mp3']);
-  assert.deepEqual(cueFiles('music.reveal', MANIFEST['music.reveal']), ['audio/music/music.reveal.ogg', 'audio/music/music.reveal.mp3']);
-  assert.deepEqual(cueFiles('voice.briefing-jihun', { class: 'voice', where: '' }), ['audio/voice/voice.briefing-jihun.ogg', 'audio/voice/voice.briefing-jihun.mp3']);
-  assert.deepEqual(cueFiles('sfx.ring', MANIFEST['sfx.ring']), ['audio/sfx/sfx.ring.ogg', 'audio/sfx/sfx.ring.mp3']);
+  assert.deepEqual(cueFiles('voice.briefing-jihun', { class: 'voice', file: true, where: '' }), ['audio/voice/voice.briefing-jihun.ogg', 'audio/voice/voice.briefing-jihun.mp3']);
+  assert.deepEqual(cueFiles('sfx.ding', M['sfx.ding']), ['audio/sfx/sfx.ding.ogg', 'audio/sfx/sfx.ding.mp3']);
+  assert.deepEqual(cueFiles('music.reveal', MANIFEST['music.reveal']), [], 'no file yet: silent without a request');
+  assert.deepEqual(cueFiles('sfx.ring', MANIFEST['sfx.ring']), [], 'zzfx only: no request');
   assert.deepEqual(cueFiles('sfx.custom', M['sfx.custom']), ['x/one.ogg', 'x/one.mp3']);
   assert.equal(cueFolder('amb.x'), 'music');
 });
@@ -96,6 +100,8 @@ test('audio: resolution order is file (ogg, then mp3) -> zzfx -> silence', async
   assert.equal(await a.source('sfx.ding'), 'zzfx');
   assert.equal(await a.source('voice.v'), 'silent');
   assert.equal(await a.source('nope'), 'silent');
+  assert.equal((await a.play('sfx.synthonly')).status, 'zzfx');
+  assert.deepEqual(fetched.filter((u) => u.includes('synthonly')), [], 'a cue that ships no file is never fetched');
 
   // a file appears (fresh manager = fresh cache, like a page reload after main drops files in)
   files.set('/b/audio/sfx/sfx.ding.mp3', new Uint8Array([1, 2]));
@@ -285,4 +291,17 @@ test('audio manifest: ids, classes, files and fallbacks', () => {
       if (n.askText !== undefined) assert.ok(`voice.nudge-${e.cs.id}-${n.id}-ask` in v, `${e.id} ${n.id} ask`);
     }
   }
+});
+
+test('audio manifest: every file a manifest requests is on disk, and every shipped file is requested', () => {
+  const pub = new URL('../public/', import.meta.url).pathname;
+  // the manifest the game builds: the shared cues plus one case's voices, in both modes
+  const manifests = [MANIFEST, ...CAMPAIGN.flatMap((e) => (e.cs ? [voiceManifest(e.cs), voiceManifest(applyExpert(e.cs))] : []))];
+  const requested = new Set<string>();
+  for (const m of manifests) for (const [id, c] of Object.entries(m as Record<string, CueDef>)) for (const s of cueFiles(id, c)) requested.add(s);
+  const missing = [...requested].filter((s) => !existsSync(pub + s));
+  assert.deepEqual(missing, [], 'requested but not shipped (would 404)');
+  const shipped = ['music', 'voice', 'sfx'].flatMap((d) => (existsSync(`${pub}audio/${d}`) ? readdirSync(`${pub}audio/${d}`).filter((f) => /\.(ogg|mp3)$/.test(f)).map((f) => `audio/${d}/${f}`) : []));
+  assert.deepEqual(shipped.filter((s) => !requested.has(s)), [], 'shipped but never requested: mark the cue `file: true` (src/audio/manifest.ts)');
+  assert.ok(requested.size > 2, `${requested.size} files`);
 });
