@@ -11,7 +11,7 @@ import { CAMPAIGN } from '../src/cases/index.ts';
 import { DUR, LIVE_TICK_MS } from '../src/ui/motion.ts';
 import { readFileSync } from 'node:fs';
 import {
-  caseAnnotations, cronExpr, dataWindow, lastSample, cronOccurrences, fitRange, fmtLogTs, logRows, nextCron, panelRange, parseCron, pinAnnotations, pinKind, pinLevel,
+  caseAnnotations, cronExpr, dataWindow, dayLines, lastSample, cronOccurrences, fitRange, fmtDayHM, fmtLogTs, fmtRange, logRows, nextCron, panelRange, parseCron, pinAnnotations, pinKind, pinLevel,
   placeAnnotations, rangeOptions, sampleSeries, spansAbove, summarizePanel, timeTicks, valueAt, xOf, yExtent,
 } from '../src/ui/dashboard/derive.ts';
 
@@ -159,6 +159,69 @@ test('time ticks and log timestamps', () => {
   assert.ok(multi.some((t) => t.label === '11/14'), 'midnight shows the date');
   assert.equal(fmtLogTs(L('2026-11-14T03:15:40')), '11-14 03:15:40');
   assert.equal(fmtLogTs(L('2026-11-13T18:02')), '11-13 18:02');
+});
+
+/** Ticks strictly ascending, unique labels, at least `gap` px apart on a `w` px axis. */
+function assertTicks(ticks: { ts: number; label: string }[], r: { from: number; to: number }, w: number, gap: number, what: string): void {
+  assert.ok(ticks.length >= 2, `${what}: ${ticks.length} ticks`);
+  for (const [i, t] of ticks.entries()) {
+    assert.ok(t.ts >= r.from && t.ts <= r.to, `${what}: ${t.label} inside the range`);
+    if (!i) continue;
+    assert.ok(t.ts > ticks[i - 1].ts, `${what}: ${ticks[i - 1].label} → ${t.label} ascending`);
+    assert.ok(xOf(t.ts, r, w)! - xOf(ticks[i - 1].ts, r, w)! >= gap, `${what}: ${ticks[i - 1].label} / ${t.label} at least ${gap} px apart`);
+  }
+  assert.equal(new Set(ticks.map((t) => t.label)).size, ticks.length, `${what}: labels unique`);
+}
+
+test('fit range over years (Case 0: a 2023 history line + today): ends at the clock, dates carry the year, ticks ascend', () => {
+  const now = L('2026-11-10T09:40');
+  const pins = [pin('# TODO: wiki 로그 logrotate 규칙', '2023-04-03T10:41:03'), pin('No space left on device', '2026-11-10T08:47:20')];
+  const r = fitRange(pins, now);
+  assert.ok(r.from < L('2023-04-03T10:41') && r.from > L('2023-01-01T00:00'), 'padded a few percent before the oldest pin');
+  assert.ok(r.to >= L('2026-11-10T08:47:20') && r.to <= now + 5 * 60_000, 'never past the in-game clock (+5 min)');
+  assert.equal(fmtRange(r).replace(/ \(.\) \d\d:\d\d/g, ''), `${new Date(r.from).getUTCFullYear()}/${new Date(r.from).getUTCMonth() + 1}/${new Date(r.from).getUTCDate()} → 2026/11/10`);
+  assert.match(fmtRange(r), /^2023\/\d+\/\d+ \(.\) \d\d:\d\d → 2026\/11\/10 \(화\) \d\d:\d\d$/);
+  for (const w of [240, 600, 954, 1400]) {
+    const ticks = timeTicks(r, w);
+    assertTicks(ticks, r, w, 90, `${w}px`);
+    assert.ok(ticks.every((t) => /^20\d\d년/.test(t.label)), `${w}px: every label has the year (${ticks.map((t) => t.label).join(', ')})`);
+  }
+  assert.deepEqual(timeTicks(r, 954).map((t) => t.label), ['2023년 7월', '2024년 1월', '2024년 7월', '2025년 1월', '2025년 7월', '2026년 1월', '2026년 7월']);
+  assert.deepEqual(dayLines(r, 954, now), [], 'no day boundaries when a day is a fraction of a pixel');
+});
+
+test('fit range on one day: no year, HH:MM ticks; day boundaries keep clear of the 지금 tag', () => {
+  const now = L('2026-11-10T09:40');
+  const r = fitRange([pin('a', '2026-11-09T21:14:03'), pin('b', '2026-11-10T08:47:20')], now);
+  assert.ok(r.to <= now + 5 * 60_000);
+  assert.match(fmtRange(r), /^11\/9 \(월\) \d\d:\d\d → 11\/10 \(화\) \d\d:\d\d$/);
+  const ticks = timeTicks(r, 954);
+  assertTicks(ticks, r, 954, 90, 'overnight');
+  assert.ok(ticks.some((t) => t.label === '11/10'), 'midnight shows the date');
+  assert.ok(ticks.filter((t) => t.label !== '11/10').every((t) => /^\d\d:\d\d$/.test(t.label)));
+  const same = fitRange([pin('a', '2026-11-10T08:47'), pin('b', '2026-11-10T09:01')], now);
+  assert.match(fmtRange(same), /^11\/10 \(화\) \d\d:\d\d → \d\d:\d\d$/);
+  assertTicks(timeTicks(same, 954), same, 954, 90, 'same day');
+  // a three-day range: one line per midnight; a label that would run into "지금" is dropped, its line stays
+  const three = { from: L('2026-11-07T12:00'), to: L('2026-11-10T09:40') };
+  const days = dayLines(three, 954, L('2026-11-10T01:00'));
+  assert.deepEqual(days.map((x) => x.label), ['11/8 (일)', '11/9 (월)', null]);
+  assert.deepEqual(dayLines(three, 954).map((x) => x.label), ['11/8 (일)', '11/9 (월)', '11/10 (화)']);
+});
+
+test('fit range across a new year: the year shows on dates and ticks', () => {
+  const r = fitRange([pin('a', '2026-12-31T22:10'), pin('b', '2027-01-01T03:30')], L('2027-01-01T09:00'));
+  assert.match(fmtRange(r), /^2026\/12\/31 \(목\) \d\d:\d\d → 2027\/1\/1 \(금\) \d\d:\d\d$/);
+  const ticks = timeTicks(r, 954);
+  assertTicks(ticks, r, 954, 90, 'new year');
+  assert.ok(ticks.some((t) => t.label === '2027/1/1'), ticks.map((t) => t.label).join(', '));
+  assert.equal(fmtDayHM(L('2027-01-01T00:00'), true), '2027/1/1 (금) 00:00');
+  assert.deepEqual(dayLines(r, 954).map((x) => x.label), ['2027/1/1 (금)']);
+  // a few months inside one year: month ticks without the year
+  const months = { from: L('2026-03-05T00:00'), to: L('2026-11-10T09:40') };
+  const mt = timeTicks(months, 954);
+  assertTicks(mt, months, 954, 80, 'months');
+  assert.deepEqual(mt.map((t) => t.label), ['4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월']);
 });
 
 test('logs panel rows: range, search (text, source, note), level toggles, oldest first', () => {

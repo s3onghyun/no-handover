@@ -9,7 +9,7 @@ import type { AppDef } from '../wm.ts';
 import type { Pin } from '../../engine/game.ts';
 import { parseLocal, pad } from '../../engine/time.ts';
 import {
-  caseAnnotations, cronExpr, dataWindow, cronOccurrences, fmtDayHM, logRows, nextCron, pinAnnotations, pinLevel, rangeOptions,
+  caseAnnotations, cronExpr, dataWindow, cronOccurrences, fmtDayHM, fmtRange, logRows, nextCron, pinAnnotations, pinLevel, rangeOptions,
   type Annotation, type Level, type RangeId,
 } from '../dashboard/derive.ts';
 import { play, DUR } from '../motion.ts';
@@ -185,7 +185,7 @@ export const boardApp: AppDef = {
       if (lanes) grid.appendChild(
         panel(
           {
-            title: `증거 타임라인 · ${fmtDayHM(range.from)} → ${fmtDayHM(range.to)}`,
+            title: `증거 타임라인 · ${fmtRange(range)}`,
             cls: 'obs-tl',
             description: '핀한 증거가 종류별 줄에 시각대로 놓입니다. ◆ 변경(커밋·배포) ▲ 크론(크론탭 줄은 실행 시각마다 반복 표시) ■ 알림 ✖ 오류·경고 ● 그 밖의 이벤트. 표시를 누르면 아래 로그 줄로 이동합니다.',
           },

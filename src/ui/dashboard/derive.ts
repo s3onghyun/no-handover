@@ -36,8 +36,12 @@ const KO_DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const d = (ms: number) => new Date(ms);
 export const fmtHM = (ms: number): string => `${pad(d(ms).getUTCHours())}:${pad(d(ms).getUTCMinutes())}`;
 export const fmtMD = (ms: number): string => `${d(ms).getUTCMonth() + 1}/${d(ms).getUTCDate()}`;
-/** '11/14 (토) 03:15' */
-export const fmtDayHM = (ms: number): string => `${fmtMD(ms)} (${KO_DOW[d(ms).getUTCDay()]}) ${fmtHM(ms)}`;
+/** '2023/4/3' */
+export const fmtYMD = (ms: number): string => `${d(ms).getUTCFullYear()}/${fmtMD(ms)}`;
+/** '11/14 (토) 03:15', or with the year '2023/4/3 (월) 10:41'. */
+export const fmtDayHM = (ms: number, year = false): string => `${year ? fmtYMD(ms) : fmtMD(ms)} (${KO_DOW[d(ms).getUTCDay()]}) ${fmtHM(ms)}`;
+/** The range crosses a new year (always true past a year): dates on it need the year. */
+export const spansYears = (r: Range): boolean => d(r.from).getUTCFullYear() !== d(r.to).getUTCFullYear();
 /** Log-row timestamp: 'MM-DD HH:MM[:SS]'. */
 export function fmtLogTs(ms: number): string {
   const x = d(ms);
@@ -46,7 +50,8 @@ export function fmtLogTs(ms: number): string {
 }
 export function fmtRange(r: Range): string {
   const sameDay = Math.floor(r.from / DAY) === Math.floor(r.to / DAY);
-  return sameDay ? `${fmtDayHM(r.from)} → ${fmtHM(r.to)}` : `${fmtDayHM(r.from)} → ${fmtDayHM(r.to)}`;
+  const year = spansYears(r);
+  return sameDay ? `${fmtDayHM(r.from)} → ${fmtHM(r.to)}` : `${fmtDayHM(r.from, year)} → ${fmtDayHM(r.to, year)}`;
 }
 export function fmtValue(v: number, unit = ''): string {
   const abs = Math.abs(v);
@@ -81,8 +86,9 @@ export function panelRange(p: DashboardDef | undefined): Range | null {
 }
 
 /**
- * The range that shows every timed pin (padded 4 %, at least one hour). Falls back to the
- * dashboard window, then to the last 24 h of the in-game clock.
+ * The range that shows every timed pin (padded 4 %, at least one hour). The padding never runs
+ * more than 5 minutes past the in-game clock (a 2023 pin next to today's must not stretch the
+ * range into next year). Falls back to the dashboard window, then to the last 24 h of the clock.
  */
 export function fitRange(pins: Pin[], now: number, panels?: DashboardDef): Range {
   const ts = pins.filter((p) => p.ts !== null && p.onTimeline).map((p) => p.ts!);
@@ -96,7 +102,8 @@ export function fitRange(pins: Pin[], now: number, panels?: DashboardDef): Range
     to = mid + span / 2;
   }
   const padMs = Math.max(5 * MIN, span * 0.04);
-  return { from: Math.floor((from - padMs) / MIN) * MIN, to: Math.ceil((to + padMs) / MIN) * MIN };
+  const end = Math.min(to + padMs, Math.max(to, now) + 5 * MIN);
+  return { from: Math.floor((from - padMs) / MIN) * MIN, to: Math.ceil(end / MIN) * MIN };
 }
 
 /** Range picker options; relative ones end at the in-game `now`. */
@@ -406,17 +413,55 @@ export function placeAnnotations<T extends { ts: number }>(items: T[], r: Range,
 
 // ------------------------------------------------------------------ ticks
 
-const STEPS = [MIN, 5 * MIN, 10 * MIN, 15 * MIN, 30 * MIN, HOUR, 2 * HOUR, 3 * HOUR, 6 * HOUR, 12 * HOUR, DAY, 2 * DAY, 7 * DAY, 30 * DAY, 365 * DAY];
+const STEPS = [MIN, 5 * MIN, 10 * MIN, 15 * MIN, 30 * MIN, HOUR, 2 * HOUR, 3 * HOUR, 6 * HOUR, 12 * HOUR, DAY, 2 * DAY, 7 * DAY];
+/** Past a week the ticks fall on calendar months (first of the month) and then on new years. */
+const MONTH_STEPS = [1, 2, 3, 6, 12, 24, 60, 120];
 
-/** Round time ticks for an axis about `width` px wide (one per ~90 px). */
+/**
+ * Round time ticks for an axis about `width` px wide, oldest first and at least ~90 px apart
+ * (~110 px when the labels carry the year, on a range that crosses a new year).
+ */
 export function timeTicks(r: Range, width: number): { ts: number; label: string }[] {
-  const want = Math.max(2, Math.floor(width / 90));
-  const step = STEPS.find((s) => (r.to - r.from) / s <= want) ?? STEPS[STEPS.length - 1];
+  const year = spansYears(r);
+  const want = Math.max(2, Math.floor(width / (year ? 110 : 90)));
+  const span = r.to - r.from;
   const out: { ts: number; label: string }[] = [];
-  const multiDay = r.to - r.from > DAY || Math.floor(r.from / DAY) !== Math.floor(r.to / DAY);
-  for (let ts = Math.ceil(r.from / step) * step; ts <= r.to; ts += step) {
-    const midnight = ts % DAY === 0;
-    out.push({ ts, label: step >= DAY ? fmtMD(ts) : multiDay && midnight ? fmtMD(ts) : fmtHM(ts) });
+  const date = year ? fmtYMD : fmtMD;
+  const step = STEPS.find((s) => span / s <= want);
+  if (step) {
+    const multiDay = span > DAY || Math.floor(r.from / DAY) !== Math.floor(r.to / DAY);
+    for (let ts = Math.ceil(r.from / step) * step; ts <= r.to; ts += step) {
+      const midnight = ts % DAY === 0;
+      out.push({ ts, label: step >= DAY ? date(ts) : multiDay && midnight ? date(ts) : fmtHM(ts) });
+    }
+    return out;
+  }
+  // calendar months, counted at their mean length (a 28-day month still keeps ~92 % of the spacing)
+  const months = MONTH_STEPS.find((m) => span / (m * 30.44 * DAY) <= want) ?? Math.ceil(span / (want * 365 * DAY)) * 12;
+  const f = d(r.from);
+  let idx = Math.ceil((f.getUTCFullYear() * 12 + f.getUTCMonth() + (f.getUTCDate() > 1 || r.from % DAY ? 1 : 0)) / months) * months;
+  for (let ts = Date.UTC(Math.floor(idx / 12), idx % 12, 1); ts <= r.to; idx += months, ts = Date.UTC(Math.floor(idx / 12), idx % 12, 1)) {
+    const x = d(ts);
+    out.push({ ts, label: months % 12 === 0 ? `${x.getUTCFullYear()}년` : year ? `${x.getUTCFullYear()}년 ${x.getUTCMonth() + 1}월` : `${x.getUTCMonth() + 1}월` });
+  }
+  return out;
+}
+
+/**
+ * Day boundaries for the evidence timeline (a line and a 'M/D (요일)' label at each midnight),
+ * only while a day is wide enough for its label (otherwise the ticks carry the dates). A label
+ * that would run into the "지금" tag at `now` is dropped (the line stays).
+ */
+export function dayLines(r: Range, width: number, now?: number): { ts: number; label: string | null }[] {
+  const days = (r.to - r.from) / DAY;
+  if (!days || width / days < 80) return [];
+  const year = spansYears(r);
+  const nowX = now === undefined ? null : xOf(now, r, width);
+  const out: { ts: number; label: string | null }[] = [];
+  for (let ts = Math.ceil(r.from / DAY) * DAY; ts <= r.to; ts += DAY) {
+    const x = xOf(ts, r, width)!;
+    const clash = nowX !== null && nowX - x > -4 && nowX - x < (year ? 130 : 105);
+    out.push({ ts, label: clash ? null : fmtDayHM(ts, year).replace(/ 00:00$/, '') });
   }
   return out;
 }
