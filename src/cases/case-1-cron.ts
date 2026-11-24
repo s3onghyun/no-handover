@@ -571,7 +571,7 @@ export const caseOneCron: CaseFile = {
     { at: '2026-11-10T18:41:30', emits: [hist('crontab -l')] },
     { at: '2026-11-10T18:41:52', emits: [hist('# 매시 정각. 은재님 crontab 빌림 🙇 (도윤)')] },
     // Wednesday morning, before the half day off
-    { at: '2026-11-11T09:11:05', emits: [hist('# 도윤님, 오늘은 제 crontab 이에요. 맨 위 주석 두 줄부터 🌱')] },
+    { at: '2026-11-11T09:11:05', emits: [hist('# 망설여지면 맨 위 주석 두 줄부터요, 도윤님. 오늘은 제 crontab 이에요 🌱')] },
 
     // wiki journal: Case 0's incident and Seojin's Tuesday fix, then the certificate
     { at: '2026-11-09T21:14:03', emits: [wiki('WARN thumbnail attach/8812 failed: PDF parse error (xref table broken) — retrying (attempt 1)', 4, 1423)] },
@@ -671,7 +671,7 @@ export const caseOneCron: CaseFile = {
       scrollback: [
         'Nuri wiki-01 (Ubuntu 22.04 LTS) — 사내 위키',
         '조사 모드 (읽기 전용) — 명령 목록: help',
-        'eunjae@wiki-01:~$ # 도윤님, 오늘은 제 crontab 이에요. 맨 위 주석 두 줄부터 🌱',
+        'eunjae@wiki-01:~$ # 망설여지면 맨 위 주석 두 줄부터요, 도윤님. 오늘은 제 crontab 이에요 🌱',
       ],
     },
   ],
@@ -1032,7 +1032,7 @@ export const caseOneCron: CaseFile = {
           { at: '2026-11-10T18:36:12', cmd: './wiki-cert-renew.sh --dry-run >> wiki-cert.log 2>&1' },
           { at: '2026-11-10T18:36:41', cmd: '# 됨!! ✓ (도윤)' },
           { at: '2026-11-10T18:40:02', cmd: 'crontab -e' },
-          { at: '2026-11-11T09:11:05', cmd: '# 도윤님, 오늘은 제 crontab 이에요 🌱' },
+          { at: '2026-11-11T09:11:05', cmd: '# 망설여지면 천천히요, 도윤님. 오늘은 제 crontab 이에요 🌱' },
         ],
       },
     ],
@@ -1053,7 +1053,7 @@ export const caseOneCron: CaseFile = {
     terminalTabs: [
       {
         label: 'wiki-01', host: W, cwd: '/home/eunjae',
-        scrollback: ['Nuri wiki-01 (Ubuntu 22.04 LTS) — 사내 위키', '조사 모드 (읽기 전용) — 명령 목록: help', 'eunjae@wiki-01:~$ # 도윤님, 오늘은 제 crontab 이에요 🌱'],
+        scrollback: ['Nuri wiki-01 (Ubuntu 22.04 LTS) — 사내 위키', '조사 모드 (읽기 전용) — 명령 목록: help', 'eunjae@wiki-01:~$ # 망설여지면 천천히요, 도윤님. 오늘은 제 crontab 이에요 🌱'],
       },
     ],
     files: [
