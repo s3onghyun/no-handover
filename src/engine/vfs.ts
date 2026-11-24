@@ -115,6 +115,13 @@ export class Vfs {
     this.writeFile(path, line, opts);
   }
 
+  /** Remove a file (the player's own `crontab -r`, Case 4). */
+  remove(path: string): boolean {
+    const p = Vfs.normalize(path);
+    const parent = this.lookup(Vfs.dirname(p));
+    return !!parent?.children?.delete(Vfs.basename(p));
+  }
+
   mount(path: string, node: VNode): void {
     const p = Vfs.normalize(path);
     const parent = this.mkdirp(Vfs.dirname(p));

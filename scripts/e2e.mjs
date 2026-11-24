@@ -34,7 +34,11 @@
 // and one tap away (💡 힌트, 🔊), the terminal's ✕ and 📌 column inside the screen, "오늘 할 일" folded clear of it.
 // A thirteenth round pins one line straight from a long output in every case: Shift+↑ / P at 1280x800,
 // tap a line + 「⇡ 단서」 + 「📌 핀하기」 at 390x844, reduced motion on and off, 숙련자 모드 without marks.
-// The last three rounds also run in WebKit (the Safari engine) when PW_WEBKIT names a WebKit launcher or is 1.
+// A fourteenth round plays Case 4 「남아 있는 열쇠」 and the season finale: the crontab aha, the hidden sign, 은재's drafts
+// (namu), the keys and prints, the hidden bad ending (crontab -r), the report, the last scene, the choice, two endings
+// (#인프라, then 다른 곳에 넘겨 보기 → 「인수인계 없음」), the reply with the workshop photo, the credits, the 15 s line,
+// the stats; then the sign-not-found path at 390x844 with reduced motion.
+// The last rounds (eleven to fourteen) also run in WebKit (the Safari engine) when PW_WEBKIT names a WebKit launcher or is 1.
 //
 //   npm run build && npm run e2e
 //   E2E_SHOTS=/some/dir npm run e2e        # also save screenshots
@@ -145,10 +149,10 @@ try {
   await shot('case0-01-boot.png');
   await page.locator('#boot .linkbtn.cases').click();
   assert.equal(await page.locator('#cases li').count(), 5);
-  for (const id of ['case1-cron-env', 'case2-deleted-open', 'friday-1802']) assert.equal(await page.locator(`#cases li[data-id="${id}"].case-locked`).count(), 1, `${id} locked until the case before it is solved`);
-  assert.equal(await page.locator('#cases li.case-soon').count(), 1, 'Case 4 is the only titled placeholder');
+  for (const id of ['case1-cron-env', 'case2-deleted-open', 'friday-1802', 'case4-keys']) assert.equal(await page.locator(`#cases li[data-id="${id}"].case-locked`).count(), 1, `${id} locked until the case before it is solved`);
+  assert.equal(await page.locator('#cases li.case-soon').count(), 0, 'no placeholder left: Case 4 is playable');
   // round 3: a locked case says how it opens and links back to the case that opens it (here, the one on screen)
-  for (const id of ['case1-cron-env', 'case2-deleted-open', 'friday-1802']) {
+  for (const id of ['case1-cron-env', 'case2-deleted-open', 'friday-1802', 'case4-keys']) {
     assert.equal(await page.locator(`#cases li[data-id="${id}"] .cl-st`).innerText(), '🔒 잠김 — Case 0 · 튜토리얼: 증거 핀 → 보고서 제출 후 열려요');
     assert.equal(await page.locator(`#cases li[data-id="${id}"] .cl-back`).innerText(), '← 지금 사건으로 돌아가기');
   }
@@ -2054,6 +2058,7 @@ try {
     ['case1-cron-env', 'journalctl -u cron', 'c1_cronran', 'wiki-01', 'maybe'],
     ['case2-deleted-open', 'journalctl', 'c2_rm', 'logs-01', 'maybe'],
     ['friday-1802', 'journalctl -u payment-api', 'c_emfile', 'pay-api-01', 'maybe'],
+    ['case4-keys', 'sudo cat /home/deploy/.ssh/authorized_keys', 'k_deploy_key', 'pay-api-02', 'maybe', 'pay-api-02'],
   ];
   const engines13 = [['chromium', browser]];
   if (process.env.PW_WEBKIT) engines13.push(['webkit', await webkit.launch(process.env.PW_WEBKIT === '1' ? {} : { executablePath: process.env.PW_WEBKIT })]);
@@ -2062,7 +2067,7 @@ try {
     try {
       for (const [w, hgt, touch] of [[1280, 800, false], [390, 844, true]]) {
         for (const reduced of [false, true]) {
-          for (const [id, cmd, clue, host, mark] of LINE13) {
+          for (const [id, cmd, clue, host, mark, tabName] of LINE13) {
             // WebKit runs the touch screen (the Safari case), Chromium both; reduced motion in Case 0 and Case 3 only
             if ((engine === 'webkit' && !touch) || (reduced && id !== 'case0-wiki' && id !== 'friday-1802')) continue;
             const tag = `${engine} ${w}x${hgt}${reduced ? ' reduced' : ''} ${id}`;
@@ -2077,6 +2082,8 @@ try {
             if (!(await term13.count())) await (touch ? p13.locator('.icon[data-app="terminal"]').tap() : p13.locator('.icon[data-app="terminal"]').click());
             const input13 = term13.locator('.tin input');
             await input13.waitFor();
+            // Case 4: the line is on an audit session, not the first tab (도윤's PC)
+            if (tabName) await (touch ? term13.locator('.ttab', { hasText: new RegExp(`^${tabName}$`) }).tap() : term13.locator('.ttab', { hasText: new RegExp(`^${tabName}$`) }).click());
             await p13.waitForTimeout(900);
             assert.equal(await term13.locator('.tline.maybe, .tline.clue').count(), 0, `${tag}: no line is marked before a command`);
             await input13.fill(cmd);
@@ -2190,6 +2197,290 @@ try {
     await ctx13.close();
   }
   step(`line pin in every case (${engines13.map(([e]) => e).join(' + ')}; 1280x800 keys, 390x844 touch; reduced motion on and off): marks only on clue lines after the command, run-by-run jumps (${Object.entries(jumps13).map(([k, v]) => `${k} ${v}`).join(', ')}), P / 44 px 📌 핀하기, host and command kept, flash under 1 s, typing goes on; 숙련자 모드 marks nothing`);
+
+  // ---- fourteenth round: Case 4 「남아 있는 열쇠」 and the season finale (1280x800, Chromium; the overlays again at
+  // 390x844 with reduced motion, and in WebKit when PW_WEBKIT is set). One path through: the briefing, the security
+  // mail, the ledger-01 crontab (aha), the hidden sign on the notebook page, 은재's drafts opened with namu and one
+  // forwarded, the keys and their prints, the hidden bad ending (crontab -r → 몬스테라, back), the report, the last
+  // scene (오미래's "네 번째", the 24th handover line), the choice (#인프라 shows because the sign was found), the
+  // card, 은재 grey, her reply with the workshop photo, the crontab, the credits, the 15 s line, the stats; then
+  // 다른 곳에 넘겨 보기 → the title ending 「인수인계 없음」 (no reply). A second page skips the sign: no #인프라,
+  // and the last scene lights the letters itself.
+  {
+    const ctx14 = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    const p14 = await ctx14.newPage();
+    p14.on('pageerror', (e) => errors.push(`case4: ${e}`));
+    p14.on('console', (m) => m.type() === 'error' && !/404 \(Not Found\)/.test(m.text()) && errors.push(`case4: ${m.text()}`));
+    p14.on('dialog', (d) => (nativeDialogs.push(`p14 ${d.type()}: ${d.message()}`), d.accept()));
+    const shot14 = async (name) => shots && (await p14.screenshot({ path: join(shots, name) }));
+    const term14 = p14.locator('.window[data-app="terminal"]');
+    const run14 = async (label, cmd) => {
+      // another window may have opened over the terminal: its taskbar entry brings it forward
+      if ((await p14.evaluate(() => document.querySelector('.window.focused')?.dataset.app)) !== 'terminal') await p14.locator('#taskbar .task[data-app="terminal"]').click();
+      await term14.locator('.ttab', { hasText: new RegExp(`^${label}$`) }).click();
+      await term14.locator('.tin input').fill(cmd);
+      await term14.locator('.tin input').press('Enter');
+      await p14.waitForTimeout(120);
+    };
+    const pin14 = async (re) => {
+      const line = term14.locator('.tline', { hasText: re }).last();
+      await line.hover();
+      await line.locator('.pinbtn').click();
+    };
+    await p14.goto(`${url}?fresh=1&case=case4-keys`);
+    await p14.locator('#boot .caselabel', { hasText: 'Case 4' }).waitFor();
+    await p14.locator('#boot .exp-new').click();
+    await p14.locator('#briefing[data-step="voice"]').waitFor({ timeout: 10000 });
+    assert.match(await p14.locator('.brief-card').innerText(), /강서진/);
+    await p14.keyboard.press('Escape');
+    await p14.locator('#briefing').waitFor({ state: 'detached', timeout: 4000 });
+    await term14.waitFor();
+    assert.deepEqual(await term14.locator('.ttab:not(.dead)').allInnerTexts(), ['nuri-pc', 'handover', 'bastion', 'pay-api-02', 'ledger-01']);
+    await shot14('case4-01-desktop.png');
+    // the security mail (the first box), and 지훈's "설마"
+    await p14.locator('.icon[data-app="mail"]').click();
+    await p14.locator('.window[data-app="mail"] .mail-row', { hasText: '[보안] 퇴사자 계정·키 점검' }).click();
+    await p14.locator('.toast', { hasText: '설마' }).waitFor({ timeout: 15000 });
+    step('Case 4: briefing (서진), five tabs (도윤\'s PC, handover, three audit sessions), the security mail, 지훈\'s "설마"');
+    // ledger-01: the crontab is comments only, the last line says "첫 글자만" (aha), then the namu README
+    await run14('ledger-01', 'sudo crontab -l -u eunjae');
+    await p14.locator('.moment.moment-aha').waitFor({ timeout: 4000 });
+    assert.match(await p14.locator('.moment-title').innerText(), /바뀐 건 명령이 아니라 주석 한 줄/);
+    await p14.keyboard.press('Escape');
+    await pin14(/첫 글자만 :\)/);
+    await run14('ledger-01', 'cat /etc/nsswitch.conf');
+    await pin14(/^passwd:\s+files\s*📌?$/);
+    await run14('ledger-01', 'cat /home/eunjae/README.txt');
+    await p14.locator('.toast', { hasText: '안 도망침' }).waitFor({ timeout: 15000 });
+    await shot14('case4-02-crontab.png');
+    // the notebook page read again: 도 · 망 · 쳐 · 요, the sign found (지훈 and 서진 react)
+    await p14.locator('.icon[data-app="notes"]').click();
+    await p14.locator('.window[data-app="notes"] .item', { hasText: '은재님이 나한테 남긴 한 줄들' }).click();
+    await p14.locator('.window[data-app="notes"] .sign-letter.lit').nth(3).waitFor();
+    assert.equal((await p14.locator('.window[data-app="notes"] .sign-letter').allInnerTexts()).join(''), '도망쳐요');
+    await p14.locator('.toast', { hasText: '튀래요' }).waitFor({ timeout: 15000 });
+    await p14.locator('.toast', { hasText: '선배답네요' }).waitFor({ timeout: 20000 });
+    await shot14('case4-03-sign.png');
+    step('Case 4: ledger-01 crontab → aha, nsswitch, the namu README; the notebook page shows 도·망·쳐·요 once the crontab said "첫 글자만"; 지훈 "튀래요", 서진 "선배답네요"');
+    // 은재's drafts: a wrong password, namu, the hesitation, the chair; one forwarded to 서진
+    await p14.locator('#taskbar .task[data-app="mail"]').click();
+    const mail14 = p14.locator('.window[data-app="mail"]');
+    await mail14.locator('.segmented button', { hasText: '은재' }).click();
+    await mail14.locator('.segmented button', { hasText: '임시' }).click();
+    await mail14.locator('.mail-row', { hasText: '잠긴 초안' }).last().click();
+    await mail14.locator('input[type="password"]').fill('ledger');
+    await mail14.locator('form button').click();
+    await mail14.locator('.mail-read', { hasText: '처음 맡았던 서버 이름' }).waitFor();
+    await mail14.locator('input[type="password"]').fill('namu');
+    await mail14.locator('form button').click();
+    const priv = p14.locator('.modal-back .modal-private');
+    await priv.waitFor();
+    assert.match(await priv.innerText(), /남은재의 개인 초안입니다\. 열까요\?[\s\S]*열지 않아도 사건은 풀려요/);
+    await priv.locator('.modal-ok').click();
+    await mail14.locator('.mail-read h2', { hasText: '어젯밤' }).waitFor();
+    assert.equal(await mail14.locator('.mail-row', { hasText: '잠긴 초안' }).count(), 0, 'all nine open at once');
+    await mail14.locator('.mail-read .forward').click();
+    await mail14.locator('.mail-read .forward.done', { hasText: '전달함' }).waitFor();
+    await mail14.locator('.mail-row', { hasText: '작업실' }).click();
+    assert.match(await mail14.locator('.mail-read pre').innerText(), /다리 넷이 다 같은 길이인 의자/);
+    step('Case 4: 은재\'s nine drafts — a wrong word keeps them shut, namu asks once ("열지 않아도 사건은 풀려요") and opens all nine; one sent on to 서진');
+    // the keys, the prints, the 11/20 login, the investigation sessions, the history line, the procedure mails
+    await run14('pay-api-02', 'sudo cat /home/deploy/.ssh/authorized_keys');
+    await pin14(/eunjae@nuri-pc\s*📌?$/);
+    await run14('pay-api-02', 'sudo ssh-keygen -lf /home/deploy/.ssh/authorized_keys');
+    await pin14(/jhpark@mbp-2024 \(ED25519\)/);
+    await run14('pay-api-02', 'sudo grep "for deploy" /var/log/auth.log');
+    await run14('bastion', 'sudo grep SEC-2211 /var/log/auth.log');
+    await pin14(/approved by 보안팀 \(ticket SEC-2211\)/);
+    await run14('bastion', 'ssh pay-api-01');
+    await run14('bastion', 'sudo cat /home/eunjae/.bash_history');
+    await pin14(/키 정리: 5대 중 3대 함/);
+    await p14.locator('#taskbar .task[data-app="mail"]').click();
+    await mail14.locator('.segmented button', { hasText: '내 메일' }).click();
+    await mail14.locator('.mail-row', { hasText: '퇴사 처리 체크리스트' }).click();
+    await mail14.locator('.mail-read h2 .pinbtn').click();
+    // the hidden bad ending: 도윤's own crontab -r, the plant's reminder with it; back to before
+    await run14('nuri-pc', 'crontab -r');
+    const bad14 = p14.locator('.finale-bad');
+    await bad14.waitFor({ timeout: 4000 });
+    assert.equal(await bad14.locator('h2').innerText(), '몬스테라가 시들었습니다');
+    await shot14('case4-04-bad.png');
+    await bad14.locator('.fb-back').click();
+    await bad14.waitFor({ state: 'detached' });
+    await run14('nuri-pc', 'crontab -l');
+    await term14.locator('.tline', { hasText: '월요일: 몬스테라' }).last().waitFor();
+    step('Case 4: keys and prints (the 11/20 deploy login is 지훈\'s key), SEC-2211, the "5대 중 3대" history line; crontab -r on 도윤\'s PC → 「몬스테라가 시들었습니다」 → back, the reminder restored');
+    // the report: three fields, cited, one submission
+    await p14.locator('#taskbar .task[data-app="board"], .icon[data-app="report"]').first().waitFor();
+    await p14.locator('.icon[data-app="report"]').click();
+    const rep14 = p14.locator('.window[data-app="report"]');
+    await pick(rep14, 'cause', 'dir-only');
+    await pick(rep14, 'sequence', 'nobody');
+    for (const id of ['checklist', 'outside-ldap', 'shared-account']) await pick(rep14, 'responsibility', id);
+    await cite(rep14, 'cause', /eunjae@nuri-pc/);
+    await cite(rep14, 'sequence', /jhpark@mbp-2024/);
+    await cite(rep14, 'responsibility', /퇴사 처리 체크리스트/);
+    await submit(rep14, /1번째 제출이에요 \(남은 제출 2\/2\)/, p14);
+    // the last scene: no score, 오미래's "네 번째", the sign beats skipped (found), the 24th line waits in the handover tab
+    await p14.locator('.window[data-app="mail"] h2', { hasText: 'RE: [보안] ledger-01 퇴사자 계정 — 경위 보고' }).waitFor({ timeout: 8000 });
+    assert.match(await p14.locator('.window[data-app="mail"] pre').innerText(), /같은 이야기를 네 번째로 듣습니다/);
+    assert.equal(await p14.locator('.moment-result').count(), 0, 'no score moment in the finale');
+    await p14.locator('.ending-bar .ending-act', { hasText: '서버 키 회수' }).waitFor({ timeout: 25000 });
+    assert.match(await term14.locator('.tin input').inputValue(), /^echo "- \[x\] 서버 키 회수/);
+    await shot14('case4-05-handover.png');
+    await term14.locator('.tin input').press('Enter');
+    // the choice: five ways, #인프라 among them
+    const choice14 = p14.locator('.finale-choice');
+    await choice14.waitFor({ timeout: 10000 });
+    assert.equal(await choice14.locator('h2').innerText(), '인수인계서 v5를 누구에게 넘길까요?');
+    assert.deepEqual(await choice14.locator('.fc-opt').allInnerTexts(), ['서진님 — 런북으로', '미래님 — 체크리스트로', '보안팀 — 오늘 안에', '#인프라 — 다 같이', '아무에게도 — 제가 기억할게요']);
+    await shot14('case4-06-choice.png');
+    await choice14.locator('.fc-opt[data-choice="infra"]').click();
+    const conf14 = p14.locator('.modal-back .modal-handover');
+    await conf14.waitFor();
+    assert.match(await conf14.innerText(), /넘기면 되돌릴 수 없어요\. 넘기기 직전 저장은 남아요\./);
+    await conf14.locator('.modal-ok').click();
+    await p14.waitForFunction(() => window.__audio.history.some((x) => x.id === 'music.finale'), null, { timeout: 4000 });
+    const card14 = p14.locator('.finale-card');
+    await card14.waitFor();
+    assert.equal(await card14.locator('h2').innerText(), '「다 같이」');
+    await p14.waitForTimeout(6500);
+    assert.match(await card14.innerText(), /읽는 사람은 열한 명, 고치는 사람은 아직 셋이다/);
+    await shot14('case4-07-card.png');
+    await card14.locator('.finale-next').click();
+    // 은재 grey, then her reply with the photo (the only live words; the face shown only here)
+    await p14.locator('.pc-status.left', { hasText: '남은재 (퇴사)' }).waitFor({ timeout: 4000 });
+    await shot14('case4-08-grey.png');
+    await p14.locator('.finale-bar .finale-next').click();
+    await mail14.locator('.mail-read h2', { hasText: '도윤님께' }).waitFor({ timeout: 5000 });
+    const reply14 = await mail14.locator('.mail-read pre').innerText();
+    assert.match(reply14, /^도윤님,\n다 같이 읽었다면서요\. 그게 제가 8년 동안 못 한 거예요\.\n첫 글자 찾았다면서요 :\)/);
+    assert.match(reply14, /혼자 다 기억하는 자리에서예요/);
+    assert.match(reply14, /서진님한테 제 초안을 전해 줬다면서요/);
+    assert.match(reply14, /다리 하나가 자꾸 짧아요\.\n서버들한테 안부 전해 주세요\. 🌱\n남은재$/);
+    await mail14.locator('.mail-read .attach').click();
+    await p14.locator('.photo-view img').waitFor();
+    assert.equal(await p14.locator('.photo-view img').evaluate((i) => i.naturalWidth), 600);
+    await shot14('case4-09-reply.png');
+    await p14.keyboard.press('Escape');
+    await p14.locator('.finale-bar .finale-next').click();
+    // 내가 살려 둔 것, the credits, the line for the next person, the stats
+    await term14.locator('.tline', { hasText: '다음 실행: 11/27 (금) 18:00' }).waitFor({ timeout: 4000 });
+    assert.ok(await term14.locator('.tline', { hasText: '# 왜: 밤에 도는 것 목록을 매주 팀에' }).count());
+    await shot14('case4-10-crontab.png');
+    await p14.locator('.finale-bar .finale-next').click();
+    const cr14 = p14.locator('.finale-credits');
+    await cr14.waitFor();
+    assert.match(await cr14.innerText(), /## 체크리스트 \(27\/27\)[\s\S]*적어 두기\. 그래야 도망칠 수 있어요\./);
+    await shot14('case4-11-credits.png');
+    await cr14.locator('.finale-next').click();
+    const line14 = p14.locator('.finale-line');
+    await line14.waitFor();
+    assert.match(await line14.locator('.fl-readme').innerText(), /이 PC를 받는 분께/);
+    await line14.locator('.fl-input').fill('밤에 도는 거, 적어 두세요.');
+    await shot14('case4-12-line.png');
+    await line14.locator('.fl-input').press('Enter');
+    const stats14 = p14.locator('.finale-stats');
+    await stats14.waitFor();
+    assert.equal(await stats14.locator('h2').innerText(), '엔딩 2 / 6', 'the hidden one counts too: 몬스테라 and 다 같이');
+    assert.match(await stats14.innerText(), /숨은 사인 ✓ 직접 찾음[\s\S]*은재의 초안 \d \/ 9 읽음[\s\S]*다음 사람에게: “밤에 도는 거, 적어 두세요\.” — 한도윤/);
+    assert.equal(await p14.evaluate(() => localStorage.getItem('no-handover:next-line')), '밤에 도는 거, 적어 두세요.');
+    await shot14('case4-13-stats.png');
+    step('Case 4 finale (#인프라): the 24th line, the choice with #인프라 (sign found), the confirm, music.finale, 「다 같이」, 은재 grey, her reply (sign, forwarded draft) with the 600 px workshop photo, 내가 살려 둔 것 (다음 실행 11/27 18:00), v5 credits, the 15 s line kept locally, the stats');
+    // 다른 곳에 넘겨 보기: back to just before the choice, each time: 아무에게도 = the title ending (no reply), then
+    // 미래님 and 보안팀; every card ends on its price, every reply opens on its own first line
+    const ENDINGS14 = [
+      ['nobody', '「인수인계 없음」', /"도윤님: 밤에 도는 거 꼭\. \(뭐였지\)"/, null, '다음 실행: 11/28 (토) 03:15', /## 체크리스트 \(20\/24\)[\s\S]*v5: 아무에게도 넘기지 않음/],
+      ['mirae', '「네 번째」', /체크하는 사람은 여전히 바쁘다/, /^도윤님,\n대표님이 2년 전 회고를 고쳤다고 들었어요\. 네 번째에서요 :\)/, '다음 실행: 11/27 (금) 18:00', /## 체크리스트 \(27\/27\)/],
+      ['security', '「하루 만에」', /다음 날 아침 배포가 멈췄다/, /^도윤님,\n보안팀이 하루 만에 다 막았다고요/, '다음 실행: 11/27 (금) 18:00', /## 체크리스트 \(27\/27\)/],
+    ];
+    let found14 = 2;
+    for (const [id, title, price, reply, next, credits] of ENDINGS14) {
+      await stats14.locator('.fs-again').click();
+      await p14.locator('#boot').waitFor();
+      await p14.locator('#boot button', { hasText: /이어서/ }).first().click();
+      await choice14.waitFor({ timeout: 8000 });
+      await choice14.locator(`.fc-opt[data-choice="${id}"]`).click();
+      await p14.locator('.modal-back .modal-handover .modal-ok').click();
+      await card14.waitFor();
+      assert.equal(await card14.locator('h2').innerText(), title);
+      await p14.waitForTimeout(6000);
+      assert.match(await card14.innerText(), price, `${id}: the card ends on its price`);
+      if (id === 'nobody') await shot14('case4-14-title.png');
+      await card14.locator('.finale-next').click();
+      await p14.locator('.finale-bar .finale-next').click();
+      if (reply) {
+        await mail14.locator('.mail-read h2', { hasText: '도윤님께' }).waitFor({ timeout: 5000 });
+        assert.match(await mail14.locator('.mail-read pre').innerText(), reply, `${id}: 은재's reply`);
+        await p14.locator('.finale-bar .finale-next').click();
+      } else assert.equal(await p14.evaluate(() => window.__game.st.mailsDelivered.includes('reply')), false, 'the title ending gets no reply');
+      await term14.locator('.tline', { hasText: next }).waitFor({ timeout: 4000 });
+      await p14.locator('.finale-bar .finale-next').click();
+      assert.match(await cr14.innerText(), credits);
+      await cr14.locator('.finale-next').click();
+      await line14.locator('.fl-input').press('Enter');
+      await stats14.waitFor();
+      assert.equal(await stats14.locator('h2').innerText(), `엔딩 ${++found14} / 6`);
+    }
+    assert.match(await stats14.innerText(), /다음 사람에게: “…” — 한도윤/, 'an empty line is signed …');
+    await stats14.locator('.fs-debrief').click();
+    await rep14.locator('.debrief h2', { hasText: '계정을 지워도 열쇠는 남는다' }).waitFor({ timeout: 5000 });
+    step('Case 4: 다른 곳에 넘겨 보기 three times → 「인수인계 없음」 (no reply, 15 3 * * 6, v4 credits 20/24), 「네 번째」, 「하루 만에」 — each card ends on its price, each reply its own first line; 엔딩 5 / 6, then the debrief');
+    await ctx14.close();
+  }
+  // the sign not found: no #인프라; the last scene lights 도·망·쳐·요 and 지훈 laughs there. Narrow screen, reduced motion;
+  // the finale's overlays fit, every button is a 44 px target. In WebKit too when PW_WEBKIT is set.
+  const engines14 = [['chromium', browser]];
+  if (process.env.PW_WEBKIT) engines14.push(['webkit', await webkit.launch(process.env.PW_WEBKIT === '1' ? {} : { executablePath: process.env.PW_WEBKIT })]);
+  for (const [engine, b14] of engines14) {
+    try {
+      const ctx = await b14.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, reducedMotion: 'reduce' });
+      const p = await ctx.newPage();
+      p.on('pageerror', (e) => errors.push(`case4 ${engine}: ${e}`));
+      p.on('dialog', (d) => (nativeDialogs.push(`p14b ${d.type()}: ${d.message()}`), d.accept()));
+      await p.goto(`${url}?fresh=1&briefing=0&case=case4-keys`);
+      await p.locator('#boot .exp-familiar').click();
+      await p.locator('#boot').waitFor({ state: 'detached' });
+      // straight to a finished report (the report itself was played above): the scene, the sign lit by it
+      await p.evaluate(() => {
+        const g = window.__game;
+        const sub = { cause: 'dir-only', sequence: 'nobody', responsibility: ['checklist', 'outside-ldap', 'shared-account'] };
+        g.st.submissions.push({ at: g.st.playMs, sub, score: { total: 330, max: 330, allCorrect: true, slots: { cause: { correct: true, points: 100, cite: 'ok' }, sequence: { correct: true, points: 100, cite: 'ok' }, responsibility: { correct: true, points: 100, cite: 'ok' } }, multiplier: 1, evidenceBonus: 30, hintCost: 0, hints: 0, blamed: [] } });
+        g.st.finished = true;
+        g.startEnding();
+      });
+      await p.locator('.window[data-app="notes"] .sign-letter').nth(3).waitFor({ timeout: 25000 });
+      await p.waitForFunction(() => window.__game.st.live.some((m) => m.text === 'ㅋㅋㅋㅋㅋ 도윤님 튀래요'), null, { timeout: 25000 });
+      await p.locator('.ending-bar .ending-act').waitFor({ timeout: 25000 });
+      const term = p.locator('.window[data-app="terminal"]');
+      await term.locator('.tin input').press('Enter');
+      const choice = p.locator('.finale-choice');
+      await choice.waitFor({ timeout: 10000 });
+      assert.equal(await choice.locator('.fc-opt[data-choice="infra"]').count(), 0, `${engine}: no #인프라 without the sign`);
+      for (const b of await choice.locator('.fc-opt').all()) {
+        const bb = await b.boundingBox();
+        assert.ok(bb.height >= 44 && bb.x >= 0 && bb.x + bb.width <= 390, `${engine}: a choice is a 44 px target on screen`);
+      }
+      if (engine === 'chromium' && shots) await p.screenshot({ path: join(shots, 'case4-15-narrow-choice.png') });
+      await choice.locator('.fc-opt[data-choice="seojin"]').tap();
+      await p.locator('.modal-back .modal-handover .modal-ok').tap();
+      const card = p.locator('.finale-card');
+      await card.waitFor();
+      assert.equal(await card.locator('.fcard-line').count(), 3);
+      assert.match(await card.innerText(), /그날 밤에도 '결제' 알림을 끄지 못했다/, `${engine}: reduced motion shows every line at once`);
+      const next = await card.locator('.finale-next').boundingBox();
+      assert.ok(next.height >= 44 && next.y + next.height <= 844, `${engine}: 계속 on screen`);
+      await card.locator('.finale-next').tap();
+      await p.locator('.finale-bar .finale-next').tap();
+      await p.locator('.window[data-app="mail"] .mail-read h2', { hasText: '도윤님께' }).waitFor();
+      assert.match(await p.locator('.window[data-app="mail"] .mail-read pre').innerText(), /서진님한테 넘겼다고요[\s\S]*메모장을 세로로 읽어 봐요/);
+      if (engine === 'chromium' && shots) await p.screenshot({ path: join(shots, 'case4-16-narrow-reply.png') });
+      await ctx.close();
+    } finally {
+      if (engine === 'webkit') await b14.close();
+    }
+  }
+  step(`Case 4 without the sign (${engines14.map(([e]) => e).join(' + ')}; 390x844 touch, reduced motion): the last scene lights 도·망·쳐·요 and 지훈 laughs there, no #인프라, every choice a 44 px target, the card all at once, 서진's reply`);
 
   assert.deepEqual(nativeDialogs, [], 'no browser confirm()/alert() anywhere');
 

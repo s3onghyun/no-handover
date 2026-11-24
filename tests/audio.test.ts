@@ -304,12 +304,15 @@ test('audio: music/voice asked for just before the unlock play on unlock; UI cue
 });
 
 test('audio manifest: ids, classes, files and fallbacks', () => {
-  assert.equal(Object.keys(MANIFEST).length, 19);
+  assert.equal(Object.keys(MANIFEST).length, 21);
   // a case's page loads the UI set, only the music it plays and only its own voices
   for (const e of CAMPAIGN) {
     if (!e.cs) continue;
     const m = caseManifest(e.cs);
-    assert.ok('sfx.ding' in m && 'amb.office' in m && 'music.reveal' in m, e.id);
+    assert.ok('sfx.ding' in m && 'amb.office' in m, e.id);
+    // the reveal theme where a case ends on its debrief, the finale theme only in the season finale
+    assert.equal('music.reveal' in m, !e.cs.finale, e.id);
+    assert.equal('music.finale' in m, !!e.cs.finale, e.id);
     assert.deepEqual(Object.keys(m).filter((id) => id.startsWith('voice.')).sort(), Object.keys(voiceManifest(e.cs)).sort(), e.id);
   }
   assert.ok(Object.keys(MANIFEST).every((id) => !id.startsWith('voice.')), 'voices come from src/engine/voices.ts');

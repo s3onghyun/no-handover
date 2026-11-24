@@ -9,7 +9,7 @@
 // Each pass also decodes every shipped voice file in that format (all cases' lines, src/engine/voices.ts).
 // Then the Case 0, 1 and 2 openings (서진's voice messages): the sting and the voice play from the
 // files with no typing fallback, the mail slides in, and the desktop loops amb.office from the file;
-// Case 0's last scene plays its colleagues' recorded lines;
+// Case 0's last scene plays its colleagues' recorded lines; Case 4 (서진's briefing too) loads music.finale and plays a scene line;
 // in Case 1 a colleague nudge then plays its own per-case voice line, the asked wording too, a
 // trigger's two messages play one after the other, and a wrong report's reply plays line by line (~110 s more).
 //
@@ -210,6 +210,7 @@ async function newOpenings() {
       ['case0-wiki', 'voice.briefing-case0-seojin', '[연습] 위키 502'],
       ['case1-cron-env', 'voice.briefing-case1-seojin', '[연습 2] 위키 인증서 만료'],
       ['case2-deleted-open', 'voice.briefing-case2-seojin', '[중요] 로그 서버 디스크'],
+      ['case4-keys', 'voice.briefing-case4-seojin', '[보안] 퇴사자 계정·키 점검'],
     ]) {
       console.log(`\n[${id}] opening against ${url}`);
       await page.goto(`${url}?fresh=1&case=${id}`);
@@ -253,6 +254,17 @@ async function newOpenings() {
         await page.locator('.ending-bar .ending-skip').click();
         await page.locator('.debrief h2').waitFor({ timeout: 5000 });
         step(`${id}: the last scene's DMs play voice.seojin-13c6aed6 then voice.jihoon-41bda4b1 from the files; 해설 바로 보기 opens the debrief`);
+      }
+      if (id === 'case4-keys') {
+        // the season finale's theme is in this case's manifest only, and decodes; the reveal theme is not
+        const m = await page.evaluate(async () => ({ finale: (await window.__audio.load('music.finale'))?.duration ?? null, reveal: 'music.reveal' in window.__audio.manifest }));
+        assert.ok(m.finale > 69 && m.finale < 71, `music.finale decoded ${m.finale} s`);
+        assert.equal(m.reveal, false);
+        // a scene line plays from its file (the sign: 지훈's laugh)
+        await page.evaluate(() => window.__game.fire('sign-found'));
+        await page.waitForFunction(() => window.__audio.history.some((h) => h.id === 'voice.jihoon-f40f336c'), null, { timeout: 30000 });
+        assert.deepEqual(await page.evaluate(() => window.__audio.history.find((h) => h.id === 'voice.jihoon-f40f336c')), { id: 'voice.jihoon-f40f336c', status: 'file' });
+        step(`${id}: music.finale (${m.finale.toFixed(1)} s) decodes and only this case loads it; the sign trigger plays 지훈's voice.jihoon-f40f336c from the file`);
       }
       if (id === 'case1-cron-env') {
         // a nudge plays voice.nudge-<case id>-<nudge id>; the asked wording plays its own -ask line

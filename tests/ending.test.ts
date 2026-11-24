@@ -78,7 +78,7 @@ test('ending: Case 3 waits for 물주기 in 은재\'s tab (prefilled), writes th
   const act = g.endingAwaits();
   assert.ok(act, 'waiting on the act');
   assert.equal(g.st.tabs[act!.tab].input, '물주기', 'the prompt holds the alias');
-  assert.ok(events.includes(`ending-note:${JSON.stringify({ id: 'farewell', quiet: false })}`), 'the farewell memo is written again first');
+  assert.ok(events.includes(`ending-note:${JSON.stringify({ id: 'farewell', quiet: false, sign: false })}`), 'the farewell memo is written again first');
   assert.ok(events.includes(`ending-mail:${JSON.stringify({ id: 'closing', quiet: false })}`));
   assert.ok(g.st.live.some((m) => m.from === 'seojin' && m.text === '도윤님. 오늘 고마웠어요.'));
   assert.equal(g.st.mailsDelivered.includes('sec-done'), false);

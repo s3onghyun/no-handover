@@ -28,7 +28,8 @@ test('state: locked, new, playing, done, skipped; a restarted solved case reads 
   assert.equal(c.state(c0, p, null), 'new');
   assert.equal(c.state(c0, p, started), 'playing');
   assert.equal(c.state(c1, p, started), 'locked', 'a locked case stays locked whatever its save says');
-  assert.equal(c.state('case4-keys', p, null), 'soon');
+  assert.equal(c.state('case4-keys', p, null), 'locked');
+  assert.equal(new Campaign([...CAMPAIGN, { slot: 5, id: 'season2', title: '다음 시즌', when: '', principle: '' }]).state('season2', p, null), 'soon');
   p = c.solve(c0, p);
   assert.equal(c.state(c0, p, { started: true, finished: true, grade: 'S' }), 'done');
   assert.equal(c.state(c0, p, null), 'done', 'solved without a save (restarted, not reopened)');
@@ -45,7 +46,10 @@ test('upNext: the first open case not solved or skipped — the path Case N → 
   assert.equal(c.upNext(c.skipTo(c1, parseProgress(null)))?.id, c1, 'a skipped tutorial is not "next"');
   p = c.solve(c2, c.solve(c1, p));
   assert.equal(c.upNext(p)?.id, c3);
-  assert.equal(c.upNext(c.solve(c3, p)), null, 'placeholders are never next');
+  assert.equal(c.upNext(c.solve(c3, p))?.id, 'case4-keys');
+  assert.equal(c.upNext(c.solve('case4-keys', c.solve(c3, p))), null, 'the season is done');
+  const withNext = new Campaign([...CAMPAIGN, { slot: 5, id: 'season2', title: '다음 시즌', when: '', principle: '' }]);
+  assert.equal(withNext.upNext(withNext.solve('case4-keys', withNext.solve(c3, p))), null, 'placeholders are never next');
 });
 
 test('parseGrades keeps only S–D letters', () => {
@@ -63,5 +67,6 @@ test('blocker: a locked case names the first unsolved, unskipped case before it 
   assert.equal(c.blocker(c2, p)?.id, c1);
   assert.equal(c.blocker(c1, p), null, 'open: nothing blocks it');
   assert.equal(c.blocker(c3, c.skipTo(c2, parseProgress(null)))?.id, c2, 'skipped cases do not block');
-  assert.equal(c.blocker('case4-keys', p), null, 'placeholders are not in the ladder of playable cases');
+  assert.equal(c.blocker('case4-keys', p)?.id, c1, 'Case 4 waits like the others');
+  assert.equal(new Campaign([...CAMPAIGN, { slot: 5, id: 'season2', title: '다음 시즌', when: '', principle: '' }]).blocker('season2', p), null, 'placeholders are not in the ladder of playable cases');
 });

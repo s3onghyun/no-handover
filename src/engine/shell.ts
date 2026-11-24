@@ -33,7 +33,11 @@ export type ShellEvent =
   | { type: 'exit'; host: string }
   | { type: 'private'; path: string; opened: boolean }
   | { type: 'syntax'; msg: string }
-  | { type: 'hint' };
+  | { type: 'hint' }
+  /** The player's own crontab removed (`crontab -r` on a host marked `own`). */
+  | { type: 'crontab-removed'; host: string; user: string }
+  /** Output appended to a file (`>>` into a host's `appendable` path). */
+  | { type: 'append'; host: string; path: string; lines: string[] };
 
 export interface OutLine {
   text: string;
@@ -93,6 +97,22 @@ const NOT_INSTALLED = new Set(['lsof', 'docker', 'kubectl']);
 
 const MON3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/**
+ * A stable SHA256-style fingerprint (43 base64 characters) for a public key blob: `ssh-keygen -l`
+ * prints it and case files write the same one into auth.log ("ssh2: ED25519 SHA256:…").
+ * Not the real hash of the key, but the same key always gives the same print.
+ */
+export function sshFingerprint(blob: string): string {
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let out = '';
+  let h = 0x811c9dc5;
+  for (let round = 0; out.length < 43; round++) {
+    for (const ch of `${round}:${blob}`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+    for (let k = 0; k < 5 && out.length < 43; k++) out += B64[(h >>> (k * 6)) & 63];
+  }
+  return out;
+}
+
 /** OpenSSL's ASN1_TIME print: 'Nov 11 00:00:04 2026 GMT' (day padded with a space). */
 export function certDate(utc: string): string {
   const x = new Date(parseLocal(utc));
@@ -135,7 +155,7 @@ function certText(cert: CertDef): string[] {
 /** Files bigger than this are not dumped by cat (the player is pointed at head/tail instead). */
 export const CAT_LIMIT = 50 * 1024 * 1024;
 
-const SUDO_OK = new Set(['cat', 'less', 'more', 'head', 'tail', 'ls', 'grep', 'wc', 'journalctl', 'crontab', 'ss', 'find', 'sort', 'uniq', 'last', 'id', 'whoami']);
+const SUDO_OK = new Set(['cat', 'less', 'more', 'head', 'tail', 'ls', 'grep', 'wc', 'journalctl', 'crontab', 'ss', 'find', 'sort', 'uniq', 'last', 'id', 'whoami', 'ssh-keygen']);
 
 function lev(a: string, b: string): number {
   const dp = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
@@ -358,6 +378,7 @@ export class Shell {
       // redirections
       let discardErr = false;
       let errToOut = false;
+      let appendTo: string | null = null;
       for (const r of c.redirs) {
         const target = r.target ? this.expandWord(s, r.target, events).join(' ') : '';
         if (r.op === '2>&1') errToOut = true;
@@ -369,6 +390,8 @@ export class Shell {
           const txt = this.host(f.host).vfs.readFile(Vfs.normalize(target, f.cwd, `/home/${f.user}`), this.who(f));
           if (typeof txt === 'string' && !(txt in errText)) stdin = txt.split('\n');
           else return fail(`bash: ${target}: ${errText[txt as keyof typeof errText] ?? 'No such file or directory'}`);
+        } else if (r.op === '>>' && this.appendable(f, target)) {
+          appendTo = this.appendable(f, target);
         } else {
           events.push({ type: 'blocked', cmd: `> ${target}` });
           return fail([`bash: ${target}: Read-only file system`, '  (조사 모드: 파일을 쓰거나 바꿀 수 없는 읽기 전용 세션이에요)']);
@@ -392,10 +415,24 @@ export class Shell {
         if (errToOut) r.out.push(...r.err);
         else errs.push(...r.err);
       }
+      if (appendTo && r.code === 0) {
+        for (const line of r.out) this.host(f.host).vfs.appendLine(appendTo, line);
+        events.push({ type: 'append', host: f.host, path: appendTo, lines: [...r.out] });
+        r.out = [];
+      }
       last = { out: devnull ? [] : r.out, err: [], code: r.code };
       stdin = last.out;
     }
     return { out: last.out, err: errs, code: last.code, clear };
+  }
+
+  /** The absolute path `>>` may append to on this host (an existing file under an `appendable` prefix), or null. */
+  private appendable(f: Frame, target: string): string | null {
+    const prefixes = this.host(f.host).def.appendable ?? [];
+    if (!prefixes.length || !target) return null;
+    const p = Vfs.normalize(target, f.cwd, `/home/${f.user}`);
+    const n = this.host(f.host).vfs.lookup(p);
+    return n?.type === 'file' && prefixes.some((x) => p.startsWith(x)) ? p : null;
   }
 
   expandWord(s: Session, w: Word, events: ShellEvent[]): string[] {
@@ -526,7 +563,7 @@ export class Shell {
     if (sysBin && (sysBin[1] in this.commands || sysBin[1] in BLOCKED) && !Shell.BUILTINS.has(sysBin[1])) argv = [sysBin[1], ...argv.slice(1)];
     const name = argv[0];
     const fn = this.commands[name];
-    const tut = this.world.cs.shell;
+    const tut = this.world.cs.shell?.allow ? { allow: this.world.cs.shell.allow, refuse: this.world.cs.shell.refuse ?? '' } : null;
     // tools that are simply not installed answer the same in every case (lsof → /proc/<PID>/fd)
     if (tut && !tut.allow.includes(name) && NOT_INSTALLED.has(name)) {
       events.push({ type: 'blocked', cmd: name });
@@ -1114,6 +1151,9 @@ export class Shell {
       let type: string | null = null;
       let user: string | null = null;
       let maxDepth = Infinity;
+      // -mtime -N / +N / N: modified less than / more than / exactly N days ago (24-hour units, like find)
+      let mtime: ((days: number) => boolean) | null = null;
+      let ls = false;
       for (let i = 0; i < args.length; i++) {
         const a = args[i];
         const v = args[i + 1];
@@ -1129,7 +1169,13 @@ export class Shell {
         } else if (a === '-maxdepth') {
           maxDepth = +v;
           i++;
-        } else return fail(`find: unknown predicate \`${a}'`);
+        } else if (a === '-mtime' && /^[+-]?\d+$/.test(v ?? '')) {
+          const n = Math.abs(+v);
+          mtime = v.startsWith('-') ? (d) => d < n : v.startsWith('+') ? (d) => d > n : (d) => Math.floor(d) === n;
+          i++;
+        } else if (a === '-ls') ls = true;
+        else if (a === '-print') continue;
+        else return fail(`find: unknown predicate \`${a}'`);
       }
       const out: string[] = [];
       const errs: string[] = [];
@@ -1140,8 +1186,9 @@ export class Shell {
           errs.push(`find: '${shown}': ${errText[n]}`);
           return;
         }
-        const match = (!name || name.test(Vfs.basename(abs) === '/' ? '/' : n.name)) && (!type || (type === 'd' ? n.type === 'dir' : n.type === 'file')) && (!user || n.owner === user);
-        if (match) out.push(shown);
+        const age = (this.now() - n.mtime) / 86400000;
+        const match = (!name || name.test(Vfs.basename(abs) === '/' ? '/' : n.name)) && (!type || (type === 'd' ? n.type === 'dir' : n.type === 'file')) && (!user || n.owner === user) && (!mtime || mtime(age));
+        if (match) out.push(ls ? `${Vfs.modeString(n)} ${n.owner.padEnd(7)} ${n.group.padEnd(7)} ${fmtLs(n.mtime)} ${shown}` : shown);
         if (n.type !== 'dir' || n.list || depth >= maxDepth || abs.startsWith('/proc')) return;
         const list = c.hw.vfs.readDir(abs, who);
         if (typeof list === 'string') {
@@ -1207,6 +1254,18 @@ export class Shell {
     cmds.crontab = (c) => {
       const { flags } = getopt(c.args, ['u']);
       const target = (flags.get('u') as string | undefined) ?? c.f.user;
+      // the player's own machine: -r does what cron does — removes the whole crontab, without asking
+      if (flags.has('r') && !flags.has('i') && c.hw.def.own && target === c.f.user) {
+        const path = `/var/spool/cron/crontabs/${target}`;
+        if (!c.hw.vfs.lookup(path)) return fail(`no crontab for ${target}`);
+        c.hw.vfs.remove(path);
+        c.events.push({ type: 'crontab-removed', host: c.f.host, user: target });
+        return ok();
+      }
+      if (flags.has('e') && c.hw.def.own) {
+        c.events.push({ type: 'blocked', cmd: 'crontab -e' });
+        return fail('crontab: 이 PC에는 편집기를 열지 않아요. 지금 걸린 것 보기: crontab -l');
+      }
       if (flags.has('e') || flags.has('r') || flags.has('i')) {
         c.events.push({ type: 'blocked', cmd: 'crontab -' + (flags.has('e') ? 'e' : 'r') });
         return fail('crontab: 조사 모드에서는 crontab을 편집하거나 지울 수 없어요 (읽기 전용 세션). 보기만: crontab -l');
@@ -1472,6 +1531,7 @@ export class Shell {
       const cmdline = args.join(' ');
       if (!args.length) return fail(['usage: sudo -h | -K | -k | -V', 'usage: sudo [-AbEHknPS] [-u user] [command [arg ...]]']);
       const bin = args[0];
+      if (bin === '-l' || bin === '-ll') return this.sudoList(c, args.slice(1));
       const allowed = SUDO_OK.has(bin) && !(bin === 'crontab' && !args.includes('-l'));
       const pwd = c.f.cwd;
       const ts = fmtSyslog(this.now());
@@ -1490,6 +1550,29 @@ export class Shell {
       return this.execSudo(c, args);
     };
 
+    // ssh-keygen -l -f <file>: the fingerprint of every public key in the file (authorized_keys, *.pub),
+    // as `sshd` writes it in auth.log ("… ssh2: ED25519 SHA256:…"); nothing else (no key making here)
+    cmds['ssh-keygen'] = (c) => {
+      const { flags, pos } = getopt(c.args, ['f', 'E']);
+      const file = (flags.get('f') as string | undefined) ?? (flags.has('l') ? pos[0] : undefined);
+      if (!flags.has('l')) {
+        c.events.push({ type: 'blocked', cmd: 'ssh-keygen' });
+        return fail(['조사 모드: ssh-keygen 은 지문 보기만 돼요: ssh-keygen -l -f <파일>  (예: ssh-keygen -lf ~/.ssh/authorized_keys)'], 126);
+      }
+      if (!file) return fail(['usage: ssh-keygen -l [-f input_keyfile]']);
+      const txt = c.hw.vfs.readFile(Vfs.normalize(file, c.f.cwd, `/home/${c.f.user}`), this.who(c.f, c.sudo));
+      if (typeof txt !== 'string' || txt in errText) return fail(`${file}: ${errText[txt as keyof typeof errText] ?? 'No such file or directory'}`);
+      const keys = txt.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+      const out = keys.flatMap((l) => {
+        const m = l.match(/(?:^|\s)(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256)\s+(\S+)(?:\s+(.*))?$/);
+        if (!m) return [];
+        const type = m[1] === 'ssh-ed25519' ? 'ED25519' : m[1] === 'ssh-rsa' ? 'RSA' : 'ECDSA';
+        const bits = type === 'RSA' ? 3072 : 256;
+        return [`${bits} SHA256:${sshFingerprint(m[2])} ${m[3] ?? 'no comment'} (${type})`];
+      });
+      return out.length ? ok(out) : fail(`${file} is not a public key file.`, 255);
+    };
+
     cmds.ssh = (c) => {
       const { pos } = getopt(c.args, ['p', 'i', 'l', 'o']);
       const dest = pos[0];
@@ -1497,7 +1580,9 @@ export class Shell {
       const [u, h] = dest.includes('@') ? dest.split('@') : [c.f.user, dest];
       const hw = this.world.hosts.get(h);
       if (!hw) return fail(`ssh: Could not resolve hostname ${h}: Name or service not known`, 255);
-      if (u !== 'eunjae' && u !== c.f.user) return fail(`${u}@${h}: Permission denied (publickey).`, 255);
+      // only as yourself, and only where you have an account (a server outside the directory has none for you)
+      const passwd = String(hw.vfs.lookup('/etc/passwd')?.content ?? '');
+      if (u !== c.f.user || (passwd && !passwd.split('\n').some((l) => l.startsWith(`${u}:`)))) return fail(`${u}@${h}: Permission denied (publickey).`, 255);
       const remote = pos.slice(1);
       const nf: Frame = { host: h, user: u, cwd: `/home/${u}`, prevCwd: `/home/${u}`, typed: [] };
       if (remote.length) {
@@ -1523,6 +1608,15 @@ export class Shell {
     cmds.logout = exit;
 
     return cmds;
+  }
+
+  /** `sudo -l [-U user]`: what that user may run here (HostDef.sudoers; the session user: the audit rule). */
+  private sudoList(c: Ctx, args: string[]): IO {
+    const { flags } = getopt(args, ['U']);
+    const who = (flags.get('U') as string | undefined) ?? c.f.user;
+    const rules = c.hw.def.sudoers?.[who] ?? (who === c.f.user ? [`(root) NOPASSWD: /usr/bin/cat, /usr/bin/less, /usr/bin/grep, /usr/bin/ls, /usr/bin/crontab -l *, /usr/bin/journalctl *   # 감사용 읽기 전용`] : null);
+    if (!rules) return ok([`User ${who} is not allowed to run sudo on ${c.f.host}.`]);
+    return ok([`Matching Defaults entries for ${who} on ${c.f.host}:`, '    env_reset, mail_badpass, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin', '', `User ${who} may run the following commands on ${c.f.host}:`, ...rules.map((r) => `    ${r}`)]);
   }
 
   private execSudo(c: Ctx, args: string[]): IO {
