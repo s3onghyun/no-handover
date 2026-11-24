@@ -59,6 +59,9 @@ export function creditLines(f: FinaleDef, choice: string, v4: string): string[] 
   return [`## 체크리스트 (${done}/${done + open.length})`, ...open, f.handover.line, '작성: 남은재 (v1–v4) · 한도윤 (v5: 아무에게도 넘기지 않음)'];
 }
 
+/** How the record's "숨은 사인" turns ✓ (it only counts what the game saw: the notebook page opened before the choice). */
+export const SIGN_HOW = '직접 찾았다면: 넘기기 전에 도윤 메모장의 「은재님이 나한테 남긴 한 줄들」을 열면 ✓ 로 남아요.';
+
 export function mountFinale(ctx: UiCtx, audio: AudioManager, season: () => SeasonInfo): { refresh(): void; resume(): void } | null {
   const g = ctx.game;
   const f = g.cs.finale;
@@ -72,11 +75,17 @@ export function mountFinale(ctx: UiCtx, audio: AudioManager, season: () => Seaso
     layer = null;
   };
   const setBar = (label: string | null, next?: () => void) => {
+    const had = !!bar;
     bar?.remove();
     bar = null;
-    if (!label) return;
+    if (!label) {
+      if (had) ctx.wm.keepAbove(null);
+      return;
+    }
     bar = h('div.ending-bar.finale-bar', { role: 'region', 'aria-label': label }, h('span.ending-tag', null, `🎬 ${label}`), next ? h('button.ending-skip.finale-next', { type: 'button', onclick: next }, '계속 ▸') : null);
     document.body.appendChild(bar);
+    // "내가 살려 둔 것": the crontab's last lines stay above the bar (they were cut off behind it)
+    ctx.wm.keepAbove(bar);
   };
   const go = (step: string, patch: Record<string, unknown> = {}) => g.setFinale({ step, ...patch });
 
@@ -204,10 +213,10 @@ export function mountFinale(ctx: UiCtx, audio: AudioManager, season: () => Seaso
     const back = storage.get(checkpointKey(g.cs.id));
     layer = h(
       'div.finale-layer.finale-stats',
-      { role: 'dialog', 'aria-modal': 'true', 'aria-label': '시즌 기록' },
+      { role: 'dialog', 'aria-modal': 'true', 'aria-label': '시즌 기록', tabindex: '-1' },
       h('h2', null, `엔딩 ${found.length} / ${f!.endings.length}`),
       h('ul.fs-endings', null, ...f!.endings.map((e) => h(`li${found.includes(e.id) ? '.got' : ''}`, { dataset: { ending: e.id } }, found.includes(e.id) ? `✓ 「${e.title}」` : '· ???'))),
-      h('ul.fs-facts', null, h('li', null, `숨은 사인 ${st.signFound ? '✓ 직접 찾음' : '✗ 피날레에서 봄'}`), h('li', null, `은재의 초안 ${read} / ${drafts} 읽음`), h('li', null, `힌트 단계 ${season().hints}개 (시즌)`), st.line ? h('li.fs-line', null, `다음 사람에게: “${st.line}” — 한도윤`) : null),
+      h('ul.fs-facts', null, h('li', null, `숨은 사인 ${st.signFound ? '✓ 직접 찾음' : '✗ 피날레에서 봄'}`, st.signFound ? null : h('div.fs-how', null, SIGN_HOW)), h('li', null, `은재의 초안 ${read} / ${drafts} 읽음`), h('li', null, `힌트 단계 ${season().hints}개 (시즌)`), st.line ? h('li.fs-line', null, `다음 사람에게: “${st.line}” — 한도윤`) : null),
       h(
         'div.fs-acts',
         null,
@@ -216,8 +225,10 @@ export function mountFinale(ctx: UiCtx, audio: AudioManager, season: () => Seaso
       ),
     );
     document.body.appendChild(layer);
-    const first = layer.querySelector('.fs-debrief') as HTMLElement;
-    setTimeout(() => first.isConnected && first.focus(), 300);
+    // focus the record itself, not 해설 보기: an Enter still on its way from the line before (its
+    // 15 s ran out mid-typing) pressed that button and skipped the record and its replay
+    const self = layer;
+    self.focus({ preventScroll: true });
   }
 
   const STEPS: Record<string, () => void> = { choice, card, grey, reply, crontab, credits, line, stats };
@@ -258,7 +269,21 @@ export function mountFinale(ctx: UiCtx, audio: AudioManager, season: () => Seaso
       { role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'fb-t' },
       h('h2#fb-t', null, f.bad.title),
       h('p', null, f.bad.sub),
-      h('button.ghost-btn.fb-back', { type: 'button', onclick: () => (g.restoreCrontab(f.bad.host, f.bad.user), bad?.remove(), (bad = null)) }, f.bad.back),
+      h(
+        'button.ghost-btn.fb-back',
+        {
+          type: 'button',
+          onclick: () => {
+            g.restoreCrontab(f.bad.host, f.bad.user);
+            bad?.remove();
+            bad = null;
+            // show the note the restore left under `crontab -r` (the tab re-renders)
+            const tab = g.cs.terminalTabs.findIndex((x) => x.host === f.bad.host);
+            if (tab >= 0 && ctx.wm.isOpen('terminal')) ctx.wm.instance('terminal')?.open?.(tab);
+          },
+        },
+        f.bad.back,
+      ),
     );
     document.body.appendChild(bad);
     (bad.querySelector('button') as HTMLElement).focus();

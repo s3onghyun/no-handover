@@ -39,3 +39,11 @@ export function nextTourStep(steps: TourStep[], st: TourState, env: TourEnv): To
   }
   return null;
 }
+
+/**
+ * "n/N" on a mark: n counts this case's marks already shown, plus this one, so the marks read 1, 2,
+ * 3… in the order they appear (data order read 8/8 before 6/8 when the report unlocked first).
+ */
+export function tourNumber(steps: TourStep[], st: TourState): string {
+  return `${steps.filter((x) => st.seen.includes(x.id)).length + 1}/${steps.length}`;
+}

@@ -144,16 +144,19 @@ export const terminalApp: AppDef = {
       e.preventDefault();
     });
     // a click or tap on a line picks it (the toolbar shows its 📌); on the picked line it pins it.
-    // Capture phase: the line's own 📌 stops its click, and it picks its line too. No pointerType
-    // check: WebKit reports a tap's click as a mouse click.
+    // Capture phase: the line's own 📌 stops its click. A 📌 click pins without opening the toolbar
+    // (it took the bottom of the output, so the next 📌 the player aimed at was under it); with the
+    // toolbar already open it moves to that line. No pointerType check: WebKit reports a tap's
+    // click as a mouse click.
     out.addEventListener(
       'click',
       (e: MouseEvent) => {
         const target = e.target as HTMLElement;
         const el = target.closest<HTMLElement>('.tline[data-pin]');
         if (!el || window.getSelection()?.toString()) return;
-        if (target.closest('.pinbtn')) pick(el, false);
-        else if (el === sel) pinSel('line-again');
+        if (target.closest('.pinbtn')) {
+          if (sel) pick(el, false);
+        } else if (el === sel) pinSel('line-again');
         else pick(el);
       },
       true,
@@ -262,7 +265,8 @@ export const terminalApp: AppDef = {
         // the echo of this command is the first new line: it sets the host and command for the rest
         out.appendChild(build(fresh, blank()));
         while (out.childElementCount > 700) out.firstElementChild?.remove();
-        if (sel && !sel.isConnected) leave(false);
+        // a new command: the toolbar of a line from an earlier output closes (it kept naming that command)
+        if (sel) leave(false);
         out.scrollTop = out.scrollHeight;
         maybeTip(fresh.filter((l) => l.cls !== 'sys' && l.text.trim()).length);
       }

@@ -62,7 +62,7 @@ input, textarea, select { font: inherit; }
 }
 .window.focused { border-color: #8e8a80; }
 .window.min { display: none; }
-.window.max { left: 0 !important; top: 0 !important; width: calc(100% - var(--max-right, 0px)) !important; height: 100% !important; border-radius: 0; resize: none; }
+.window.max { left: 0 !important; top: 0 !important; width: calc(100% - var(--max-right, 0px)) !important; height: calc(100% - var(--max-bottom, 0px)) !important; border-radius: 0; resize: none; }
 /* --max-right: a maximized window stops short of the "오늘 할 일" sticky, which sits above every window, so its ✕ stays clickable */
 .titlebar {
   height: 34px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px;
@@ -255,7 +255,8 @@ input, textarea, select { font: inherit; }
 .cite { margin-top: 8px; padding: 8px 10px; border: 1px dashed #c9c2b0; border-radius: 8px; background: #f7f5ef; font-size: 13px; }
 .cite-h { color: var(--ink-2); margin-bottom: 4px; }
 .cite-h b { color: var(--ink); }
-.cite-list { display: flex; flex-direction: column; gap: 2px; max-height: 150px; overflow: auto; }
+.cite-list { display: flex; flex-direction: column; gap: 2px; }
+/* every pin is listed (no inner scroll: its scrollbar hid on macOS, the wheel stuck in it and pins looked missing) */
 .citeopt { display: flex; gap: 8px; align-items: flex-start; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
 .citeopt:hover { background: #ece8dc; }
 .citeopt input { margin-top: 3px; }
@@ -266,8 +267,9 @@ input, textarea, select { font: inherit; }
 .cite-kinds span.crit.miss { border-style: dashed; color: var(--ink-3); }
 .cite-need { font-weight: 600; color: #a35a00; }
 .cite-need.met { color: #2f7a3a; }
-.cite-state { margin: 4px 0 0; font-size: 12.5px; }
-.cite-state:empty { display: none; }
+.cite-state { margin: 4px 0 0; font-size: 12.5px; line-height: 1.45; min-height: 1.45em; }
+/* the line keeps its room while empty: ticking a pin must not push the submit button down */
+.cite-state:empty { visibility: hidden; }
 .cite-state.ok { color: #2f7a3a; }
 .cite-state.unsupported { color: #a35a00; }
 .more-opts { font-size: 12px; margin: 4px 8px 0; }
@@ -598,6 +600,8 @@ body:has(.popover.hints) .toasts, body:has(.popover.goalpop) .toasts { right: 45
 .obs-ax { fill: var(--obs-ink-2); font: 10.5px var(--mono); }
 .obs-axm { fill: var(--obs-ink); font-weight: 700; }
 .obs-mark { stroke: var(--obs-ink); stroke-width: 2; }
+.obs-markline { stroke: var(--obs-ink); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.45; pointer-events: none; }
+.obs-markhit { stroke: transparent; stroke-width: 10; pointer-events: stroke; }
 .obs-line { fill: none; stroke-width: 1.6; stroke-linejoin: round; }
 .obs-area { stroke: none; opacity: 0.16; }
 .obs-over { stroke: var(--obs-red) !important; stroke-width: 2.2; }
@@ -813,6 +817,8 @@ html.reduce-motion .modal-back { animation: none; }
 .slot-mark.bad { color: var(--warn); background: #fbe7e4; }
 .primary-btn.is-blocked { opacity: 0.5; cursor: not-allowed; }
 .submit-need { font-size: 12.5px; color: #a35a00; }
+/* the button keeps its place while the list beside it grows or shrinks */
+.report > .submitbar { align-items: flex-start; }
 .submit-need ul { display: inline; margin: 0; padding: 0; list-style: none; }
 .submit-need li { display: inline; }
 .submit-need li + li::before { content: ' · '; color: var(--ink-3); }
@@ -908,7 +914,8 @@ html.reduce-motion .window.act { box-shadow: var(--shadow), 0 0 0 4px rgba(242, 
 .finale-card .fcard-line:last-of-type { color: #d9c37a; }
 @keyframes nh-fade-in { to { opacity: 1; } }
 .finale-card .finale-next, .finale-credits .finale-next { margin-top: 22px; min-height: 44px; color: #ecebe7; border-color: rgba(236, 235, 231, 0.35); background: transparent; }
-.finale-credits { background: rgba(13, 13, 15, 0.94); color: #ecebe7; }
+/* opaque: the windows behind showed through and crossed the list */
+.finale-credits { background: #0d0d0f; color: #ecebe7; }
 .finale-credits .credits-roll { width: min(620px, 100%); font: 14px/1.9 ui-monospace, 'D2Coding', monospace; }
 .finale-credits .credit.head { font-weight: 700; color: #d9c37a; }
 .finale-credits .credit.sign { margin-top: 10px; color: #b5b2aa; }
@@ -920,12 +927,14 @@ html.reduce-motion .window.act { box-shadow: var(--shadow), 0 0 0 4px rgba(242, 
 .finale-line .fl-input { width: 100%; min-height: 44px; box-sizing: border-box; padding: 8px 10px; border: 1px solid rgba(236, 235, 231, 0.4); border-radius: 6px; background: #17181b; color: #ecebe7; font: 15px/1.4 ui-monospace, 'D2Coding', monospace; }
 .finale-line .fl-sign { width: min(560px, 100%); text-align: right; margin-top: 6px; color: #cfcdc6; font-family: ui-monospace, monospace; }
 .finale-line .fl-hint { color: #8f8c84; font-size: 12.5px; }
-.finale-stats { background: rgba(13, 13, 15, 0.94); color: #ecebe7; }
+.finale-stats { background: #0d0d0f; color: #ecebe7; }
 .finale-stats h2 { margin: 0 0 10px; }
 .finale-stats ul { list-style: none; padding: 0; margin: 0 0 12px; width: min(420px, 100%); }
 .finale-stats .fs-endings li { padding: 4px 0; color: #8f8c84; }
 .finale-stats .fs-endings li.got { color: #ecebe7; }
 .finale-stats .fs-facts li { padding: 3px 0; color: #cfcdc6; }
+.finale-stats .fs-how { font-size: 12.5px; color: #9d9a92; margin-top: 2px; }
+.finale-stats:focus { outline: none; }
 .finale-stats .fs-acts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .finale-stats .fs-acts button { min-height: 44px; }
 .finale-stats .fs-again { color: #ecebe7; border-color: rgba(236, 235, 231, 0.35); background: transparent; }

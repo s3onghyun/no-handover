@@ -490,7 +490,8 @@ export const caseFourKeys: CaseFile = {
     { id: 's_fp_jihoon', label: `키 지문: jhpark@mbp-2024 = SHA256:${FP.jhpark.slice(0, 8)}…`, slot: 'sequence', key: true, match: [{ output: `SHA256:${FP.jhpark.replace(/[+/]/g, (c) => `\\${c}`)} jhpark@mbp-2024` }] },
     { id: 's_1120', label: 'pay-api-02 auth.log: 11/20 22:41 deploy 로그인 (지훈의 지문)', slot: 'sequence', match: [{ output: 'Nov 20 22:41:07 pay-api-02 sshd\\[66711\\]: Accepted publickey for deploy' }] },
     { id: 's_41', label: 'bastion auth.log: 11/16 eunjae 키 접속 (10.20.4.17)', slot: 'sequence', match: [{ output: 'Nov 16 \\d\\d:\\d\\d:\\d\\d bastion sshd\\[\\d+\\]: Accepted publickey for eunjae from 10\\.20\\.4\\.17' }] },
-    { id: 's_sec2211', label: 'SEC-2211: 11/16 조사 모드 세션 (보안팀 승인)', slot: 'sequence', key: true, match: [{ output: 'approved by 보안팀 \\(ticket SEC-2211\\)' }, { open: 'mail:sec-2211' }] },
+    // either end of the session in bastion's auth.log (`grep eunjae` prints both): the closing line names SEC-2211 too
+    { id: 's_sec2211', label: 'SEC-2211: 11/16 조사 모드 세션 (보안팀 승인)', slot: 'sequence', key: true, match: [{ output: 'approved by 보안팀 \\(ticket SEC-2211\\)' }, { output: 'SEC-2211 closed; LDAP account eunjae disabled', host: 'bastion' }, { open: 'mail:sec-2211' }] },
 
     { id: 'r_checklist', label: '인사팀 퇴사 체크리스트: 서버 키 · 공용 계정 항목 없음', slot: 'responsibility', key: true, match: [{ open: 'mail:checklist' }] },
     { id: 'r_sec_done', label: '보안팀 11/16 회수 메일: "서버 키: 해당 없음"', slot: 'responsibility', key: true, match: [{ open: 'mail:sec-done' }] },

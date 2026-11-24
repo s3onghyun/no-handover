@@ -126,6 +126,8 @@ export const ASK_BEAT_MS = 600;
 export const ENDING_LEAD_MS = 2600;
 /** After the last beat, a moment of quiet before the debrief opens. */
 export const ENDING_TAIL_MS = 3000;
+/** Under `crontab -r` once 「지우기 직전으로 돌아가기」 put the crontab back (the season finale's hidden ending). */
+export const RESTORED_LINE = '(지우기 직전으로 돌아왔어요 — crontab 이 그대로 있어요. 확인: crontab -l)';
 /** How long 도윤's notebook takes per character when the scene writes a line (src/ui/apps/notes.ts). */
 export const NOTE_CHAR_MS = 45;
 /** An act beat waits this long for the player by default. */
@@ -975,6 +977,8 @@ export class Game {
     const file = hd?.files.find((f) => f.path === `/var/spool/cron/crontabs/${user}`)?.content ?? hd?.crontabs?.[user];
     if (file === undefined) return false;
     this.setCrontab(host, user, file);
+    // the terminal says so under the `crontab -r` it ran (that line alone read as if the wipe still stood)
+    this.cs.terminalTabs.forEach((tb, i) => tb.host === host && this.st.tabs[i]?.lines.push({ text: RESTORED_LINE, cls: 'dim' }));
     this.log('crontab-restored', { host, user });
     this.emit('crontab-restored', { host, user });
     return true;

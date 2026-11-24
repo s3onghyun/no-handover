@@ -4,7 +4,7 @@
 import { expandAliases, parse, ParseError, type ListItem, type SimpleCmd, type Word } from './parser.ts';
 import type { HistEntry, HostWorld, World } from './build.ts';
 import { errText, Vfs, type VNode, type Who } from './vfs.ts';
-import { fmtDate, fmtGit, fmtIso, fmtLs, fmtSyslog, parseLocal, parseSince, tzOffsetMs } from './time.ts';
+import { fmtDate, fmtGit, fmtIso, fmtLs, fmtSyslog, parseLocal, parseSince, statusAgo, tzOffsetMs } from './time.ts';
 import { manFor } from './manpages.ts';
 import type { CertDef, CommitDef, RepoDef } from './types.ts';
 
@@ -1423,7 +1423,8 @@ export class Shell {
         return fail(`Unit ${unitArg}${unitArg.includes('.') ? '' : '.service'} could not be found.`, 4);
       }
       if (verb === 'cat') return ok([`# /etc/systemd/system/${u.name}`, ...u.unitFile.split('\n')]);
-      if (verb === 'status') return ok(u.statusLines);
+      // the "…; 42min ago" part follows the game clock (it was written for one moment of the case)
+      if (verb === 'status') return ok(u.statusLines.map((l) => statusAgo(l, this.now())));
       if (verb === 'show') {
         const pv = ((flags.get('p') ?? flags.get('property')) as string | undefined)?.split(',');
         if (!pv) return ok(Object.entries(u.props).map(([k, v]) => `${k}=${v}`));

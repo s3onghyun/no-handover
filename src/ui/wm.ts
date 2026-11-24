@@ -130,7 +130,7 @@ export class WM {
     const def = this.apps.get(id);
     if (!def) return null;
     const vw = this.root.clientWidth || window.innerWidth;
-    const vh = this.root.clientHeight || window.innerHeight - 40;
+    const vh = (this.root.clientHeight || window.innerHeight - 40) - this.bottomInset;
     let w = Math.min(def.w, vw - 16);
     const hh = Math.min(def.h, vh - 16);
     let x = def.x ?? Math.max(8, Math.min(vw - w - 8, 120 + (this.cascade % 6) * 28));
@@ -180,23 +180,95 @@ export class WM {
   }
 
   /**
-   * Move window `id` sideways so it does not cover the right-hand column of window `of` (where
-   * the terminal's 📌 buttons sit): beside it when there is room, otherwise left of that column.
+   * Where window `id` (its usual size) could open without covering any part of window `of`: its
+   * usual place when that is already clear (or `of` is not on screen), else beside, above or below
+   * `of`. Null when the desktop has no such room (a window that opens by itself must not cover the
+   * terminal's output: the memo used to land on the line the player had just printed).
    */
-  keepClearOf(id: string, of: string, column = 48): void {
-    const a = this.wins.get(id)?.el;
+  spotClearOf(id: string, of: string): { x: number; y: number } | null {
+    const def = this.apps.get(id);
+    if (!def) return null;
+    const vw = this.root.clientWidth || window.innerWidth;
+    const vh = this.root.clientHeight || window.innerHeight - 40;
+    const w = Math.min(def.w, vw - 16);
+    const hh = Math.min(def.h, vh - 16);
+    const limit = vw - this.reserveRight() - 8;
+    const x0 = Math.max(8, Math.min(def.x ?? 120, limit - w));
+    const y0 = Math.max(8, Math.min(def.y ?? 20, vh - this.bottomInset - hh - 8));
     const b = this.wins.get(of)?.el;
-    // a maximized `of` counts too: it stops short of the checklist, and its 📌 column is still at its right edge
-    if (!a || !b || b.classList.contains('min') || a.classList.contains('max')) return;
-    const bRight = b.offsetLeft + b.offsetWidth;
-    const colLeft = bRight - column;
-    const covers =
-      a.offsetTop < b.offsetTop + b.offsetHeight && a.offsetTop + a.offsetHeight > b.offsetTop &&
-      a.offsetLeft < bRight && a.offsetLeft + a.offsetWidth > colLeft;
-    if (!covers) return;
-    const limit = (this.root.clientWidth || window.innerWidth) - this.reserveRight() - 8;
-    const x = limit - bRight - 8 >= a.offsetWidth ? bRight + 8 : colLeft - 8 - a.offsetWidth;
-    if (x >= 8) a.style.left = `${x}px`;
+    if (!b || b.classList.contains('min')) return { x: x0, y: y0 };
+    const r = { l: b.offsetLeft, t: b.offsetTop, r: b.offsetLeft + b.offsetWidth, b: b.offsetTop + b.offsetHeight };
+    const clear = (x: number, y: number) => x >= 8 && y >= 8 && x + w <= limit && y + hh <= vh - this.bottomInset - 8 && (x + w <= r.l || x >= r.r || y + hh <= r.t || y >= r.b);
+    const spots = [
+      { x: x0, y: y0 },
+      { x: r.r + 8, y: y0 },
+      { x: r.l - 8 - w, y: y0 },
+      { x: x0, y: r.b + 8 },
+      { x: x0, y: r.t - 8 - hh },
+    ];
+    return spots.find((p) => clear(p.x, p.y)) ?? null;
+  }
+
+  /**
+   * Where window `id` could sit over the older lines of terminal-like window `of` when nothing is
+   * clear of it: below its title bar (its buttons stay reachable), left of its 📌 column, and above
+   * its newest `newestPx` of output (the lines just printed sit over the prompt). Null when that
+   * leaves less than `minH` px.
+   */
+  spotOverOlder(id: string, of: string, newestPx: number, minH = 220): { x: number; y: number; w: number; h: number } | null {
+    const def = this.apps.get(id);
+    const b = this.wins.get(of)?.el;
+    const out = b?.querySelector<HTMLElement>('.tout');
+    if (!def || !b || !out || b.classList.contains('min')) return null;
+    const d = this.root.getBoundingClientRect();
+    const bar = b.querySelector<HTMLElement>('.titlebar')?.offsetHeight ?? 34;
+    const y = b.offsetTop + bar + 6;
+    const bandTop = out.getBoundingClientRect().bottom - d.top - newestPx;
+    const h = Math.min(def.h, Math.floor(bandTop - 8 - y));
+    const colLeft = b.offsetLeft + b.offsetWidth - 48;
+    const w = Math.min(def.w, colLeft - 16);
+    if (h < minH || w < 280) return null;
+    return { x: Math.max(8, colLeft - 8 - w), y, w, h };
+  }
+
+  /** Put window `id` at (x, y) in desktop pixels, optionally at a new size. */
+  moveTo(id: string, x: number, y: number, w?: number, h?: number): void {
+    const el = this.wins.get(id)?.el;
+    if (!el) return;
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    if (w !== undefined) el.style.width = `${w}px`;
+    if (h !== undefined) el.style.height = `${h}px`;
+    this.relayout();
+  }
+
+  /** Keep windows clear of a bar floating over the bottom of the desktop; null: the bar is gone. */
+  keepAbove(bar: HTMLElement | null): void {
+    const r = bar?.isConnected ? bar.getBoundingClientRect() : null;
+    const d = this.root.getBoundingClientRect();
+    this.setBottomInset(r && r.height ? d.bottom - r.top + 8 : 0);
+  }
+
+  /**
+   * Room kept free at the bottom of the desktop (px) while a bar floats there (the last scene's and
+   * the finale's): windows on screen move up or shrink above it, a maximized one stops short of it,
+   * new ones open above it. 0 gives the room back.
+   */
+  bottomInset = 0;
+  setBottomInset(px: number): void {
+    this.bottomInset = Math.max(0, Math.round(px));
+    this.root.style.setProperty('--max-bottom', `${this.bottomInset}px`);
+    if (!this.bottomInset) return this.relayout();
+    const vh = this.root.clientHeight || window.innerHeight - 40;
+    const floor = vh - this.bottomInset - 8;
+    for (const { el } of this.wins.values()) {
+      if (el.classList.contains('min') || el.classList.contains('max')) continue;
+      const bottom = el.offsetTop + el.offsetHeight;
+      if (bottom <= floor) continue;
+      const top = Math.max(8, floor - el.offsetHeight);
+      el.style.top = `${top}px`;
+      if (top + el.offsetHeight > floor) el.style.height = `${Math.max(200, floor - top)}px`;
+    }
     this.relayout();
   }
 
