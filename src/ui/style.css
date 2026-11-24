@@ -847,3 +847,28 @@ html.reduce-motion .modal-back { animation: none; }
   .popover, .popover.hints { left: 8px; right: 8px; width: auto; }
   body:has(.popover.hints) .toasts, body:has(.popover.goalpop) .toasts { right: 12px; }
 }
+
+/* ---- the last scene (case `ending`, src/main.ts): after the final report, before the debrief */
+.ending-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--tb-h) + 12px); z-index: 100003; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 24px); padding: 6px 8px 6px 14px; border-radius: 22px; background: rgba(30, 33, 40, 0.88); color: #f4f2ec; font-size: 13px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); }
+.ending-bar .ending-tag { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.85; }
+.ending-bar .ending-skip { flex: none; min-height: 32px; border: 1px solid rgba(244, 242, 236, 0.4); border-radius: 16px; background: transparent; color: inherit; padding: 4px 12px; font: 600 13px/1.2 var(--sans); cursor: pointer; }
+.ending-bar .ending-skip:hover, .ending-bar .ending-skip:focus-visible { background: rgba(244, 242, 236, 0.16); }
+.ending-wait { padding: 28px 18px; text-align: center; color: var(--ink-2, #4a4a4a); }
+.ending-wait p { font-size: 15px; margin: 0 0 12px; }
+.page .ln.added { color: #2f3e5c; }
+.page .ln .ln-text.writing::after { content: '▍'; margin-left: 1px; opacity: 0.6; animation: nh-caret 0.8s steps(2) infinite; }
+@keyframes nh-caret { 50% { opacity: 0; } }
+.memo-scene .added { color: #2f3e5c; }
+.sticky.act { outline: 3px solid rgba(94, 140, 74, 0.75); outline-offset: 3px; animation: nh-sticky-pulse 1.6s ease-in-out infinite; }
+@keyframes nh-sticky-pulse { 50% { outline-color: rgba(94, 140, 74, 0.15); } }
+html.reduce-motion .sticky.act, html.reduce-motion .page .ln .ln-text.writing::after { animation: none; }
+.debrief details.score-fold { margin: 22px 0 6px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: #fcfbf8; }
+.debrief details.score-fold > summary { cursor: pointer; font-size: 14px; color: var(--accent); }
+.debrief details.score-fold > summary .score-sum { color: var(--ink-3); font-weight: 400; }
+@media (max-width: 900px) {
+  .ending-bar { bottom: calc(var(--tb-h) + 8px); font-size: 12px; gap: 6px; padding-left: 10px; }
+  .ending-bar .ending-skip { min-height: 44px; }
+}
+.window.act { animation: pulse 1.8s ease-in-out infinite; }
+html.reduce-motion .window.act { box-shadow: var(--shadow), 0 0 0 4px rgba(242, 217, 78, 0.85); }
+.ending-bar .ending-act { white-space: nowrap; font-weight: 600; color: #f2d94e; }

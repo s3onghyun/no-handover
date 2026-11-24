@@ -23,56 +23,25 @@ function debrief(root: HTMLElement, ctx: UiCtx): void {
   const card = resultCard(g, ctx.caseLabel ?? '');
   const canvas = h('canvas.resultcard', { 'aria-label': `${card.caseLabel} ${card.caseTitle} — ${recordLine(rec)}` }) as HTMLCanvasElement;
   drawResultCard(canvas, card);
+  // feeling first (the memo scene and the people), then the numbers, folded: a case ends on how it felt
+  const memo = farewell
+    ? h(
+        'div.memo-scene',
+        null,
+        h('div', null, farewell.title),
+        ...farewell.lines.map((l, i) => h(i === farewell.highlight ? 'div.hl' : 'div', null, l)),
+        farewell.reveal ? h('div.reveal', null, farewell.reveal) : null,
+        ...(g.st.noteLines?.[farewell.id] ?? []).map((l) => h('div.added', null, l)),
+      )
+    : null;
   root.appendChild(
     h(
       'div.debrief',
       null,
       h('p.muted', null, `${t('debrief.title')} · ${g.cs.title}`),
       h('h2', null, d.headline),
-      h(
-        'div.record',
-        null,
-        h('span.rec-label', null, t('debrief.record')),
-        h('span.rec-line', null, recordLine(rec)),
-        rec.solved && rec.hints === 0 ? h('span.badge-nohint', null, `💡 ${t('debrief.badge')}`) : null,
-        senior ? h('span.rec-senior', null, t('debrief.senior')) : null,
-        rec.panelOpens ? h('span.rec-panel', null, t('debrief.panelNote', { n: rec.panelOpens })) : null,
-      ),
-      h(
-        'div.scorebox',
-        null,
-        h('div.s.grade', null, t('debrief.score'), h('b', null, grade(s.total, s.max))),
-        h('div.s', null, '합계', h('b', null, `${s.total} / ${s.max}`)),
-        ...g.cs.accusation.slots.map((slot) => h('div.s', null, slot.title.split(' ')[0], h('b', null, `${s.slots[slot.id]?.correct ? '✓' : '✗'} ${s.slots[slot.id]?.points ?? 0}`))),
-        h('div.s', null, `제출 ×${s.multiplier}`, h('b', null, `${g.st.submissions.length}회`)),
-        h('div.s', null, t('report.evidence'), h('b', null, `+${s.evidenceBonus}`)),
-        senior ? h('div.s', null, t('debrief.steps'), h('b', null, `−${s.hintCost}`)) : h('div.s', null, t('debrief.steps'), h('b', null, `${rec.hints}개`)),
-        // 숙련자 모드 in Cases 0–2: play time over par
-        s.timeCost !== undefined ? h('div.s.time', null, t('debrief.time'), h('b', null, s.timeCost ? `−${s.timeCost}` : '0')) : null,
-      ),
-      citeList(g, last.sub),
-      h(
-        'div.cardbox',
-        null,
-        canvas,
-        h(
-          'div.cardside',
-          null,
-          h('p.muted', null, t('debrief.cardNote')),
-          h('button.primary-btn.card-dl', { onclick: () => downloadResultCard(canvas, `no-handover-${g.cs.id}.png`) }, `🖼 ${t('debrief.card')}`),
-        ),
-      ),
       s.allCorrect ? null : h('p', { style: 'color:var(--warn)' }, '제출 기회를 모두 썼다. 아래가 실제로 일어난 일이다.'),
-      h('h3', null, t('debrief.memo')),
-      farewell
-        ? h(
-            'div.memo-scene',
-            null,
-            h('div', null, farewell.title),
-            ...farewell.lines.map((l, i) => h(i === farewell.highlight ? 'div.hl' : 'div', null, l)),
-            farewell.reveal ? h('div.reveal', null, farewell.reveal) : null,
-          )
-        : null,
+      memo ? [h('h3', null, t('debrief.memo')), memo] : null,
       d.cast?.length
         ? [
             h('h3', null, '사람들 — 결함은 있어도 악역은 없다'),
@@ -86,6 +55,44 @@ function debrief(root: HTMLElement, ctx: UiCtx): void {
             ),
           ]
         : null,
+      h(
+        'details.score-fold',
+        null,
+        h('summary', null, h('b', null, t('debrief.scoreFold')), h('span.score-sum', null, ` · ${t('debrief.score')} ${grade(s.total, s.max)} · ${s.total} / ${s.max} · ${recordLine(rec)}`)),
+        h(
+          'div.record',
+          null,
+          h('span.rec-label', null, t('debrief.record')),
+          h('span.rec-line', null, recordLine(rec)),
+          rec.solved && rec.hints === 0 ? h('span.badge-nohint', null, `💡 ${t('debrief.badge')}`) : null,
+          senior ? h('span.rec-senior', null, t('debrief.senior')) : null,
+          rec.panelOpens ? h('span.rec-panel', null, t('debrief.panelNote', { n: rec.panelOpens })) : null,
+        ),
+        h(
+          'div.scorebox',
+          null,
+          h('div.s.grade', null, t('debrief.score'), h('b', null, grade(s.total, s.max))),
+          h('div.s', null, '합계', h('b', null, `${s.total} / ${s.max}`)),
+          ...g.cs.accusation.slots.map((slot) => h('div.s', null, slot.title.split(' ')[0], h('b', null, `${s.slots[slot.id]?.correct ? '✓' : '✗'} ${s.slots[slot.id]?.points ?? 0}`))),
+          h('div.s', null, `제출 ×${s.multiplier}`, h('b', null, `${g.st.submissions.length}회`)),
+          h('div.s', null, t('report.evidence'), h('b', null, `+${s.evidenceBonus}`)),
+          senior ? h('div.s', null, t('debrief.steps'), h('b', null, `−${s.hintCost}`)) : h('div.s', null, t('debrief.steps'), h('b', null, `${rec.hints}개`)),
+          // 숙련자 모드 in Cases 0–2: play time over par
+          s.timeCost !== undefined ? h('div.s.time', null, t('debrief.time'), h('b', null, s.timeCost ? `−${s.timeCost}` : '0')) : null,
+        ),
+        citeList(g, last.sub),
+        h(
+          'div.cardbox',
+          null,
+          canvas,
+          h(
+            'div.cardside',
+            null,
+            h('p.muted', null, t('debrief.cardNote')),
+            h('button.primary-btn.card-dl', { onclick: () => downloadResultCard(canvas, `no-handover-${g.cs.id}.png`) }, `🖼 ${t('debrief.card')}`),
+          ),
+        ),
+      ),
       h('h3', null, t('debrief.story')),
       h('ul.story', null, ...d.story.map((x) => h('li', null, h('div.at', null, x.at), x.text))),
       h('h3', null, t('debrief.factors')),
@@ -287,6 +294,11 @@ export const reportApp: AppDef = {
       clear(root);
       submitBtn = null;
       needBox = null;
+      if (g.st.finished && g.endingActive()) {
+        // the last scene plays first (main.ts); the debrief opens when it ends or is skipped
+        root.appendChild(h('div.ending-wait', null, h('p', null, `📝 ${t('ending.wait')}`), h('button.ghost-btn.ending-skip', { type: 'button', onclick: () => g.skipEnding() }, t('ending.skip'))));
+        return;
+      }
       if (g.st.finished) {
         debrief(root, ctx);
         root.scrollTop = 0;
@@ -432,7 +444,7 @@ export const reportApp: AppDef = {
     let sig = shownSig();
     return {
       refresh: (type?: string) => {
-        if (type === 'accuse' || type === 'pins' || type === 'hint') render();
+        if (type === 'accuse' || type === 'pins' || type === 'hint' || type === 'ending') render();
         else if ((type === 'clue' || type === 'message') && shownSig() !== sig) render();
         sig = shownSig();
       },

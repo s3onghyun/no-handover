@@ -416,6 +416,34 @@ export interface TriggerDef {
   actions: TriggerAction[];
 }
 
+/**
+ * The case's last scene (docs/case-format.md §15): after the final report (right, or out of
+ * submissions) and before the debrief, 15–30 s that end the case on a feeling rather than a score.
+ * Beats play in order, each `wait` seconds after the previous one has landed; Esc skips to the
+ * debrief. 은재 does not speak: she appears only as what 도윤 writes down.
+ */
+export interface EndingDef {
+  beats: EndingBeat[];
+}
+
+export type EndingBeat = { wait: number } & (
+  /** A colleague's message, seen typing first (voiced like any other line: src/engine/voices.ts). */
+  | { message: { channel: string; from: string; text: string } }
+  /**
+   * 도윤's notebook opens on this page and `line` is written in under the last line, letter by
+   * letter (`{hm}` = the game clock). Without `line` the page's `reveal` line is written again.
+   */
+  | { note: string; line?: string }
+  /** This mail arrives (if it has not yet) and opens. */
+  | { mail: string }
+  /**
+   * The player acts: the terminal tab's prompt holds `prefill` and the desktop sticky `sticky`
+   * (index) pulses; the scene waits until a command in that tab matches `until` (then `note`, a
+   * notebook line, is written) or `timeoutSec` passes (nothing is written).
+   */
+  | { act: { tab: number; prefill: string; until: string; timeoutSec?: number; sticky?: number; note?: { id: string; line: string } } }
+);
+
 export interface CommandCard {
   title: string;
   cmd: string;
@@ -489,6 +517,8 @@ export interface CaseFile {
   hints: HintsDef;
   triggers: TriggerDef[];
   debrief: DebriefDef;
+  /** The last scene between the final report and the debrief (optional). */
+  ending?: EndingDef;
   /** First minutes: briefing scene + "오늘 할 일" objectives (optional; see docs/case-format.md §12). */
   opening?: OpeningDef;
   /** Tutorial shell: only these commands run; other real commands answer in-world (docs/case-format.md §13). */

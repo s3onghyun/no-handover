@@ -521,8 +521,11 @@ desktop.appendChild(h('div.wall-caption', null, '바탕화면: 의자 (2026, 직
 desktop.appendChild(iconsEl);
 let objectivesUi: ReturnType<typeof mountObjectives> | null = null;
 let tourUi: ReturnType<typeof mountTour> = null;
+/** The desktop stickies in case order (the last scene can pulse one: src/engine/types.ts EndingBeat `act`). */
+const stickyEls: HTMLElement[] = [];
 for (const s of game.cs.stickies) {
   const el = h('div.sticky', { style: { left: `${s.x}%`, top: `${s.y}%`, background: s.color ?? '#F2D94E' }, title: '포스트잇' }, s.text);
+  stickyEls.push(el);
   el.appendChild(ctx.pinBtn({ kind: 'note', text: `포스트잇: ${s.text.replace(/\n/g, ' ')}`, source: '바탕화면' }));
   el.addEventListener('click', () => game.open(`sticky:${s.text.slice(0, 12)}`));
   desktop.appendChild(el);
@@ -724,8 +727,10 @@ game.on('message', (m) => {
   const msg = m as Message;
   const last = game.st.log[game.st.log.length - 1];
   const reason = last?.type === 'message' ? String(last.reason ?? '') : '';
-  if (reason === 'ask') return; // the player's own quick reply: no ding, no toast
+  if (reason === 'ask' || reason === 'ending-skip') return; // the player's own quick reply, or a skipped scene line: no ding, no toast
   void audio.play('sfx.ding');
+  // the last scene: the colleague's DM opens where it lands (src/engine/game.ts ending)
+  if (reason === 'ending') wm.open('messenger', msg.channel);
   // the colleague's recorded line (src/engine/voices.ts); no file = subtitles only
   const cue = cueFor(game.cs, msg.from, msg.text);
   if (cue) say(cue);
@@ -785,6 +790,78 @@ game.on('accuse', (sc) => {
     void audio.play('music.reveal', { gain: (sc as ScoreResult).allCorrect ? 1 : 0.8 });
   } else audio.loop('music.tension'); // a wrong report raises the stakes
 });
+// ------------------------------------------------------------------ the last scene (case `ending`, docs/case-format.md §15)
+// After the final report: colleagues' DMs, 도윤's notebook writing itself, a mail, maybe one thing to
+// do; then the debrief. A bar at the bottom (and Esc) goes straight to the debrief.
+let endingBar: HTMLElement | null = null;
+function syncEnding(): void {
+  const act = game.endingAwaits();
+  // an act waits for the player: the terminal glows, the sticky pulses, the bar says what to press
+  desktop.querySelector('.window[data-app="terminal"]')?.classList.toggle('act', !!act);
+  stickyEls.forEach((el, i) => el.classList.toggle('act', act?.sticky === i));
+  if (!game.endingActive()) {
+    endingBar?.remove();
+    endingBar = null;
+    return;
+  }
+  if (!endingBar) {
+    endingBar = h(
+      'div.ending-bar',
+      { role: 'region', 'aria-label': t('ending.bar') },
+      h('span.ending-tag', null, `🎬 ${t('ending.bar')}`),
+      h('span.ending-act', { hidden: true }),
+      h('button.ending-skip', { type: 'button', onclick: () => game.skipEnding() }, t('ending.skip')),
+    );
+    document.body.appendChild(endingBar);
+  }
+  const hint = endingBar.querySelector<HTMLElement>('.ending-act')!;
+  hint.hidden = !act;
+  hint.textContent = act ? `⌨️ ${act.prefill} · ${t('ending.act')}` : '';
+}
+game.on('ending', (what) => {
+  syncEnding();
+  if (what === 'done') wm.open('report');
+});
+game.on('ending-note', (p) => {
+  syncEnding();
+  const { id, line, quiet } = p as { id: string; line?: string; quiet: boolean };
+  if (quiet) {
+    if (wm.isOpen('notes')) wm.instance('notes')?.open?.(id);
+    return;
+  }
+  wm.open('notes', { id, write: line === undefined ? 'reveal' : 'line' });
+});
+game.on('ending-mail', (p) => {
+  const { id, quiet } = p as { id: string; quiet: boolean };
+  if (!quiet) wm.open('mail', id);
+  else if (wm.isOpen('mail')) wm.instance('mail')?.refresh?.('mail');
+});
+game.on('ending-act', (a) => {
+  const act = a as { tab: number; prefill: string };
+  wm.open('terminal', { tab: act.tab, input: act.prefill });
+  syncEnding();
+  void audio.play('sfx.pulse');
+});
+// an act that times out (or is done without a notebook line) moves the scene on: keep the glow in step
+game.on('save', () => game.st.ending && !game.st.ending.done && syncEnding());
+// 도윤's notebook writing a line: soft key clicks while it writes (notes.ts 'nh-writing')
+document.addEventListener('nh-writing', (e) => {
+  const ms = Number((e as CustomEvent).detail) || 0;
+  const t0 = performance.now();
+  const tick = () => {
+    if (performance.now() - t0 > ms) return;
+    void audio.play(KEY_CLICKS[Math.floor(Math.random() * KEY_CLICKS.length)], { gain: 0.6, pan: (Math.random() * 2 - 1) * 0.2 });
+    setTimeout(tick, 90 + Math.random() * 60);
+  };
+  tick();
+});
+// Esc skips the scene (not while a dialog, a popover or the result moment has the key)
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !game.endingActive() || document.querySelector('.moment, .modal-back, .popover')) return;
+  game.skipEnding();
+});
+syncEnding();
+
 // "처음부터" (lock screen, debrief, playtest panel): always asks first; the case list asks for any case
 document.addEventListener('nh-reset', () => void confirmRestart(ENTRY));
 

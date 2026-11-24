@@ -781,6 +781,11 @@ done`,
       body: '보고서 잘 읽었습니다. 책임자가 아니라 원인을 찾아 주셔서 고맙습니다. git-admins 그룹 정리, 온콜표 갱신, 퇴사자 계정 회수 절차를 이번 주 안에 정하겠습니다. 그리고… 은재님이 예전에 같은 이야기를 했었다는 것도 기억합니다.\n\n오미래 드림 / CTO',
     },
     {
+      id: 'sec-done', account: 'me', folder: 'inbox', from: 'security', to: '한도윤', at: '2026-11-16T21:30', later: true,
+      subject: '[보안] 퇴사자 계정 회수 완료 — 남은재',
+      body: '한도윤님,\n남은재님 계정 회수를 마쳤습니다 (11/16 21:00).\n\n- 사내 계정(LDAP): 완료\n- 메신저: 대상 아님\n- 서버 키: 해당 없음\n\n조사 모드 세션(SEC-2211)도 종료했습니다. 수고 많으셨습니다.\n보안팀',
+    },
+    {
       id: 'thu', account: 'pc', folder: 'inbox', from: 'mirae', to: '박지훈', cc: '인프라팀 (남은재 외)', at: '2026-11-12T16:40',
       subject: '[중요] 월요일 파트너 데모 전 결제 지연(p99) 개선 요청',
       body: '지훈님,\n바쁘신 와중에 죄송합니다.\n\n- 월요일 10시 데모 전까지 p99 개선 부탁드립니다.\n- 방법은 맡기겠습니다. 다만 일정은 맡길 수 없습니다.\n- 진행 상황은 금요일 18:00까지 공유해 주십시오.\n\n오미래 드림 / CTO',
@@ -1132,6 +1137,19 @@ done`,
   ],
 
   // ------------------------------------------------------------------ debrief
+  // ------------------------------------------------------------------ last scene (docs/case-format.md §15)
+  // the farewell memo first ("→ 알았음. 늦었음."), 오미래's reply, 서진's thanks, 도윤 waters the plant (물주기, the
+  // alias 은재 left), and the security team's mail that seeds Case 4: "서버 키: 해당 없음"
+  ending: {
+    beats: [
+      { wait: 0, note: 'farewell' },
+      { wait: 3, mail: 'closing' },
+      { wait: 6, message: { channel: 'me-dm-seojin', from: 'seojin', text: '도윤님. 오늘 고마웠어요.' } },
+      { wait: 3, act: { tab: 0, prefill: '물주기', until: '^물주기$', timeoutSec: 25, sticky: 1, note: { id: 'today', line: '{hm} 몬스테라 물 줌 🌱' } } },
+      { wait: 3, mail: 'sec-done' },
+    ],
+  },
+
   debrief: {
     headline: '범인은 한 사람이 아니었다. 시스템이었다.',
     story: [

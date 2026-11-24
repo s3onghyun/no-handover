@@ -1,6 +1,32 @@
 import { clear, h, storage } from '../dom.ts';
 import { t } from '../../i18n.ts';
 import type { AppDef } from '../wm.ts';
+import { NOTE_CHAR_MS } from '../../engine/game.ts';
+import { reducedMotion } from '../motion.ts';
+
+/**
+ * Write a line in letter by letter (the last scene, src/engine/game.ts NOTE_CHAR_MS per character;
+ * reduced motion = at once). Tells the page how long it writes ('nh-writing', main.ts clicks keys).
+ */
+function writeIn(el: HTMLElement | null | undefined): void {
+  if (!el) return;
+  const text = el.textContent ?? '';
+  el.closest('.ln')?.classList.add('written');
+  if (reducedMotion() || !text) return;
+  const chars = [...text];
+  el.textContent = '';
+  el.classList.add('writing');
+  let i = 0;
+  const timer = setInterval(() => {
+    if (!el.isConnected) return clearInterval(timer);
+    el.textContent += chars[i++];
+    if (i >= chars.length) {
+      clearInterval(timer);
+      el.classList.remove('writing');
+    }
+  }, NOTE_CHAR_MS);
+  document.dispatchEvent(new CustomEvent('nh-writing', { detail: chars.length * NOTE_CHAR_MS }));
+}
 
 export const notesApp: AppDef = {
   id: 'notes',
@@ -56,8 +82,10 @@ export const notesApp: AppDef = {
       n.lines.forEach((line, i) => {
         const hl = revealed && n.highlight === i;
         page.appendChild(h(`div.ln${hl ? '.hl' : ''}`, null, line || '​', line ? ctx.pinBtn({ kind: 'note', text: `도윤 메모 ${n.title}: ${line}`, source: t('app.notes'), sourceKey: `note:${n.id}` }) : null));
-        if (hl && n.reveal) page.appendChild(h('div.ln.reveal', null, n.reveal));
+        if (hl && n.reveal) page.appendChild(h('div.ln.reveal', null, h('span.ln-text', null, n.reveal)));
       });
+      // lines the last scene wrote in (src/engine/game.ts)
+      for (const line of g.st.noteLines?.[n.id] ?? []) page.appendChild(h('div.ln.added', null, h('span.ln-text', null, line), ctx.pinBtn({ kind: 'note', text: `도윤 메모 ${n.title}: ${line}`, source: t('app.notes'), sourceKey: `note:${n.id}` })));
     };
     render();
     return {
@@ -68,6 +96,14 @@ export const notesApp: AppDef = {
         if (typeof arg === 'string') {
           sel = arg;
           render();
+        } else if (arg && typeof arg === 'object' && 'id' in arg) {
+          // the last scene: open the page and write its newest line (or the reveal line) in again
+          const a = arg as { id: string; write?: 'line' | 'reveal' };
+          sel = a.id;
+          render();
+          const target = a.write === 'reveal' ? page.querySelector<HTMLElement>('.ln.reveal .ln-text') : a.write === 'line' ? [...page.querySelectorAll<HTMLElement>('.ln.added .ln-text')].at(-1) : null;
+          writeIn(target);
+          target?.scrollIntoView({ block: 'nearest' });
         }
       },
     };

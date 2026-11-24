@@ -760,6 +760,18 @@ export const caseTwoDeleted: CaseFile = {
   ],
 
   // ------------------------------------------------------------------ debrief
+  // ------------------------------------------------------------------ last scene (docs/case-format.md §15)
+  // 오미래's reply first, 지훈 owns it without an emoji, then his farewell-party invite, 서진 cannot come, the box on 은재's desk
+  ending: {
+    beats: [
+      { wait: 0, mail: 'closing' },
+      { wait: 5, message: { channel: 'me-dm-jihoon', from: 'jihoon', text: '도윤님. 제가 지운 거 맞아요. 다음엔 df 먼저 볼게요.' } },
+      { wait: 5, message: { channel: 'me-dm-jihoon', from: 'jihoon', text: '아 그리고 내일 은재 선배 송별회!! 정든집 19시 🍕 도윤님도 꼭요' } },
+      { wait: 3, message: { channel: 'me-dm-seojin', from: 'seojin', text: '송별회 저는 못 가요. 금요일 오후부터 휴가예요.' } },
+      { wait: 3, note: 'today', line: '17:40 은재님 자리에 종이 상자. 머그컵, 오래된 키보드, 목공 잡지(?). 내일이 마지막 출근.' },
+    ],
+  },
+
   debrief: {
     headline: '지운 파일도 열려 있으면 공간을 차지한다. 고쳤다고 믿은 조치는, 확인해야 조치다.',
     story: [

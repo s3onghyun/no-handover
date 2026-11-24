@@ -24,6 +24,7 @@ function liveMessages(cs: CaseFile): { from: string; text: string; at: string }[
   // evidence history (timeline, channels), mails and the debrief are read, not said to the player
   walk(cs.hints, 'hints');
   walk(cs.triggers, 'triggers');
+  walk(cs.ending, 'ending');
   return out.filter((m) => m.from !== cs.player);
 }
 

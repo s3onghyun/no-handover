@@ -896,6 +896,15 @@ export const caseOneCron: CaseFile = {
   ],
 
   // ------------------------------------------------------------------ debrief
+  // ------------------------------------------------------------------ last scene (docs/case-format.md §15)
+  // 서진's verdict in 은재's words, then 은재 taps the two comment lines on 도윤's screen (written in the notebook)
+  ending: {
+    beats: [
+      { wait: 0, message: { channel: 'me-dm-seojin', from: 'seojin', text: '봤어요. cron의 PATH. 맞아요. 터미널에서 된 건 증거가 아니에요. 은재 선배 말.' } },
+      { wait: 4, note: 'today', line: '12:05 은재님이 지나가다 내 crontab 맨 위 주석 두 줄을 손가락으로 톡톡 치고 가심. cron-env.txt 날짜 2024-03-12. 은재님도 여기서 넘어졌구나. (조금 안심)' },
+    ],
+  },
+
   debrief: {
     headline: 'cron 은 로그인 셸이 아니다. 내 터미널에서 된 건 증거가 아니다.',
     story: [

@@ -12,7 +12,8 @@ import { emptyObjectiveState, Objectives, type Observation, type ObjectiveState 
 import { scoreSubmission, type ScoreResult, type Submission } from './scoring.ts';
 import { Shell, type OutLine, type RunResult, type Session, type ShellEvent } from './shell.ts';
 import { detectTime, parseLocal } from './time.ts';
-import type { CaseFile, ClueDef, MailDef, NudgeDef, OptionDef, SlotId, TriggerAction, TriggerDef } from './types.ts';
+import { fmtHM } from './time.ts';
+import type { CaseFile, ClueDef, EndingBeat, MailDef, NudgeDef, OptionDef, SlotId, TriggerAction, TriggerDef } from './types.ts';
 
 export const SAVE_VERSION = 1;
 
@@ -100,6 +101,13 @@ export interface SaveState {
   rail?: { said: string[]; redirected: string[] };
   /** Live messages the sender deletes again ("written, then deleted"): due play time, message id. */
   unsend?: { due: number; id: string }[];
+  /**
+   * The last scene (case `ending`): the next beat and when it is due, the play time an act waits
+   * until, and whether it is over (the debrief opens then). Absent until the case finishes.
+   */
+  ending?: { step: number; due: number; waitUntil?: number; done: boolean; skipped?: boolean };
+  /** Lines the last scene wrote into 도윤's notebook, per page id. */
+  noteLines?: Record<string, string[]>;
 }
 
 type Listener = (payload?: unknown) => void;
@@ -107,6 +115,14 @@ type Listener = (payload?: unknown) => void;
 const MAX_TAB_LINES = 600;
 /** After the player's quick reply, a short beat before the colleague starts typing. */
 export const ASK_BEAT_MS = 600;
+/** The last scene starts after the report's result moment (2.2 s, src/main.ts) has had its time. */
+export const ENDING_LEAD_MS = 2600;
+/** After the last beat, a moment of quiet before the debrief opens. */
+export const ENDING_TAIL_MS = 3000;
+/** How long 도윤's notebook takes per character when the scene writes a line (src/ui/apps/notes.ts). */
+export const NOTE_CHAR_MS = 45;
+/** An act beat waits this long for the player by default. */
+export const ACT_TIMEOUT_S = 25;
 
 export class Game {
   /** The case as played: `base`, or its 숙련자 모드 copy (src/engine/expert.ts). */
@@ -303,6 +319,7 @@ export class Game {
       this.st.unsend = this.st.unsend!.filter((u) => u.due > t);
       for (const u of gone) this.unsend(u.id);
     }
+    this.runEnding();
     // time-based triggers
     for (const tr of this.cs.triggers) {
       if ('afterMin' in tr.when && !this.st.triggersFired.includes(tr.id) && t >= tr.when.afterMin * 60000) this.fire(tr.id);
@@ -579,6 +596,7 @@ export class Game {
     // first command that showed the player evidence (found a clue or ticked an objective)
     if (progressed && !this.st.log.some((e) => e.type === 'meaningful')) this.log('meaningful', { line });
     if (!progressed) this.railOffTrack(line);
+    this.endingAct(tabIndex, line);
     this.emit('save');
     return r;
   }
@@ -720,6 +738,7 @@ export class Game {
       this.st.finished = true;
       this.deliverMail(this.cs.debrief.closingMail);
       this.log('finish', { attempt, total: score.total, solved: score.allCorrect, hints: score.hints });
+      this.startEnding();
     } else {
       const n = this.ladder.onWrong(score.blamed, this.st.playMs);
       if (n) this.deliverNudge(n, 'wrong');
@@ -727,6 +746,145 @@ export class Game {
     this.emit('accuse', score);
     this.emit('save');
     return score;
+  }
+
+  // ---------------------------------------------------------------- the last scene (case `ending`)
+
+  /** The last scene is playing: the case is finished and the debrief waits for it. */
+  endingActive(): boolean {
+    return !!this.st.ending && !this.st.ending.done;
+  }
+
+  /** The act beat the scene waits on right now, if any. */
+  endingAwaits(): Extract<EndingBeat, { act: unknown }>['act'] | null {
+    const e = this.st.ending;
+    const b = e && !e.done && e.waitUntil !== undefined ? this.cs.ending?.beats[e.step] : undefined;
+    return b && 'act' in b ? b.act : null;
+  }
+
+  /** Start the last scene (the case just finished). False when the case has none or it already ran. */
+  startEnding(): boolean {
+    const beats = this.cs.ending?.beats;
+    if (!beats?.length || this.st.ending) return false;
+    this.st.ending = { step: 0, due: this.st.playMs + ENDING_LEAD_MS + beats[0].wait * 1000, done: false };
+    this.log('ending', { action: 'start' });
+    this.emit('ending', 'start');
+    this.emit('save');
+    return true;
+  }
+
+  private runEnding(): void {
+    const e = this.st.ending;
+    if (!e || e.done) return;
+    const beats = this.cs.ending?.beats ?? [];
+    const t = this.st.playMs;
+    if (e.waitUntil !== undefined) {
+      if (t < e.waitUntil) return;
+      this.log('ending', { action: 'act-timeout', step: e.step });
+      this.nextBeat(t, 0);
+    }
+    while (e.waitUntil === undefined && t >= e.due) {
+      if (e.step >= beats.length) {
+        this.finishEnding(false);
+        return;
+      }
+      const b = beats[e.step];
+      // an act waits for the player: mark the wait before it is announced (the UI asks endingAwaits())
+      if ('act' in b) e.waitUntil = t + (b.act.timeoutSec ?? ACT_TIMEOUT_S) * 1000;
+      const lands = this.applyBeat(b, false);
+      if ('act' in b) return;
+      this.nextBeat(t, lands);
+    }
+  }
+
+  /** Move past the current beat: the next one is due its `wait` after this one lands (`lands` ms from now). */
+  private nextBeat(t: number, lands: number): void {
+    const e = this.st.ending!;
+    const beats = this.cs.ending?.beats ?? [];
+    e.waitUntil = undefined;
+    e.step++;
+    const next = beats[e.step];
+    e.due = t + lands + (next ? next.wait * 1000 : ENDING_TAIL_MS);
+    this.emit('save');
+  }
+
+  /** Play one beat; returns ms until it has landed (a colleague typing, a line being written). Quiet = skipped: no typing, no sound. */
+  private applyBeat(b: EndingBeat, quiet: boolean): number {
+    if ('message' in b) {
+      if (quiet) {
+        this.pushLive(b.message, 'ending-skip');
+        return 0;
+      }
+      this.queueMessage(b.message, 'ending');
+      return typingMs(b.message.text);
+    }
+    if ('note' in b) {
+      const n = this.cs.notes.find((x) => x.id === b.note);
+      if (n?.highlight !== undefined && !this.st.notesRevealed.includes(n.id)) this.st.notesRevealed.push(n.id);
+      const line = b.line === undefined ? undefined : this.addNoteLine(b.note, b.line);
+      this.log('ending', { action: 'note', note: b.note });
+      this.emit('ending-note', { id: b.note, line, quiet });
+      const written = line ?? (b.line === undefined ? n?.reveal : undefined) ?? '';
+      return quiet ? 0 : [...written].length * NOTE_CHAR_MS;
+    }
+    if ('mail' in b) {
+      this.deliverMail(b.mail);
+      this.emit('ending-mail', { id: b.mail, quiet });
+      return 0;
+    }
+    if (quiet) return 0;
+    this.st.tabs[b.act.tab].input = b.act.prefill;
+    this.log('ending', { action: 'act-wait', tab: b.act.tab });
+    this.emit('ending-act', b.act);
+    return 0;
+  }
+
+  /** Write a line into 도윤's notebook page (`{hm}` = the game clock); returns the line as written. */
+  private addNoteLine(id: string, line: string): string {
+    const text = line.replace(/\{hm\}/g, fmtHM(this.now()));
+    const lines = (this.st.noteLines ??= {});
+    (lines[id] ??= []).push(text);
+    this.emit('save');
+    return text;
+  }
+
+  /** A command ran: if the scene waits on an act in that tab and the line matches, the act is done. */
+  private endingAct(tabIndex: number, line: string): void {
+    const act = this.endingAwaits();
+    if (!act || act.tab !== tabIndex || !new RegExp(act.until).test(line.trim())) return;
+    this.log('ending', { action: 'act', tab: tabIndex, line });
+    let lands = 0;
+    if (act.note) {
+      const text = this.addNoteLine(act.note.id, act.note.line);
+      this.emit('ending-note', { id: act.note.id, line: text, quiet: false });
+      lands = [...text].length * NOTE_CHAR_MS;
+    }
+    this.nextBeat(this.st.playMs, lands);
+  }
+
+  /** Esc / "해설 바로 보기": the rest of the scene lands at once and quietly, and the debrief opens. */
+  skipEnding(): void {
+    const e = this.st.ending;
+    if (!e || e.done) return;
+    const beats = this.cs.ending?.beats ?? [];
+    // a colleague still typing a scene line: it lands now, without a sound
+    const typing = this.st.queue.filter((q) => q.trigger === 'ending');
+    this.st.queue = this.st.queue.filter((q) => q.trigger !== 'ending');
+    for (const q of typing) if ('message' in q.action) this.pushLive(q.action.message, 'ending-skip');
+    for (let i = e.waitUntil !== undefined ? e.step + 1 : e.step; i < beats.length; i++) this.applyBeat(beats[i], true);
+    this.finishEnding(true);
+  }
+
+  private finishEnding(skipped: boolean): void {
+    const e = this.st.ending!;
+    e.done = true;
+    e.skipped = skipped;
+    e.waitUntil = undefined;
+    e.step = this.cs.ending?.beats.length ?? e.step;
+    this.log('ending', { action: skipped ? 'skip' : 'done' });
+    this.checkTyping();
+    this.emit('ending', 'done');
+    this.emit('save');
   }
 
   // ---------------------------------------------------------------- opening: briefing + objectives
