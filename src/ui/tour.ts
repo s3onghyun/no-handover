@@ -8,7 +8,7 @@
 // A player who chose "터미널이 익숙해요" (src/engine/experience.ts) gets no coach marks: the tour
 // collapses into a small "도구 안내 보기" entry (toolGuide below) that lists the same lines on demand.
 
-import { nextTourStep, parseTourState, type TourState } from '../engine/tour.ts';
+import { nextTourStep, parseTourState, tourNumber, type TourState } from '../engine/tour.ts';
 import type { TourStep } from '../engine/types.ts';
 import type { Game } from '../engine/game.ts';
 import { canRestoreFocus, h, storage } from './dom.ts';
@@ -17,6 +17,8 @@ import { t } from '../i18n.ts';
 export const TOUR_SEEN_KEY = 'no-handover:tour';
 export const tourKey = (caseId: string) => `no-handover:tour:${caseId}`;
 const AUTO_HIDE_MS = 15000;
+/** The terminal's newest output a mark must not cover (px above the prompt). */
+const NEWEST_PX = 170;
 
 export function mountTour(game: Game, opts: { blocked: () => boolean; collapsed?: () => boolean }): { refresh(): void } | null {
   const steps = game.cs.tour?.steps;
@@ -46,6 +48,19 @@ export function mountTour(game: Game, opts: { blocked: () => boolean; collapsed?
     }
     x = Math.max(8, Math.min(x, innerWidth - w - 8));
     y = Math.max(8, Math.min(y, innerHeight - hgt - 56));
+    // a mark for another tool keeps off the terminal's newest lines (the output sits just over the
+    // prompt): above them when it fits, else below the terminal
+    const term = document.querySelector<HTMLElement>('.window[data-app="terminal"]:not(.min)');
+    const out = term?.querySelector<HTMLElement>('.tout');
+    if (term && out && a !== term && !term.contains(a)) {
+      const t = term.getBoundingClientRect();
+      const o = out.getBoundingClientRect();
+      const band = { top: Math.max(o.top, o.bottom - NEWEST_PX), bottom: t.bottom };
+      if (x < t.right && x + w > t.left && y < band.bottom && y + hgt > band.top) {
+        if (band.top - 8 - hgt >= 8) y = band.top - 8 - hgt;
+        else if (t.bottom + 8 + hgt <= innerHeight - 56) y = t.bottom + 8;
+      }
+    }
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
   };
@@ -76,7 +91,7 @@ export function mountTour(game: Game, opts: { blocked: () => boolean; collapsed?
     const el = h(
       'div.tour',
       { role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': `tour-t-${step.id}`, 'aria-describedby': `tour-d-${step.id}`, dataset: { step: step.id, app: step.app } },
-      h('div.tour-head', null, h('b', { id: `tour-t-${step.id}` }, step.title), h('span.tour-n', null, `${steps.indexOf(step) + 1}/${steps.length}`)),
+      h('div.tour-head', null, h('b', { id: `tour-t-${step.id}` }, step.title), h('span.tour-n', null, tourNumber(steps, st))),
       h('p', { id: `tour-d-${step.id}` }, step.text),
       h('div.tour-acts', null, h('button.tour-skip', { onclick: () => close('skip') }, t('tour.skip')), ok),
     );

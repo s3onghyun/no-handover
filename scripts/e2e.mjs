@@ -84,6 +84,8 @@ async function tab(label) {
   await page.locator('.ttab', { hasText: new RegExp(`^${label}$`) }).first().click();
 }
 async function pinLine(re) {
+  // the memo may have turned over the terminal's older lines: bring the terminal forward first, as a player would
+  if ((await page.evaluate(() => document.querySelector('.window.focused')?.dataset.app)) !== 'terminal') await page.locator('#taskbar .task[data-app="terminal"]').click();
   const line = page.locator('.tline', { hasText: re }).last();
   await line.hover();
   await line.locator('.pinbtn').click();
@@ -126,11 +128,14 @@ async function lastScene(rep, pg = page, { first, open = true } = {}) {
 /** Report: pick an option by id; cite the pin whose line matches `re` for a slot. */
 const pick = (rep, slot, id) => rep.locator(`input[name="slot-${slot}"][value="${id}"]`).check();
 const cite = (rep, slot, re) => rep.locator(`label.citeopt:has(input[name="cite-${slot}"])`, { hasText: re }).first().locator('input').check();
+/** Each mark's "n/N", in the order the marks showed (season report B7: they count up as they appear). */
+const tourNs = [];
 /** A coach mark: waits for it, checks it is the only one on screen, then "알겠어요". */
 async function mark(id, shotName) {
   const m = page.locator(`.tour[data-step="${id}"]`);
   await m.waitFor({ timeout: 6000 });
   assert.equal(await page.locator('.tour').count(), 1, 'one mark at a time');
+  tourNs.push(await m.locator('.tour-n').innerText());
   if (shotName) {
     await page.waitForTimeout(500);
     await shot(shotName);
@@ -276,7 +281,11 @@ try {
   await shot('case0-02-terminal-df.png');
   step('df -h: /var 100% (highlighted, pinned); "보고서에는 이 줄을 핀하세요 (0/2)" toast with the line; the notebook icon appears with its 메모장 mark');
 
+  // season report B6: a line picked from one output (its toolbar names "wiki-01 $ df -h") lets go when the next command runs
+  await page.locator('.tline', { hasText: /100%\s+\/var/ }).last().click();
+  assert.equal(await page.locator('.tpinbar:not([hidden]) .tpb-src').innerText(), 'wiki-01 $ df -h');
   await run('du -sh /var/log/*');
+  assert.equal(await page.locator('.tpinbar:not([hidden])').count(), 0, 'the toolbar closes with the next command');
   await page.locator('.tline.clue', { hasText: /^11G\s+\/var\/log\/wiki(?!\/)/ }).waitFor();
   await run('tail -n 20 /var/log/wiki/wiki.log');
   await todoItem('tail').and(page.locator('.done')).waitFor();
@@ -310,6 +319,7 @@ try {
   await page.locator('.window[data-app="report"] .titlebar button.close').click();
   const tourLog0 = await page.evaluate(() => window.__game.st.log.filter((e) => e.type === 'tour-step').map((e) => e.step));
   assert.deepEqual(tourLog0, ['terminal', 'messenger', 'mail', 'hint', 'notes', 'board', 'dashboard', 'report'], 'each Case 0 mark once, at its unlock');
+  assert.deepEqual(tourNs, ['1/8', '2/8', '3/8', '4/8', '5/8', '6/8', '7/8', '8/8'], 'the marks count up in the order they show');
   assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('no-handover:tour'))).seen, tourLog0);
   step('the pins item counts evidence pins (1/2) and lists the kinds that count, met or missing');
   step('du → tail → systemctl status → 2 pins: all five boxes tick, "📝 보고서 쓰기" on the last item opens the report and the sticky folds; every icon is unlocked, each with its mark (8 marks, each once)');
@@ -626,6 +636,16 @@ try {
   await page.locator('.toast-options', { hasText: '새 보기가 열렸어요' }).waitFor({ timeout: 3000 });
   assert.equal(await todoItem('pins').and(page.locator('.done')).count(), 0, '재발 방지 has no pin yet');
   step('df 180G vs du 95G → pgrep → /proc/1187/fd "(deleted)" (aha) → the sudo rm in the journal; two boxes tick, "증거 3개" waits for 재발 방지');
+  // season report B13: the dashboard's 14:28 mark runs up through each chart as a guide and names its time on hover,
+  // so whether the ingest rise starts before or after it reads off the chart
+  await page.locator('.icon[data-app="dashboard"]').click();
+  const dash2 = page.locator('.window[data-app="dashboard"]');
+  await dash2.locator('.obs-tsp .obs-chart svg').first().waitFor();
+  const mk2 = dash2.locator('.obs-tsp').first().locator('.obs-markg').first();
+  assert.match(await mk2.locator('title').textContent(), /^표식 .*14:28$/);
+  const ml2 = await mk2.locator('.obs-markline').evaluate((l) => [+l.getAttribute('y1'), +l.getAttribute('y2')]);
+  assert.ok(ml2[1] - ml2[0] > 100, `the guide spans the plot (${ml2})`);
+  await closeWin('dashboard');
   await run('ssh pay-api-01');
   await run('journalctl -u payment-api --since "2026-11-11 14:00" --until "2026-11-11 15:00"');
   await page.locator('.tline', { hasText: 'log level changed: info -> debug' }).waitFor();
@@ -728,7 +748,10 @@ try {
   await pinLine(/^LimitNOFILE=4096/);
   await todoItem('pins').and(page.locator('.done')).waitFor();
   await todoItem('pins').locator('.todo-report').waitFor();
-  await page.locator('.todo').waitFor({ state: 'detached', timeout: 16000 }); // left alone, it folds by itself
+  // season report B2: it no longer folds on a timer (a slow reader lost the button); 📝 보고서 쓰기 opens the report and folds it
+  await todoItem('pins').locator('.todo-report').click();
+  await page.locator('.todo').waitFor({ state: 'detached', timeout: 4000 });
+  await closeWin('report');
   await page.locator('.toast', { hasText: '오늘 할 일 끝' }).click();
   await page.locator('.window[data-app="notes"] .item.sel', { hasText: '오늘 할 일 ✓' }).waitFor();
   await page.waitForTimeout(400);
@@ -736,7 +759,7 @@ try {
   fm = (await page.evaluate(() => window.__game.playtestReport())).summary.firstMinutes;
   assert.ok(fm.objectives.every((o) => o.t !== null) && fm.objectivesFoldedAt !== null);
   assert.ok(fm.firstMeaningfulCommandAt !== null);
-  step('box 3 ticks at the third pin; the sticky folds into the notebook ("오늘 할 일 ✓")');
+  step('box 3 ticks at the third pin; 📝 보고서 쓰기 opens the report and the sticky folds into the notebook ("오늘 할 일 ✓")');
   await closeWin('notes');
   await pinLine(/opened 2,314 segment files/);
 
@@ -1082,12 +1105,37 @@ try {
   await tin5.focus();
   await run5('systemctl status wiki');
   await p5.locator('.todo li[data-id="service"].done').waitFor();
-  await p5.locator('.window[data-app="notes"]').waitFor({ timeout: 3000 }); // the memo scene pops the notebook up, and it stays open
-  // B2: pin the two lines the tester picked by clicking straight on their 📌
+  // season report B3: no room beside the terminal at 1280x800, so the memo page pops up over the terminal's older lines
+  // only — below its title bar, left of its 📌 column, above the newest output (it covered the line just printed) —
+  // and the typing stays in the prompt
+  const notes5 = p5.locator('.window[data-app="notes"]');
+  await notes5.waitFor({ timeout: 3000 });
+  {
+    const n = await notes5.boundingBox();
+    const t = await p5.locator('.window[data-app="terminal"]').boundingBox();
+    const o = await p5.locator('.window[data-app="terminal"] .tout').boundingBox();
+    assert.ok(n.y + n.height <= o.y + o.height - 170, `the memo (bottom ${n.y + n.height}) keeps off the newest output (from ${o.y + o.height - 170})`);
+    assert.ok(n.x + n.width <= t.x + t.width - 48, 'the memo keeps off the 📌 column');
+    assert.ok(n.y >= t.y + 30, "the memo keeps off the terminal's title bar");
+  }
+  assert.equal(await p5.evaluate(() => !!document.activeElement?.closest('.tin')), true, 'the prompt keeps the keyboard');
+  // B2 (round 2) / season report B4: pin the two lines by clicking straight on their 📌, the second right after the first —
+  // a 📌 click no longer opens the line toolbar, which took the bottom of the output and swallowed the second click
   for (const re of [/100%\s+\/var/, /ERROR session save failed/]) await clickCentre(p5.locator('.tline', { hasText: re }).last().locator('.pinbtn'), '.pinbtn');
   assert.equal(await p5.evaluate(() => window.__game.st.pins.length), 2);
+  assert.equal(await p5.locator('.tpinbar:not([hidden])').count(), 0, 'a 📌 click pins without opening the toolbar');
   await p5.locator('.todo li[data-id="pins"].done').waitFor({ timeout: 2000 });
-  step('1280x800, clicked like the playtester: "알겠어요" returns focus to the prompt; one click on the 📌 icon opens the board with a coach mark up, the taskbar minimizes/restores it, Enter opens it; the terminal clears the checklist and the memo clears its 📌 column, so both pins land and box 5 ticks');
+  // season report B2: "📝 보고서 쓰기" stays until the report opens (it folded away on a 12 s timer, a slow reader clicked empty desktop)
+  const cta5 = p5.locator('.todo li[data-id="pins"] .todo-report');
+  await cta5.waitFor();
+  const tour5 = p5.locator('.tour[data-step="report"] .tour-ok');
+  if (await tour5.count()) await tour5.click();
+  await p5.waitForTimeout(13000);
+  assert.equal(await cta5.count(), 1, 'the sticky still offers 📝 보고서 쓰기 after 13 s');
+  await clickCentre(cta5, '.todo-report');
+  await p5.locator('.window[data-app="report"]:not(.min)').waitFor();
+  await p5.locator('.todo').waitFor({ state: 'detached', timeout: 4000 });
+  step('1280x800, clicked like the playtester: "알겠어요" returns focus to the prompt; one click on the 📌 icon opens the board with a coach mark up, the taskbar minimizes/restores it, Enter opens it; the memo turns over the older lines only (newest output, 📌 column and prompt clear), two quick 📌 clicks both land with no toolbar, box 5 ticks, and 📝 보고서 쓰기 waits past 13 s until clicked');
   await p5.close();
 
   // ---- sixth page: "터미널이 익숙해요" by keyboard — no coach marks, a 도구 안내 entry, no window opens by itself
@@ -2309,6 +2357,8 @@ try {
     await shot14('case4-04-bad.png');
     await bad14.locator('.fb-back').click();
     await bad14.waitFor({ state: 'detached' });
+    // season report B14: the terminal says the crontab is back, under the `crontab -r` it ran
+    assert.match((await term14.locator('.tline').allInnerTexts()).slice(-2).join('\n'), /crontab -r[\s\S]*지우기 직전으로 돌아왔어요 — crontab 이 그대로 있어요/);
     await run14('nuri-pc', 'crontab -l');
     await term14.locator('.tline', { hasText: '월요일: 몬스테라' }).last().waitFor();
     step('Case 4: keys and prints (the 11/20 deploy login is 지훈\'s key), SEC-2211, the "5대 중 3대" history line; crontab -r on 도윤\'s PC → 「몬스테라가 시들었습니다」 → back, the reminder restored');
@@ -2319,9 +2369,16 @@ try {
     await pick(rep14, 'cause', 'dir-only');
     await pick(rep14, 'sequence', 'nobody');
     for (const id of ['checklist', 'outside-ldap', 'shared-account']) await pick(rep14, 'responsibility', id);
+    // season report B1: every pin is listed in each field (no inner scroll whose bar hid on macOS);
+    // B15: ticking a pin does not move the submit button
+    for (const l of await rep14.locator('.cite-list').all()) assert.ok(await l.evaluate((e) => e.scrollHeight <= e.clientHeight + 1 && getComputedStyle(e).overflowY === 'visible'), 'no inner scroll in the pin list');
+    assert.equal(await rep14.locator('.cite[data-slot="sequence"] .citeopt').count(), await p14.evaluate(() => window.__game.st.pins.length));
+    const submitY14 = () => rep14.locator('.submitbar .primary-btn').evaluate((e) => Math.round(e.getBoundingClientRect().top - e.closest('.report').firstElementChild.getBoundingClientRect().top));
+    const y14 = await submitY14();
     await cite(rep14, 'cause', /eunjae@nuri-pc/);
     await cite(rep14, 'sequence', /jhpark@mbp-2024/);
     await cite(rep14, 'responsibility', /퇴사 처리 체크리스트/);
+    assert.ok(Math.abs((await submitY14()) - y14) <= 1, 'the submit button stays where it was while pins are ticked');
     await submit(rep14, /1번째 제출이에요 \(남은 제출 2\/2\)/, p14);
     // the last scene: no score, 오미래's "네 번째", the sign beats skipped (found), the 24th line waits in the handover tab
     await p14.locator('.window[data-app="mail"] h2', { hasText: 'RE: [보안] ledger-01 퇴사자 계정 — 경위 보고' }).waitFor({ timeout: 8000 });
@@ -2373,11 +2430,18 @@ try {
     // 내가 살려 둔 것, the credits, the line for the next person, the stats
     await term14.locator('.tline', { hasText: '다음 실행: 11/27 (금) 18:00' }).waitFor({ timeout: 4000 });
     assert.ok(await term14.locator('.tline', { hasText: '# 왜: 밤에 도는 것 목록을 매주 팀에' }).count());
+    // season report B11: the crontab's last line and the prompt stay above the bar
+    {
+      const barTop = (await p14.locator('.finale-bar').boundingBox()).y;
+      const tb = await term14.boundingBox();
+      assert.ok(tb.y + tb.height <= barTop, `the terminal (bottom ${tb.y + tb.height}) ends above the bar (${barTop})`);
+    }
     await shot14('case4-10-crontab.png');
     await p14.locator('.finale-bar .finale-next').click();
     const cr14 = p14.locator('.finale-credits');
     await cr14.waitFor();
     assert.match(await cr14.innerText(), /## 체크리스트 \(27\/27\)[\s\S]*적어 두기\. 그래야 도망칠 수 있어요\./);
+    assert.equal(await cr14.evaluate((e) => getComputedStyle(e).backgroundColor), 'rgb(13, 13, 15)', 'season report B12: nothing shows through the credits');
     await shot14('case4-11-credits.png');
     await cr14.locator('.finale-next').click();
     const line14 = p14.locator('.finale-line');
@@ -2388,6 +2452,13 @@ try {
     await line14.locator('.fl-input').press('Enter');
     const stats14 = p14.locator('.finale-stats');
     await stats14.waitFor();
+    // season report B9: the record has the focus, not 해설 보기 — a second Enter (the playtester's, after the 15 s ran out
+    // mid-typing) used to press it and skip the record and its replay
+    await p14.waitForTimeout(400);
+    assert.equal(await p14.evaluate(() => document.activeElement?.classList.contains('finale-stats')), true, 'the record itself has the focus');
+    await p14.keyboard.press('Enter');
+    await p14.waitForTimeout(300);
+    assert.equal(await stats14.count(), 1, 'a stray Enter leaves the record on screen');
     assert.equal(await stats14.locator('h2').innerText(), '엔딩 2 / 6', 'the hidden one counts too: 몬스테라 and 다 같이');
     assert.match(await stats14.innerText(), /숨은 사인 ✓ 직접 찾음[\s\S]*은재의 초안 \d \/ 9 읽음[\s\S]*다음 사람에게: “밤에 도는 거, 적어 두세요\.” — 한도윤/);
     assert.equal(await p14.evaluate(() => localStorage.getItem('no-handover:next-line')), '밤에 도는 거, 적어 두세요.');
@@ -2431,6 +2502,15 @@ try {
     assert.match(await stats14.innerText(), /다음 사람에게: “…” — 한도윤/, 'an empty line is signed …');
     await stats14.locator('.fs-debrief').click();
     await rep14.locator('.debrief h2', { hasText: '계정을 지워도 열쇠는 남는다' }).waitFor({ timeout: 5000 });
+    // season report B9: the replay is on the debrief too, and 이어서 하기 after a reload opens on that debrief
+    assert.match(await rep14.locator('.debrief-again').innerText(), /다른 곳에 넘겨 보기/);
+    await p14.reload();
+    await p14.locator('#boot button', { hasText: /이어서/ }).first().click();
+    await rep14.locator('.debrief .debrief-again').waitFor({ timeout: 5000 });
+    await rep14.locator('.debrief .debrief-again').click();
+    await p14.locator('#boot').waitFor();
+    await p14.locator('#boot button', { hasText: /이어서/ }).first().click();
+    await choice14.waitFor({ timeout: 8000 });
     step('Case 4: 다른 곳에 넘겨 보기 three times → 「인수인계 없음」 (no reply, 15 3 * * 6, v4 credits 20/24), 「네 번째」, 「하루 만에」 — each card ends on its price, each reply its own first line; 엔딩 5 / 6, then the debrief');
     await ctx14.close();
   }
@@ -2481,6 +2561,21 @@ try {
       await p.locator('.window[data-app="mail"] .mail-read h2', { hasText: '도윤님께' }).waitFor();
       assert.match(await p.locator('.window[data-app="mail"] .mail-read pre').innerText(), /서진님한테 넘겼다고요[\s\S]*메모장을 세로로 읽어 봐요/);
       if (engine === 'chromium' && shots) await p.screenshot({ path: join(shots, 'case4-16-narrow-reply.png') });
+      // season report B11: on a phone too, "내가 살려 둔 것" keeps the terminal (its last crontab line, its prompt) above the bar
+      await p.locator('.finale-bar .finale-next').tap();
+      await term.locator('.tline', { hasText: '다음 실행' }).last().waitFor({ timeout: 4000 });
+      {
+        const barTop = (await p.locator('.finale-bar').boundingBox()).y;
+        const tb = await term.boundingBox();
+        assert.ok(tb.y + tb.height <= barTop + 0.5, `${engine}: the terminal (bottom ${tb.y + tb.height}) ends above the bar (${barTop})`);
+      }
+      if (engine === 'chromium' && shots) await p.screenshot({ path: join(shots, 'case4-17-narrow-crontab.png') });
+      await p.locator('.finale-bar .finale-next').tap();
+      await p.locator('.finale-credits .finale-next').tap();
+      await p.locator('.finale-line .fl-input').press('Enter');
+      // season report B10: the record says how the sign turns ✓ (the playtester read the four lines but never opened the page)
+      const facts = await p.locator('.finale-stats .fs-facts').innerText();
+      assert.match(facts, /숨은 사인 ✗ 피날레에서 봄\s*직접 찾았다면: 넘기기 전에 도윤 메모장의 「은재님이 나한테 남긴 한 줄들」을 열면 ✓ 로 남아요\./, `${engine}: ${facts}`);
       await ctx.close();
     } finally {
       if (engine === 'webkit') await b14.close();

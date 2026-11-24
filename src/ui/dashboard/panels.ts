@@ -197,11 +197,16 @@ function xAxis(svg: SVGElement, r: Range, x0: number, w: number, y: number, top:
     if (!markX.some((mx) => Math.abs(mx - tx) < 40)) svg.append(s('text', { class: 'obs-ax', x, y: y + 14, 'text-anchor': 'middle' }, t.label));
   }
   // marks closer than a label apart keep their tick, the later one loses its label
+  // each mark also runs up through the plot as a faint guide, and names its time on hover: whether a
+  // curve turns before or after it (Case 2: the ingest rise against 14:28) reads straight off the chart
   let lastLabel = -Infinity;
   for (const m of [...marks].sort((a, b) => a - b)) {
     const x = xOf(m, r, w);
     if (x === null) continue;
-    svg.append(s('line', { class: 'obs-mark', x1: x0 + x, x2: x0 + x, y1: y, y2: y + 4 }));
+    svg.append(
+      s('g', { class: 'obs-markg' }, s('title', {}, `표식 ${fmtDayHM(m, spansYears(r))}`), s('line', { class: 'obs-markline', x1: x0 + x, x2: x0 + x, y1: top, y2: y }), s('line', { class: 'obs-markhit', x1: x0 + x, x2: x0 + x, y1: top, y2: y + 16 })),
+      s('line', { class: 'obs-mark', x1: x0 + x, x2: x0 + x, y1: y, y2: y + 4 }),
+    );
     if (x - lastLabel < 40) continue;
     lastLabel = x;
     svg.append(s('text', { class: 'obs-ax obs-axm', x: x0 + x, y: y + 14, 'text-anchor': 'middle' }, fmtHM(m)));

@@ -128,3 +128,32 @@ export function rng(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+/**
+ * systemd's relative time for a past moment, as `systemctl status` prints it after the timestamp
+ * ("42min ago", "1h 12min ago", "22h ago", "1 day 3h ago", "1 week 3 days ago"). `diffMs` = now − then.
+ */
+export function systemdAgo(diffMs: number): string {
+  const s = Math.max(0, Math.floor(diffMs / 1000));
+  const min = Math.floor(s / 60);
+  const hr = Math.floor(min / 60);
+  const day = Math.floor(hr / 24);
+  const pl = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  if (day >= 30) return `${Math.floor(day / 30)} month${day >= 60 ? 's' : ''} ${pl(day % 30, 'day')} ago`;
+  if (day >= 7) return `${pl(Math.floor(day / 7), 'week')} ${pl(day % 7, 'day')} ago`;
+  if (day >= 2) return `${day} days ago`;
+  if (hr >= 25) return `1 day ${hr - 24}h ago`;
+  if (hr >= 6) return `${hr}h ago`;
+  if (hr >= 1) return `${hr}h ${min % 60}min ago`;
+  if (min >= 5) return `${min}min ago`;
+  if (min >= 1) return `${min}min ${s % 60}s ago`;
+  return `${s}s ago`;
+}
+
+/** A `systemctl status` line "… since Tue 2026-11-10 08:47:41 KST; 42min ago" with the relative part as of `now` (local ms). */
+export function statusAgo(line: string, now: number): string {
+  const m = /^(.* since \w{3} (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) [A-Z]{2,5}); .+ ago$/.exec(line);
+  if (!m) return line;
+  const then = parseLocal(`${m[2]}T${m[3]}`);
+  return now >= then ? `${m[1]}; ${systemdAgo(now - then)}` : line;
+}

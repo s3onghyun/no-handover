@@ -11,6 +11,7 @@ import { playRecord, recordLine, resultCard } from '../../engine/record.ts';
 import { openedFor } from '../hintpanel.ts';
 import { drawResultCard, downloadResultCard } from '../resultcard.ts';
 import { modal, notice } from '../modal.ts';
+import { checkpointKey } from '../finale.ts';
 
 function debrief(root: HTMLElement, ctx: UiCtx): void {
   const g = ctx.game;
@@ -108,6 +109,8 @@ function debrief(root: HTMLElement, ctx: UiCtx): void {
         'div.submitbar',
         { style: 'margin-top:18px' },
         h('button.ghost-btn', { onclick: () => ctx.wm.open('mail', d.closingMail) }, `✉ ${replyLabel(ctx)}`),
+        // the season finale: back to just before the v5 choice, from here too (a first run that skipped the record had no way back)
+        g.cs.finale && storage.get(checkpointKey(g.cs.id)) ? h('button.ghost-btn.debrief-again', { onclick: () => document.dispatchEvent(new CustomEvent('nh-finale-again')) }, `↩ ${t('finale.again')}`) : null,
         h('button.ghost-btn', { onclick: () => ctx.wm.open('playtest') }, `📋 ${t('pt.save')}`),
         h('button.ghost-btn', { onclick: () => document.dispatchEvent(new CustomEvent('nh-reset')) }, `↺ ${t('debrief.again')}`),
       ),

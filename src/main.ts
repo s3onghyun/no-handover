@@ -745,18 +745,62 @@ game.on('mail', (id) => {
   if (m && id !== game.cs.debrief.closingMail) ctx.toast(h('div', null, h('b', null, '✉ '), m.subject), () => wm.open('mail', id));
 });
 const memoNote = game.cs.notes.find((n) => n.highlight !== undefined)?.id;
-game.on('toast', (text) => ctx.toast(h('div', null, String(text)), () => wm.open('notes', memoNote)));
+/** The terminal's newest output that a window opening by itself must leave uncovered (px above the prompt). */
+const NEWEST_OUTPUT_PX = 170;
+/** A notebook page that turned but stayed closed (see 'note' below): the scene's toast in the same beat opens that page. */
+let heldNote: string | null = null;
+game.on('toast', (text) => {
+  const id = heldNote ?? memoNote;
+  heldNote = null;
+  ctx.toast(h('div', null, String(text)), () => wm.open('notes', id));
+});
 // a found clue opened more report choices (gated options): say so, the toast opens the report
 game.on('options-unlocked', () => {
   if (!game.st.finished) ctx.toast(h('div.toast-options', null, h('b', null, '📝 '), t('report.newOptions')), () => wm.open('report'));
 });
-game.on('note', (id) => {
+game.on('note', (p) => {
+  const id = String(p);
   // "터미널이 익숙해요": no window opens by itself; the scene's toast still offers to open it
-  if (rules().autoWindows) {
+  if (!rules().autoWindows) {
+    heldNote = id;
+    setTimeout(() => (heldNote = null), 0);
+    return game.log('auto-window-held', { app: 'notes', id });
+  }
+  // the memo pops up by itself where it leaves the terminal whole, else over the terminal's older
+  // lines only — never on the lines just printed (it covered the decisive line), and the typing stays
+  // in the prompt; too little room even for that: it stays closed and a toast offers the page
+  if (wm.isOpen('notes')) {
+    // already on the desktop where the player left it: the page turns, the window stays put
+    wm.instance('notes')?.open?.(id);
+    return;
+  }
+  const typing = document.activeElement?.closest('.window[data-app="terminal"] .tin') ? (document.activeElement as HTMLElement) : null;
+  const spot = wm.spotClearOf('notes', 'terminal');
+  if (spot) {
+    const termFocused = wm.focused === 'terminal';
     wm.open('notes', id);
-    // the memo pops up by itself while the player works in the terminal: keep its 📌 column uncovered
-    wm.keepClearOf('notes', 'terminal');
-  } else game.log('auto-window-held', { app: 'notes', id });
+    wm.moveTo('notes', spot.x, spot.y);
+    if (termFocused) wm.focus('terminal');
+    typing?.focus({ preventScroll: true });
+    return;
+  }
+  const over = wm.spotOverOlder('notes', 'terminal', NEWEST_OUTPUT_PX);
+  if (over) {
+    wm.open('notes', id);
+    // the memo is in front; the prompt keeps the keyboard (the notebook takes no focus of its own)
+    wm.moveTo('notes', over.x, over.y, over.w, over.h);
+    return;
+  }
+  heldNote = id;
+  game.log('auto-window-held', { app: 'notes', id, why: 'covers-terminal' });
+  setTimeout(() => {
+    if (heldNote !== id) return; // the scene's own toast took it
+    heldNote = null;
+    const title = game.cs.notes.find((n) => n.id === id)?.title ?? '';
+    ctx.toast(h('div', null, h('b', null, '📒 '), t('notes.newPage', { title })), () => wm.open('notes', id));
+    desktop.querySelector('.icon[data-app="notes"]')?.classList.add('bump');
+    setTimeout(() => desktop.querySelector('.icon[data-app="notes"]')?.classList.remove('bump'), 900);
+  }, 0);
 });
 game.on('friction', () => void audio.play('sfx.error'));
 game.on('hint-panel', () => {
@@ -810,6 +854,7 @@ function syncEnding(): void {
   desktop.querySelector('.window[data-app="terminal"]')?.classList.toggle('act', !!act);
   stickyEls.forEach((el, i) => el.classList.toggle('act', act?.sticky === i));
   if (!game.endingActive()) {
+    if (endingBar) wm.keepAbove(null);
     endingBar?.remove();
     endingBar = null;
     return;
@@ -823,6 +868,8 @@ function syncEnding(): void {
       h('button.ending-skip', { type: 'button', onclick: () => game.skipEnding() }, t('ending.skip')),
     );
     document.body.appendChild(endingBar);
+    // the scene's terminal and notebook stay whole above the bar (their newest line was behind it)
+    wm.keepAbove(endingBar);
   }
   const hint = endingBar.querySelector<HTMLElement>('.ending-act')!;
   hint.hidden = !act;
@@ -1001,8 +1048,10 @@ function start(first: boolean) {
     setCovered(false);
     revealDesktop(first);
   }
-  // the season finale carries on where it stood (or starts, after "다른 곳에 넘겨 보기")
+  // the season finale carries on where it stood (or starts, after "다른 곳에 넘겨 보기"); once it is over,
+  // 이어서 하기 opens on the debrief, where "다른 곳에 넘겨 보기" waits (it used to land on a bare desktop)
   finaleUi?.resume();
+  if (!first && game.cs.finale && game.finaleState()?.done) wm.open('report');
   save();
 }
 
