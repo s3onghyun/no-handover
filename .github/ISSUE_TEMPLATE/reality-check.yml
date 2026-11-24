@@ -1,0 +1,45 @@
+name: 🧭 현실 점검 / Reality check
+description: 게임 속 명령·로그·원인이 실제와 달라요 · Something in the game differs from real systems
+title: "[reality-check] "
+labels: [reality-check]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        의도한 단순화는 README의 "알려진 단순화"에 있어요. 정답이 드러나는 내용은 `<details>`로 접어 주세요.
+        Intended simplifications are listed in the README (알려진 단순화). Fold anything that reveals an answer with `<details>`.
+  - type: dropdown
+    id: case
+    attributes:
+      label: 사건 / Case
+      options:
+        - Case 0 「위키가 안 열려요」
+        - Case 1 「밤에만 실패하는 스크립트」
+        - Case 2 「지웠는데 안 비워지는 디스크」
+        - Case 3 「금요일 18:02의 작은 변경」
+        - Case 4 「남아 있는 열쇠」
+        - 사건과 상관없음 / Not case-specific
+    validations:
+      required: true
+  - type: textarea
+    id: game
+    attributes:
+      label: 게임에서는 / In the game
+      description: 명령과 게임이 보여 준 출력이나 설명 · The command and what the game showed
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: real
+    attributes:
+      label: 실제로는 / In real life
+      description: 실제 출력(가린 것)이나 문서 링크, 배포판·버전 · Real output (redacted) or a docs link, distro and version
+    validations:
+      required: true
+  - type: checkboxes
+    id: redacted
+    attributes:
+      label: 확인 / Check
+      options:
+        - label: 실제 호스트 이름·IP·계정·비밀 값은 가렸어요 · Real hostnames, IPs, accounts and secrets are redacted
+          required: true

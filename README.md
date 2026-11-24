@@ -1,8 +1,22 @@
 # No Handover 「인수인계 없음」
 
-비공개 프로토타입. 퇴사하는 선배(남은재)의 PC를 넘겨받은 신입 한도윤이 되어, 메신저·메일·터미널을 뒤져 장애의 원인과 경위, 그리고 "무엇이 그걸 가능하게 했나"를 보고서로 쓰는 브라우저 게임이다. 사건은 주니어 → 시니어 사다리 5칸(Case 0~4, [`docs/campaign-ladder.md`](docs/campaign-ladder.md)) 가 모두 플레이 가능하다: **Case 0 튜토리얼 「위키가 안 열려요」**(CLI가 익숙하면 3–5분, 처음이면 8–12분, 처음 실행하면 여기서 시작), **Case 1 「밤에만 실패하는 스크립트」**(5–8분 / 15–20분), **Case 2 「지웠는데 안 비워지는 디스크」**(6–10분 / 20–30분), **Case 3 「금요일 18:02의 작은 변경」**(10–15분 / 30–45분), 시즌 피날레 **Case 4 「남아 있는 열쇠」**. 백엔드 없음, 계정 없음, 공개 저장소 없음.
+퇴사한 선배의 PC를 넘겨받아 메신저·메일·터미널로 서버 장애의 원인을 찾는 브라우저 추리 게임. A browser mystery game: take over a departed senior's PC and find out why the servers broke.
 
-설계 문서는 저장소 밖 firstmate 홈의 `data/infra-mystery-game/`에 있다(보고서 §2-1·§4, `characters.md`, `design-constraints.md`). 회사명 누리클라우드는 가칭이고, 모든 인물·회사·서버·로그는 가상이다.
+**▶ 플레이 / Play: https://no-handover.vercel.app/** (가입 없음, 한국어 · no sign-up, Korean)
+
+## 기여 환영 / Contributing
+
+버그, 다음 사건 아이디어, "현실에선 이렇지 않아요" 지적, PR 모두 환영합니다. Bug reports, incident ideas, reality checks and PRs are welcome.
+
+- 이슈 열기 / Open an issue: https://github.com/s3onghyun/no-handover/issues/new/choose (🐞 버그 · 💡 다음 사건 아이디어 · 🧭 현실 점검)
+- 기여 안내 / Guide: [CONTRIBUTING.md](CONTRIBUTING.md) — 사건 제안 기준, PR 흐름, 스포일러 예절, 실제 데이터 금지
+- 라이선스 / License: 코드는 [MIT](LICENSE). AI로 만든 목소리·음악·캐릭터 그림은 MIT가 아니며 [ASSETS.md](ASSETS.md)를 따릅니다 · AI-generated voices, music and art are not MIT; see [ASSETS.md](ASSETS.md).
+
+## 게임 소개
+
+퇴사하는 선배(남은재)의 PC를 넘겨받은 신입 한도윤이 되어, 메신저·메일·터미널을 뒤져 장애의 원인과 경위, 그리고 "무엇이 그걸 가능하게 했나"를 보고서로 쓰는 브라우저 게임이다. 사건은 주니어 → 시니어 사다리 5칸(Case 0~4, [`docs/campaign-ladder.md`](docs/campaign-ladder.md)) 가 모두 플레이 가능하다: **Case 0 튜토리얼 「위키가 안 열려요」**(CLI가 익숙하면 3–5분, 처음이면 8–12분, 처음 실행하면 여기서 시작), **Case 1 「밤에만 실패하는 스크립트」**(5–8분 / 15–20분), **Case 2 「지웠는데 안 비워지는 디스크」**(6–10분 / 20–30분), **Case 3 「금요일 18:02의 작은 변경」**(10–15분 / 30–45분), 시즌 피날레 **Case 4 「남아 있는 열쇠」**. 백엔드 없음, 계정 없음.
+
+원래 설계 문서(보고서, `characters.md`, `design-constraints.md`)는 저장소 밖에 있고, 이 문서와 `docs/`에 나오는 `data/…` 경로는 공개되지 않은 그 폴더를 가리킨다. 회사명 누리클라우드는 가칭이고, 모든 인물·회사·서버·로그는 가상이다.
 
 ## 실행 (3개 명령)
 
@@ -32,7 +46,7 @@ URL 옵션(플레이테스트 진행자용): `?fresh=1` 모든 사건의 저장�
 - **Case 4 「남아 있는 열쇠」 (시즌 피날레)** (`src/cases/case-4-keys.ts`, `src/ui/finale.ts`): 은재 퇴사 열흘 뒤 월요일이자 도윤이 은재 자리를 맡은 2주(Case 0부터)의 마지막 날, 도윤 계정으로 옮긴 옛 은재 PC와 보안팀 감사 세션 bastion · pay-api-02 · ledger-01(+ ssh로 pay-api-01, logs-01). 원리: 계정 회수 ≠ 키 회수. 새 명령 `ssh-keygen -lf`(지문), `sudo -l [-U 사용자]`; 도윤의 PC만 읽기 전용이 아니어서 `crontab -r`이 정말 지운다(숨은 배드 엔딩). 숨은 사인 도·망·쳐·요, `namu`로 열리는 은재의 초안 9통, 보고서 3칸·제출 2번, 그리고 다섯 갈래 피날레(서진의 "내일부터 원래 자리, 인수인계서는 오늘" 뒤 v5를 누구에게 넘길지, 엔딩 카드, 은재의 단 한 통 답장과 공방 사진, 크레디트, 15초 "다음 사람에게 한 줄", 엔딩 n/6과 "다른 곳에 넘겨 보기"). `docs/campaign-ladder.md` Case 4.
 - **목표 카드·큰 순간**: Case 1~3에는 "🎯 이번 사건에서 밝혀낼 것"(보고서 칸의 질문만, 정답 없음)이 포스트잇과 작업 표시줄 🎯, ❓에 있다. 큰 순간은 브리핑, 결정적 단서(사건마다 하나, 💡 카드), 보고서 결과 카드 셋뿐이고 모두 Esc·클릭으로 넘기며 입력을 막지 않는다. 동작 줄이기면 움직임 없이(`src/ui/motion.ts`).
 - **첫 3분 (Case 3)**: 잠금 해제 → 약 31초짜리 오프닝 브리핑(월요일 09:00 잠금 화면, 박지훈의 음성 메시지 카드와 타이핑되는 자막, 오미래의 메일 알림, Esc·건너뛰기로 생략, ❓에서 다시 보기) → 터미널이 열린 채 `crontab -`가 깜빡이고 창이 숨 쉬듯 빛나는 바탕화면 + 오른쪽 위 "오늘 할 일" 포스트잇(체크 3개: 열린 터미널 확인, 선배가 마지막에 친 명령 찾기, 증거 3개 보드에 올리기). 셋 다 체크되면 포스트잇이 메모장으로 접혀 들어가고 펄스·힌트 줄이 멈춘다.
-- **소리**: UI 효과음 12개는 파일 없이 브라우저에서 ZzFX로 합성해 지금 바로 들린다. 음악·환경음·목소리는 메인이 파일을 보내 주면 폴더에 넣는 것만으로 나온다(코드 수정 없음). 첫 클릭(어디든)에서 소리가 켜진다. 자세한 것은 아래 「소리」.
+- **소리**: UI 효과음 12개는 파일 없이 브라우저에서 ZzFX로 합성해 지금 바로 들린다. 음악·환경음·목소리는 파일을 폴더에 넣는 것만으로 나온다(코드 수정 없음). 첫 클릭(어디든)에서 소리가 켜진다. 자세한 것은 아래 「소리」.
 - **데스크톱 셸**: 잠금 화면 → 은재의 바탕화면(나무 의자 사진, 포스트잇 3장), 아이콘, 작업 표시줄, 알림 센터(🔔), 힌트(💡), 도움말(❓), 소리(🔊), 플레이테스트(📋), 게임 시계와 21:00 마감.
 - **앱**: 터미널(탭 14개 중 5개 살아 있음), 메신저(은재 PC 세션 + 내 계정, 채널·DM·삭제된 메시지 표시·보내지 않은 메시지), 메일(내 메일 + 은재 메일, 임시보관함 초안 11개 중 2개 열림), 도윤 메모장, 증거 보드, 원인 보고서/해설, 대시보드(어두운 패널 격자: 스탯, 기준선이 있는 시계열, 게임 시계를 따라 자라는 실시간 그래프, 핀한 증거 주석과 로그 패널; 사건에 `panels`가 없으면 ASCII 스냅샷).
 - **시뮬레이션 셸** (`src/engine/shell.ts`): 호스트(Case 3은 pay-api-01, bastion, pay-cfg, review-web, Case 0·1은 wiki-01, Case 2는 logs-01, pay-api-01)의 가상 파일시스템. 실제 문법과 출력 형식으로 약 40개 명령: `ls cd pwd cat less head tail grep wc sort uniq find history journalctl crontab -l git log/show/branch/status df du free ulimit ss last sudo man help hint systemctl show/status/cat ps pgrep curl ping ssh exit getent id whoami hostname date uptime echo env printenv which type clear`. 호스트마다 로그인 셸의 PATH(`env`)를 줄 수 있고, 명령은 그 PATH로 찾는다 — `env -i PATH=/usr/bin:/bin which wikictl`처럼 cron의 환경을 흉내 낼 수 있다. `du`는 파일의 겉보기 크기(`size`)로 계산하고, 50 MB가 넘는 파일의 `cat`은 "tail로 끝만"이라고 거절한다. `hint`는 💡 패널을 연다. 파이프, `; && ||`, 따옴표, `$(...)`, `$VAR`, `~`, 글롭, `2>/dev/null`, `.bashrc` 별칭(`밤`, `fds`, `왜`…), `!!`, Tab 자동완성, ↑/↓. 오타는 "혹시 'crontab' 인가요?"로, 쓰기·편집·재시작은 "조사 모드(읽기 전용)"라는 세계관 안의 설명으로 막는다. `sudo`는 읽기 명령만 허용하고 허용 여부와 상관없이 `/var/log/auth.log`에 남는다.
@@ -60,9 +74,9 @@ public/characters/  캐릭터 아트 (아래 참고)
 
 ## 캐릭터 아트
 
-`public/characters/`의 12개 파일은 캡틴이 승인한 아트(평면 2D, 스타일 S1, 원본은 저장소 밖 `data/infra-mystery-game/art/`)에서 만든 복사본이다. 원본은 커밋하지 않는다.
+`public/characters/`의 12개 파일은 메인테이너가 고른 Gemini 생성 아트(평면 2D, 스타일 S1, 원본은 저장소 밖 `data/infra-mystery-game/art/`)에서 만든 복사본이다. 원본은 커밋하지 않는다.
 
-- `eunjae-workshop.webp` 600×800 (37 KB): Case 4 피날레에서 은재의 답장에 붙는 `공방.jpg`. 시즌에서 은재 얼굴이 정면으로 보이는 유일한 그림이다(다른 그림은 뒷모습 그대로). Gemini API `gemini-3-pro-image`(Nano Banana Pro), 2026-11-24, 캡틴의 유료 키(오너 승인), 은재 포즈 ①을 참조로 첨부, 3:4 2K. 4 후보 중 A(불변 항목 통과: 올리브 재킷, 오른쪽 손목 나무 팔찌, 흰머리 섞인 머리, 성별 단서 없음). 오른쪽 아래 Gemini 반짝이 표시는 옆의 평평한 바닥으로 덮어 지웠고(SynthID는 그대로), 1200×1600 PNG에서 Lanczos로 줄여 WebP q80으로 만들었다. 원본·후보·프롬프트·처리 기록은 저장소 밖 `data/nh-ending-build/assets/`(`credits.md`). 상업적 이용 조건은 아직 확인하지 않았다(다른 그림과 같은 상태).
+- `eunjae-workshop.webp` 600×800 (37 KB): Case 4 피날레에서 은재의 답장에 붙는 `공방.jpg`. 시즌에서 은재 얼굴이 정면으로 보이는 유일한 그림이다(다른 그림은 뒷모습 그대로). Gemini API `gemini-3-pro-image`(Nano Banana Pro), 2026-11-24, 메인테이너의 유료 키, 은재 포즈 ①을 참조로 첨부, 3:4 2K. 4 후보 중 A(불변 항목 통과: 올리브 재킷, 오른쪽 손목 나무 팔찌, 흰머리 섞인 머리, 성별 단서 없음). 오른쪽 아래 Gemini 반짝이 표시는 옆의 평평한 바닥으로 덮어 지웠고(SynthID는 그대로), 1200×1600 PNG에서 Lanczos로 줄여 WebP q80으로 만들었다. 원본·후보·프롬프트·처리 기록은 저장소 밖 `data/nh-ending-build/assets/`(`credits.md`). 상업적 이용 조건은 아직 확인하지 않았다(다른 그림과 같은 상태).
 
 - `<이름>-avatar.webp` 256×256, `<이름>-avatar-64.webp` 64×64(메시지 말풍선), `<이름>-full.webp` 가로 600px(해설의 인물 카드). 이름은 doyun, seojin, jihun, eunjae.
 - **워터마크 처리**: 원본 오른쪽 아래의 작은 Gemini 반짝이 표시를 없애려고, 아바타는 오른쪽과 아래쪽 180px 띠를 잘라 냈고(2048 → 1868 정사각), 전신은 오른쪽 180px 띠만 잘라 냈다(1792×2400 → 1612×2400, 발끝 보존). 표시는 가장자리에서 65~165px 안쪽에 있어 이 띠 안에 완전히 들어간다. 그 뒤 축소해 WebP로 다시 인코딩했다(12개 합계 약 100 KB).
@@ -97,7 +111,7 @@ public/characters/  캐릭터 아트 (아래 참고)
 | `music.reveal` | 28.5 s | −18 LUFS | 해설 테마, Case 0–3 마지막 장면 (Gemini API, Lyria 3 Clip) |
 | `voice.briefing-case0-seojin`, `voice.<화자>-*` (133개 + 마지막 장면 7개) | 0.6–23 s, 모노 | −16 LUFS | Case 0 브리핑과 나머지 동료 대사 전부(오답 넛지, 트리거, Case 0 레일, 보고서 오답 회신), 서진 = Aoede, 지훈 = Puck, 오미래 = Kore (Gemini TTS) |
 
-`music.reveal`(28.5 s, −18 LUFS, Gemini API Lyria 3 Clip)은 Case 0–3에서 보고서가 끝날 때 마지막 장면과 함께 한 번 울린다. **출처·처리 명령·측정값은 [`public/audio/audio-credits.md`](public/audio/audio-credits.md).** 음악·음성은 캡틴의 Gemini 계정으로 만든 **프로토타입용**이며, Gemini 앱 음악·TTS의 상업적 이용 조건은 판매 전에 확인해야 한다. 원본(저장소 밖 `data/infra-mystery-game/audio-in/`)에서 다시 만들기: `scripts/audio-prepare.sh <원본 폴더>`. 루프 이음매 검사: `scripts/audio-check-seam.sh`. 20초 미리듣기: `scripts/audio-preview.sh /tmp/nh-preview.wav`.
+`music.reveal`(28.5 s, −18 LUFS, Gemini API Lyria 3 Clip)은 Case 0–3에서 보고서가 끝날 때 마지막 장면과 함께 한 번 울린다. **출처·처리 명령·측정값은 [`public/audio/audio-credits.md`](public/audio/audio-credits.md).** 음악·음성은 메인테이너의 Gemini 계정으로 만든 AI 생성물이며 MIT가 아니다([`ASSETS.md`](ASSETS.md)). 상업적 이용 조건은 확인하지 않았다. 원본(저장소 밖 `data/infra-mystery-game/audio-in/`)에서 다시 만들기: `scripts/audio-prepare.sh <원본 폴더>`. 루프 이음매 검사: `scripts/audio-check-seam.sh`. 20초 미리듣기: `scripts/audio-preview.sh /tmp/nh-preview.wav`.
 
 **ZzFX 효과음** (파일 0, [ZzFX](https://github.com/KilledByAPixel/ZzFX) 1.4.0 MIT를 `src/audio/vendor/zzfx.ts`에 옮겨 넣음): `sfx.ding` `sfx.mail` `sfx.error` `sfx.tick` `sfx.done` `sfx.pin` `sfx.pulse` `sfx.key` `sfx.window-open` `sfx.window-close`, 터미널에서 글자를 칠 때마다 셋 중 하나가 무작위로 좌우 ±0.25 패닝되어 나는 키 클릭 `sfx.key-1` `sfx.key-2` `sfx.key-3`(−34…−22 dBFS), 그리고 파일이 올 때까지 `sfx.ring`(진동 두 번) `sfx.typing`(1.6초 루프). 한 가족으로 맞췄다: 사인 기반, 2–6 ms 어택, 짧은 감쇠, 저역 통과 필터. 최대 음량 100 %에서 피크 −18…−12 dBFS(`sfx.key`는 −24, `sfx.typing`은 −22로 더 작게). 소리를 바꾸려면 `manifest.ts`의 숫자 배열만 고친다. 배열은 [ZzFX 디자이너](https://killedbyapixel.github.io/ZzFX/)에 그대로 붙여 넣고 다시 꺼낼 수 있다. `hits`는 같은 소리를 여러 번(시각, 음량, 반음) 울린다. 범위는 `tests/zzfx.test.ts`가 지킨다.
 
@@ -126,7 +140,7 @@ public/characters/  캐릭터 아트 (아래 참고)
 |---|---|---|---|---|
 | ZzFX (Frank Force) | 1.4.0 | MIT, Copyright (c) 2019 Frank Force. 고지는 파일 머리에 그대로 둠 | `src/audio/vendor/zzfx.ts` | UI 효과음 합성 |
 
-음원: `public/audio/music/`, `public/audio/voice/`의 파일은 Gemini 음악·Gemini TTS로 만든 프로토타입용(상업 조건 미확인). 자세한 것은 [`public/audio/audio-credits.md`](public/audio/audio-credits.md).
+이 저장소의 코드와 문서는 [MIT](LICENSE)다. 음원(`public/audio/music/`, `public/audio/voice/`)과 캐릭터 그림(`public/characters/`)은 Gemini로 만든 AI 생성물로 MIT에 포함되지 않는다: [`ASSETS.md`](ASSETS.md), 자세한 처리 기록은 [`public/audio/audio-credits.md`](public/audio/audio-credits.md).
 
 전이 의존성: esbuild, rollup, postcss, nanoid, fdir, picomatch, tinyglobby, undici-types(MIT), picocolors(ISC), source-map-js(BSD-3-Clause). vitest는 설치 시점의 버전에 미해결 보안 권고가 있어 빼고, Node 22 내장 `node --test`와 타입 제거 기능으로 대신했다.
 
