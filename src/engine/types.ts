@@ -467,7 +467,7 @@ export type EndingBeat = {
 );
 
 /**
- * The season finale (Case 4, src/ui/finale.ts; data/nh-ending-research/report.md §4-6): after the
+ * The season finale (Case 4, src/ui/finale.ts; the ending design notes (not in this repo) §4-6): after the
  * last scene (`ending`), the player hands 인수인계서 v5 to someone; that choice is the ending.
  */
 export interface FinaleDef {
