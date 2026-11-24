@@ -627,6 +627,16 @@ export const caseZeroWiki: CaseFile = {
   ],
 
   // ------------------------------------------------------------------ debrief
+  // ------------------------------------------------------------------ last scene (docs/case-format.md §15)
+  // after the report, before the debrief: 서진's verdict, 은재's silent nod in 도윤's notebook, 지훈's lunch
+  ending: {
+    beats: [
+      { wait: 0, message: { channel: 'me-dm-seojin', from: 'seojin', text: '봤어요. 맞아요. 위키 살아났어요. 숙제는 오늘 밤 cron으로.' } },
+      { wait: 2.5, note: 'today', line: '10:33 은재님 회의 끝나고 자리로 오심. 화면에 남은 내 다섯 줄 보시고 고개만 끄덕. 말은 없으셨음. (근데 알 것 같음)' },
+      { wait: 2, message: { channel: 'me-dm-jihoon', from: 'jihoon', text: '도윤님!! 위키 살았다면서요 ㅋㅋ 점심 제가 쏩니다 🍕' } },
+    ],
+  },
+
   debrief: {
     headline: '로그는 디스크를 채운다. 디스크가 차면 멀쩡한 서비스도 멈춘다.',
     story: [

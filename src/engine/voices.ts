@@ -9,7 +9,7 @@
 // every other line is voice.<speaker>-<fnv1a(text)>, so the same words by the same person share
 // one file across cases (report replies, "다시요." …).
 
-import type { CueDef } from '../audio/manifest.ts';
+import { MANIFEST, type CueDef } from '../audio/manifest.ts';
 import { FIELD_LINES, MARK_LINES, feedbackMode, slotName } from './scoring.ts';
 import type { CaseFile } from './types.ts';
 
@@ -49,6 +49,7 @@ export function voiceLines(cs: CaseFile): VoiceLine[] {
   const ask = cs.hints.ask;
   if (ask) add(ask.none.from, ask.none.text, '"뭐부터 봐요?" — 남은 넛지 없음');
   for (const tr of cs.triggers) for (const a of tr.actions) if ('message' in a) add(a.message.from, a.message.text, `트리거 ${tr.id}`);
+  for (const b of cs.ending?.beats ?? []) if ('message' in b) add(b.message.from, b.message.text, '마지막 장면');
   const rail = cs.rail;
   if (rail) {
     for (const o of cs.opening?.objectives.items ?? []) {
@@ -78,6 +79,23 @@ export function voiceLines(cs: CaseFile): VoiceLine[] {
 /** Manifest entries for one case's voices (files in public/audio/voice/<cue>.ogg|.mp3). */
 export function voiceManifest(cs: CaseFile): Record<string, CueDef> {
   return Object.fromEntries(voiceLines(cs).map((l) => [l.cue, { class: 'voice', file: true, where: `${cs.id} ${l.where} (${cs.people[l.from]?.name ?? l.from})` } satisfies CueDef]));
+}
+
+/**
+ * The music and ambience cues a case plays. Its page loads only these (and the UI sounds), so a
+ * session never downloads another case's music: the reveal theme where a case ends on its debrief.
+ */
+export function musicCues(cs: CaseFile): string[] {
+  const ids = ['amb.office', 'music.tension', 'music.reveal'];
+  if (cs.opening?.briefing) ids.push('music.briefing');
+  return ids;
+}
+
+/** Everything one case's page can play: the UI and sfx set, its music (musicCues) and its voices. */
+export function caseManifest(cs: CaseFile): Record<string, CueDef> {
+  const music = new Set(musicCues(cs));
+  const base = Object.entries(MANIFEST as Record<string, CueDef>).filter(([id, c]) => !(c.class === 'music' || c.class === 'ambience') || music.has(id));
+  return { ...Object.fromEntries(base), ...voiceManifest(cs) };
 }
 
 /** The cue voicing a live message, if it is one of the case's lines. */

@@ -8,9 +8,10 @@
 #
 # Needs ffmpeg (tested with 6.1, libopus + libmp3lame) and python3 (stdlib only, to read loudnorm's JSON).
 # Targets (data/infra-mystery-game/audio-cues.md §d): voice -16 LUFS, music -18, ambience -24,
-# true peak <= -1 dBTP, 48 kHz, Opus in .ogg + MP3 fallback. Budget: 4 MB per case (the music plus that case's
-# voices, both formats; a session loads only its own case's voices, src/engine/voices.ts), checked by
-# tests/voices.test.ts; all files together <= 8 MB.
+# true peak <= -1 dBTP, 48 kHz, Opus in .ogg + MP3 fallback. Budget: 4 MB per case, what one session downloads
+# (the music that case plays plus its voices, in the larger of the two formats: a session fetches one format
+# and only its own case's sounds, src/audio/audio.ts + src/engine/voices.ts caseManifest), checked by
+# tests/voices.test.ts; all files together <= 12 MB (the repository; a session still downloads one case, one format).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -83,6 +84,21 @@ tp() { ffmpeg -hide_banner -nostdin -nostats -i "$1" -af loudnorm=print_format=j
 enc amb.office music 80 96
 enc music.briefing music 96 128
 
+# music.reveal (2026-11-24, Lyria 3 Clip, optional original): the first 28.5 s; the last chord lands at 21 s and its
+# reverb is closed with a 3 s fade after the last stroke (26.0 s). Plays once where a case ends on its debrief.
+if [ -f "$IN/music.reveal.mp3" ]; then
+  "${FF[@]}" -i "$IN/music.reveal.mp3" -af "aresample=48000:$RS,atrim=start=0:end=28.5,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.02,afade=t=out:st=25.5:d=3:curve=hsin" -c:a pcm_f32le "$WORK/reveal.wav"
+  loudnorm_2pass "$WORK/reveal.wav" "$WORK/music.reveal.wav" -18 2
+  enc music.reveal music 96 128
+fi
+# music.finale (2026-11-24, Lyria 3.5, optional original): the whole take up to its own digital silence (69.6 s),
+# a 1.5 s safety fade at the end. Case 4 only (src/engine/voices.ts caseManifest).
+if [ -f "$IN/music.finale.mp3" ]; then
+  "${FF[@]}" -i "$IN/music.finale.mp3" -af "aresample=48000:$RS,atrim=start=0:end=70.0,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.02,afade=t=out:st=68.5:d=1.5" -c:a pcm_f32le "$WORK/finale.wav"
+  loudnorm_2pass "$WORK/finale.wav" "$WORK/music.finale.wav" -18 2
+  enc music.finale music 96 128
+fi
+
 # ---------------------------------------------------------------- voices: mono, trimmed
 # Every voice.*.wav in the originals (24 kHz mono Gemini TTS): trim the lead-in and tail silence
 # (keeping 50 ms of air at each end), 80 Hz high-pass (2nd order), -16 LUFS. TTS files peak near
@@ -120,11 +136,11 @@ done
 
 # ---------------------------------------------------------------- report
 total=0
-for f in "$OUT"/music/amb.office.{ogg,mp3} "$OUT"/music/music.briefing.{ogg,mp3} "$OUT"/voice/voice.*.{ogg,mp3}; do
+for f in "$OUT"/music/*.{ogg,mp3} "$OUT"/voice/voice.*.{ogg,mp3}; do
   s=$(wc -c <"$f" | tr -d " "); total=$((total + s))
   d=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$f")
   l=$(ffmpeg -hide_banner -nostdin -nostats -i "$f" -af loudnorm=print_format=json -f null - 2>&1 | python3 -c 'import sys; t=sys.stdin.read(); import json; d=json.loads(t[t.rindex("{"):t.rindex("}")+1]); print(d["input_i"], "LUFS", d["input_tp"], "dBTP")')
   printf '%-44s %8d B  %7.2f s  %s\n' "${f#"$OUT"/}" "$s" "$d" "$l"
 done
-printf 'total %d B (%.2f MB; budget 4 MB per case, npm test checks it; 8 MB for every case together)\n' "$total" "$(python3 -c "print($total/1e6)")"
-[ "$total" -le 8000000 ] || { echo "over the 8 MB ceiling" >&2; exit 1; }
+printf 'total %d B (%.2f MB; budget 4 MB per case, what one session downloads, npm test checks it; 12 MB for every case together)\n' "$total" "$(python3 -c "print($total/1e6)")"
+[ "$total" -le 12000000 ] || { echo "over the 12 MB ceiling" >&2; exit 1; }

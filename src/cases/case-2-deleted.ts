@@ -383,7 +383,7 @@ export const caseTwoDeleted: CaseFile = {
     { at: '2024-08-21T10:45:10', emits: [hist('df -h')] },
     { at: '2024-08-21T10:45:40', emits: [hist('# 92% → 51%. README 에 적어 둠. 지운 다음엔 꼭 df 🌱')] },
     { at: '2026-11-12T09:24:40', emits: [hist('df -h')] },
-    { at: '2026-11-12T09:25:02', emits: [hist('# 도윤님, 오늘은 logs-01. README 먼저 🌱')] },
+    { at: '2026-11-12T09:25:02', emits: [hist('# 쳐 보기 전에 README 먼저요, 도윤님. 오늘은 logs-01 🌱')] },
 
     // logs-01 journal
     { at: '2026-11-08T00:00:03', emits: [j(L, 'logrotate.service', 'logrotate.service: Deactivated successfully.', { ident: 'systemd', pid: 1 }), j(L, 'logrotate.service', 'Finished Rotate log files.', { ident: 'systemd', pid: 1 })] },
@@ -482,7 +482,7 @@ export const caseTwoDeleted: CaseFile = {
   terminalTabs: [
     {
       label: 'logs-01', host: L, cwd: '/home/eunjae',
-      scrollback: ['Nuri logs-01 (Ubuntu 22.04 LTS) — 로그 수집 서버', '조사 모드 (읽기 전용) — 명령 목록: help.  README 먼저: cat ~/README.txt', 'eunjae@logs-01:~$ # 도윤님, 오늘은 logs-01. README 먼저 🌱'],
+      scrollback: ['Nuri logs-01 (Ubuntu 22.04 LTS) — 로그 수집 서버', '조사 모드 (읽기 전용) — 명령 목록: help.  README 먼저: cat ~/README.txt', 'eunjae@logs-01:~$ # 쳐 보기 전에 README 먼저요, 도윤님. 오늘은 logs-01 🌱'],
     },
   ],
   deadTabs: ['wiki-01', 'pay-api-02'],
@@ -760,6 +760,18 @@ export const caseTwoDeleted: CaseFile = {
   ],
 
   // ------------------------------------------------------------------ debrief
+  // ------------------------------------------------------------------ last scene (docs/case-format.md §15)
+  // 오미래's reply first, 지훈 owns it without an emoji, then his farewell-party invite, 서진 cannot come, the box on 은재's desk
+  ending: {
+    beats: [
+      { wait: 0, mail: 'closing' },
+      { wait: 5, message: { channel: 'me-dm-jihoon', from: 'jihoon', text: '도윤님. 제가 지운 거 맞아요. 다음엔 df 먼저 볼게요.' } },
+      { wait: 5, message: { channel: 'me-dm-jihoon', from: 'jihoon', text: '아 그리고 내일 은재 선배 송별회!! 정든집 19시 🍕 도윤님도 꼭요' } },
+      { wait: 3, message: { channel: 'me-dm-seojin', from: 'seojin', text: '송별회 저는 못 가요. 금요일 오후부터 휴가예요.' } },
+      { wait: 3, note: 'today', line: '17:40 은재님 자리에 종이 상자. 머그컵, 오래된 키보드, 목공 잡지(?). 내일이 마지막 출근.' },
+    ],
+  },
+
   debrief: {
     headline: '지운 파일도 열려 있으면 공간을 차지한다. 고쳤다고 믿은 조치는, 확인해야 조치다.',
     story: [
@@ -883,7 +895,7 @@ export const caseTwoDeleted: CaseFile = {
           { at: '2024-08-21T10:31:05', cmd: 'ls -la /data/collector/raw' },
           { at: '2024-08-21T10:44:02', cmd: 'sudo systemctl kill -s HUP logshipd' },
           { at: '2024-08-21T10:45:40', cmd: '# 92% → 51%. 🌱' },
-          { at: '2026-11-12T09:25:02', cmd: '# 도윤님, 오늘은 logs-01. README 먼저 🌱' },
+          { at: '2026-11-12T09:25:02', cmd: '# 쳐 보기 전에 README 먼저요, 도윤님. 오늘은 logs-01 🌱' },
         ],
       },
     ],

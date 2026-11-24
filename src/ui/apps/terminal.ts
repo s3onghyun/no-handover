@@ -330,6 +330,17 @@ export const terminalApp: AppDef = {
       },
       open: (arg) => {
         if (typeof arg === 'number') selectTab(arg);
+        else if (arg && typeof arg === 'object' && 'tab' in arg) {
+          // the last scene puts a command in a tab's prompt (src/engine/game.ts act): select it, then show what it holds
+          const a = arg as { tab: number; input?: string };
+          selectTab(a.tab);
+          if (a.input !== undefined) {
+            tab().input = a.input;
+            touched.add(cur);
+            renderPrompt();
+            input.focus();
+          }
+        }
       },
     };
   },

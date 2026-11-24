@@ -9,6 +9,7 @@
 // Each pass also decodes every shipped voice file in that format (all cases' lines, src/engine/voices.ts).
 // Then the Case 0, 1 and 2 openings (서진's voice messages): the sting and the voice play from the
 // files with no typing fallback, the mail slides in, and the desktop loops amb.office from the file;
+// Case 0's last scene plays its colleagues' recorded lines;
 // in Case 1 a colleague nudge then plays its own per-case voice line, the asked wording too, a
 // trigger's two messages play one after the other, and a wrong report's reply plays line by line (~110 s more).
 //
@@ -236,6 +237,23 @@ async function newOpenings() {
       assert.deepEqual(await page.evaluate(() => window.__audio.history.find((h) => h.id === 'amb.office')), { id: 'amb.office', status: 'file' });
       assert.equal(await page.evaluate(() => window.__audio.isLooping('sfx.typing')), false, 'typing loop stopped');
       step(`${id}: mail notification, desktop after ${secs.toFixed(1)} s, amb.office loops from the file, typing loop stopped`);
+      if (id === 'case0-wiki') {
+        // the last scene after the report (src/engine/game.ts ending): 서진's DM is her recorded line, then 지훈's
+        await page.evaluate(() => {
+          const g = window.__game;
+          const slots = Object.fromEntries(g.cs.accusation.slots.map((x) => [x.id, { correct: true, optionCorrect: true, points: 100, cite: 'ok' }]));
+          g.st.submissions.push({ at: g.st.playMs, sub: { cause: 'disk', sequence: 'true', responsibility: [] }, score: { total: 200, max: 200, allCorrect: true, slots, multiplier: 1, evidenceBonus: 0, hintCost: 0, hints: 0, blamed: [] } });
+          g.st.finished = true;
+          g.startEnding();
+        });
+        for (const cue of ['voice.seojin-13c6aed6', 'voice.jihoon-41bda4b1']) {
+          await page.waitForFunction((c) => window.__audio.history.some((h) => h.id === c), cue, { timeout: 30000 });
+          assert.deepEqual(await page.evaluate((c) => window.__audio.history.find((h) => h.id === c), cue), { id: cue, status: 'file' });
+        }
+        await page.locator('.ending-bar .ending-skip').click();
+        await page.locator('.debrief h2').waitFor({ timeout: 5000 });
+        step(`${id}: the last scene's DMs play voice.seojin-13c6aed6 then voice.jihoon-41bda4b1 from the files; 해설 바로 보기 opens the debrief`);
+      }
       if (id === 'case1-cron-env') {
         // a nudge plays voice.nudge-<case id>-<nudge id>; the asked wording plays its own -ask line
         for (const [nid, why, want] of [['idle-1', 'idle', 'voice.nudge-case1-cron-env-idle-1'], ['idle-3', 'ask', 'voice.nudge-case1-cron-env-idle-3-ask']]) {

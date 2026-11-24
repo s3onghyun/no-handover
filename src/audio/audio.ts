@@ -2,7 +2,9 @@
 //
 //   source -> cue gain -> class gain (music/ambience/voice/sfx/ui) -> master (volume, mute) -> out
 //
-// - Resolution per cue (see manifest.ts): file (ogg, then mp3) -> ZzFX -> procedural synth -> silence.
+// - Resolution per cue (see manifest.ts): file -> ZzFX -> procedural synth -> silence. A session
+//   fetches one format: Opus .ogg when the browser says it plays it (canPlayType), else .mp3; the
+//   other format is tried only for a missing file, and after an undecodable one the session switches.
 // - Music never loops unless `musicLoops` is on (`?music=loop`): stings are one-shots even when a
 //   file is marked loop; ambience is the only loop under the desktop.
 //   Missing files are normal: a 404, an HTML fallback page or an undecodable file just moves on.
@@ -82,7 +84,11 @@ export interface AudioDeps {
   random?: () => number;
   /** Let `music.*` cues loop (default false: music is one-shot stings only). */
   musicLoops?: boolean;
+  /** The file format this session fetches first (default: defaultFormat(), Opus .ogg when the browser plays it). */
+  format?: AudioFormat;
 }
+
+export type AudioFormat = 'ogg' | 'mp3';
 
 export type PlayStatus = 'file' | 'zzfx' | 'synth' | 'silent' | 'muted' | 'locked' | 'pending' | 'unavailable' | 'unknown' | 'off';
 
@@ -107,6 +113,20 @@ export function defaultContext(): CtxLike | null {
     return C ? (new C() as CtxLike) : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * The one format a session downloads: Opus in .ogg when the browser says it can play it, else the
+ * .mp3 copy (old Safari). Without a DOM (node) .ogg, as the manifest lists it first.
+ */
+export function defaultFormat(): AudioFormat {
+  try {
+    const doc = (globalThis as { document?: { createElement(tag: string): { canPlayType?(type: string): string } } }).document;
+    if (!doc) return 'ogg';
+    return doc.createElement('audio').canPlayType?.('audio/ogg; codecs="opus"') ? 'ogg' : 'mp3';
+  } catch {
+    return 'ogg';
   }
 }
 
@@ -162,7 +182,9 @@ interface Pending {
 
 export class AudioManager {
   readonly manifest: Record<string, CueDef>;
-  private deps: Required<Omit<AudioDeps, 'storage'>> & { storage?: StorageLike };
+  private deps: Required<Omit<AudioDeps, 'storage' | 'format'>> & { storage?: StorageLike };
+  /** The format this session fetches (one per session; see load()). */
+  format: AudioFormat;
   private ctx: CtxLike | null = null;
   private master: GainLike | null = null;
   private classes = new Map<VolumeClass, GainLike>();
@@ -192,6 +214,7 @@ export class AudioManager {
       random: deps.random ?? Math.random,
       musicLoops: deps.musicLoops ?? false,
     };
+    this.format = deps.format ?? defaultFormat();
     try {
       const p = JSON.parse(deps.storage?.get(PREFS_KEY) ?? 'null') as { muted?: boolean; volume?: number } | null;
       if (p && typeof p.muted === 'boolean') this.muted = p.muted;
@@ -328,7 +351,11 @@ export class AudioManager {
       });
   }
 
-  /** Load the first playable file of a cue (cached). null = no file: use zzfx or silence. */
+  /**
+   * Load the first playable file of a cue (cached). null = no file: use zzfx or silence.
+   * Only the session's format is fetched; the other one only when this cue's file is missing, or
+   * when the browser could not decode it after all (then the whole session switches format).
+   */
   load(id: string): Promise<BufferLike | null> {
     const cached = this.buffers.get(id);
     if (cached) return cached;
@@ -336,13 +363,18 @@ export class AudioManager {
     const ctx = this.ctx;
     const p = (async () => {
       if (!cue || !ctx) return null;
-      for (const src of cueFiles(id, cue)) {
+      const ext = (src: string) => (src.endsWith('.mp3') ? 'mp3' : src.endsWith('.ogg') ? 'ogg' : null);
+      const files = cueFiles(id, cue);
+      const order = [...files.filter((f) => ext(f) === this.format), ...files.filter((f) => ext(f) !== this.format)];
+      for (const src of order) {
         const bytes = await this.deps.fetchBytes(this.deps.base + src);
         if (!bytes || !bytes.byteLength) continue;
         try {
           return await ctx.decodeAudioData(bytes);
         } catch {
-          /* undecodable here (e.g. ogg on an old Safari): try the next format */
+          // canPlayType said yes but decodeAudioData cannot (or the file is broken): the rest of the session asks for the other format first
+          const other = ext(src) === 'ogg' ? 'mp3' : ext(src) === 'mp3' ? 'ogg' : null;
+          if (ext(src) === this.format && other) this.format = other;
         }
       }
       return null;
