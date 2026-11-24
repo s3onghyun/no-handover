@@ -92,6 +92,11 @@ export function drawResultCard(canvas: HTMLCanvasElement, card: ResultCard): voi
     c.font = `600 22px ${SANS}`;
     c.fillText(card.mode, x, 512);
   }
+  if (card.note) {
+    c.fillStyle = '#2f3e5c';
+    c.font = `400 20px ${SANS}`;
+    c.fillText(fit(c, card.note, 1040), x, 542);
+  }
   c.fillStyle = '#8a8580';
   c.font = `400 22px ${SANS}`;
   c.fillText(card.footer, x, 572);

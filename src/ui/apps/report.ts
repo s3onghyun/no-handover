@@ -294,7 +294,7 @@ export const reportApp: AppDef = {
       clear(root);
       submitBtn = null;
       needBox = null;
-      if (g.st.finished && g.endingActive()) {
+      if (g.st.finished && (g.endingActive() || (g.cs.finale && !g.st.finale?.done))) {
         // the last scene plays first (main.ts); the debrief opens when it ends or is skipped
         root.appendChild(h('div.ending-wait', null, h('p', null, `📝 ${t('ending.wait')}`), h('button.ghost-btn.ending-skip', { type: 'button', onclick: () => g.skipEnding() }, t('ending.skip'))));
         return;
@@ -444,7 +444,7 @@ export const reportApp: AppDef = {
     let sig = shownSig();
     return {
       refresh: (type?: string) => {
-        if (type === 'accuse' || type === 'pins' || type === 'hint' || type === 'ending') render();
+        if (type === 'accuse' || type === 'pins' || type === 'hint' || type === 'ending' || type === 'finale') render();
         else if ((type === 'clue' || type === 'message') && shownSig() !== sig) render();
         sig = shownSig();
       },

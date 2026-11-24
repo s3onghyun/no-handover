@@ -59,7 +59,7 @@ test('UI cue table: one family of short, soft, low-passed sounds at -18..-12 dBF
   const zz = (Object.entries(MANIFEST) as [string, CueDef][]).filter(([, c]) => c.zzfx);
   assert.deepEqual(
     zz.map(([id]) => id).sort(),
-    ['sfx.ding', 'sfx.done', 'sfx.error', 'sfx.key', 'sfx.key-1', 'sfx.key-2', 'sfx.key-3', 'sfx.mail', 'sfx.pin', 'sfx.pulse', 'sfx.ring', 'sfx.tick', 'sfx.typing', 'sfx.window-close', 'sfx.window-open'],
+    ['sfx.ding', 'sfx.done', 'sfx.error', 'sfx.key', 'sfx.key-1', 'sfx.key-2', 'sfx.key-3', 'sfx.mail', 'sfx.pin', 'sfx.pulse', 'sfx.ring', 'sfx.tick', 'sfx.typing', 'sfx.wilt', 'sfx.window-close', 'sfx.window-open'],
   );
   for (const [id, c] of zz) {
     const p = c.zzfx!;

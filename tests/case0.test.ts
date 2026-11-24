@@ -222,21 +222,24 @@ test('case 0 scoring: two slots, max 230, unlimited submissions, wrong answers n
   assert.equal(rep.summary.submissions.length, 6);
 });
 
-test('campaign: Case 0 → 1 → 2 → 3, each opens when the one before is solved or skipped, placeholders never block', () => {
-  const c = new Campaign(CAMPAIGN);
-  assert.deepEqual(c.entries.map((e) => e.slot), [0, 1, 2, 3, 4]);
-  assert.deepEqual(c.playable().map((e) => e.id), [cs.id, 'case1-cron-env', 'case2-deleted-open', caseFriday1802.id]);
+test('campaign: Case 0 → 1 → 2 → 3 → 4, each opens when the one before is solved or skipped, placeholders never block', () => {
+  // a season-2 placeholder after Case 4 (title only) shows how placeholders behave
+  const c = new Campaign([...CAMPAIGN, { slot: 5, id: 'season2', title: '다음 시즌', when: '', principle: '' }]);
+  assert.deepEqual(c.entries.map((e) => e.slot), [0, 1, 2, 3, 4, 5]);
+  assert.deepEqual(c.playable().map((e) => e.id), [cs.id, 'case1-cron-env', 'case2-deleted-open', caseFriday1802.id, 'case4-keys']);
   assert.equal(c.first().id, cs.id);
   assert.equal(c.tutorialId(), cs.id);
   assert.equal(c.entry(caseFriday1802.id)!.slot, 3);
   assert.equal(c.next(cs.id)!.id, 'case1-cron-env');
   assert.equal(c.next('case1-cron-env')!.id, 'case2-deleted-open');
   assert.equal(c.next('case2-deleted-open')!.id, caseFriday1802.id);
-  assert.equal(c.next(caseFriday1802.id), null, 'placeholder 4 is passed over');
+  assert.equal(c.next(caseFriday1802.id)!.id, 'case4-keys');
+  assert.equal(c.next('case4-keys'), null, 'the placeholder after it is passed over');
   let p = parseProgress(null);
   assert.equal(c.status('case1-cron-env', p), 'locked');
   assert.equal(c.status(caseFriday1802.id, p), 'locked');
-  assert.equal(c.status('case4-keys', p), 'soon');
+  assert.equal(c.status('case4-keys', p), 'locked');
+  assert.equal(c.status('season2', p), 'soon');
   assert.equal(c.pick(null, null, p).id, cs.id);
   assert.equal(c.pick(null, caseFriday1802.id, p).id, cs.id, 'a locked last case falls back to the first');
   assert.equal(c.pick(caseFriday1802.id, null, p).id, caseFriday1802.id, '?case= ignores locks (facilitator)');
@@ -249,6 +252,8 @@ test('campaign: Case 0 → 1 → 2 → 3, each opens when the one before is solv
   assert.equal(c.status(caseFriday1802.id, p), 'locked');
   p = c.solve('case2-deleted-open', p);
   assert.equal(c.status(caseFriday1802.id, p), 'open');
+  assert.equal(c.status('case4-keys', p), 'locked');
+  assert.equal(c.status('case4-keys', c.solve(caseFriday1802.id, p)), 'open');
   assert.equal(c.pick(null, caseFriday1802.id, p).id, caseFriday1802.id);
   // the tutorial's skip goes to the next case and marks only the tutorial skipped
   const skipped = c.skipTo(c.next(cs.id)!.id, parseProgress('{"solved":[],"skipped":[]}'));

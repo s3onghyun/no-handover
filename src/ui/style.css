@@ -872,3 +872,69 @@ html.reduce-motion .sticky.act, html.reduce-motion .page .ln .ln-text.writing::a
 .window.act { animation: pulse 1.8s ease-in-out infinite; }
 html.reduce-motion .window.act { box-shadow: var(--shadow), 0 0 0 4px rgba(242, 217, 78, 0.85); }
 .ending-bar .ending-act { white-space: nowrap; font-weight: 600; color: #f2d94e; }
+
+/* ---- Case 4: the hidden sign on 도윤's notebook page */
+.page .ln.signed .sign-letter { font-weight: 700; }
+.page .ln.signed .sign-letter.lit { background: rgba(242, 217, 78, 0.85); border-radius: 3px; padding: 0 2px; transition: background-color 0.3s; }
+.page .ln.sign-word .sign-read { font: 700 18px/1.6 'Nanum Pen Script', var(--sans); color: #8b2f25; letter-spacing: 0.08em; }
+.page .ln.sign-word.later { visibility: hidden; }
+
+/* ---- Case 4: drafts, the photo attachment */
+.mail-read .forward { margin-top: 10px; }
+.mail-read .forward.done { opacity: 0.7; }
+.mail-read .attach { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 6px; border: 1px solid var(--line); border-radius: 8px; background: #fcfbf8; cursor: zoom-in; max-width: 280px; text-align: left; }
+.mail-read .attach img { width: 72px; height: 96px; object-fit: cover; border-radius: 4px; }
+.photo-view { position: fixed; inset: 0; z-index: 100010; display: grid; place-items: center; background: rgba(12, 12, 14, 0.82); cursor: zoom-out; }
+.photo-view figure { margin: 0; max-width: min(92vw, 600px); color: #f4f2ec; text-align: center; }
+.photo-view img { max-width: 100%; max-height: 80vh; border-radius: 6px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); }
+.photo-view .photo-close { position: absolute; top: 12px; right: 12px; min-width: 44px; min-height: 44px; color: #f4f2ec; border-color: rgba(244, 242, 236, 0.4); background: transparent; }
+.av.left { filter: grayscale(1); opacity: 0.75; }
+.pc-status.left { color: var(--ink-3); display: flex; align-items: center; gap: 4px; }
+
+/* ---- Case 4: the season finale (src/ui/finale.ts) */
+.finale-layer { position: fixed; inset: 0; z-index: 100005; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; overflow-y: auto; }
+.finale-choice-back { background: rgba(20, 22, 26, 0.72); }
+.finale-choice { width: min(520px, 100%); background: #fbf7e9; color: #2a2620; border-radius: 12px; padding: 22px 20px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4); }
+.finale-choice h2 { margin: 0 0 6px; font-size: 20px; }
+.finale-choice .fc-note { margin: 0 0 14px; color: #6b6355; font-size: 13px; }
+.finale-choice .fc-opts { display: grid; gap: 8px; }
+.finale-choice .fc-opt { min-height: 44px; text-align: left; padding: 10px 14px; border: 1px solid #d9cfb4; border-radius: 8px; background: #fff; font: 600 15px/1.3 var(--sans); cursor: pointer; }
+.finale-choice .fc-opt:hover, .finale-choice .fc-opt:focus-visible { border-color: var(--accent); background: #f3efe2; }
+.finale-choice .fc-opt[data-choice="infra"] { border-color: #b9a34f; }
+.finale-card { background: #0d0d0f; color: #ecebe7; text-align: center; gap: 10px; }
+.finale-card h2 { font: 400 26px/1.4 Georgia, 'Noto Serif KR', serif; margin: 0 0 12px; letter-spacing: 0.04em; }
+.finale-card .fcard-line { max-width: 560px; margin: 0; font-size: 16px; line-height: 1.7; }
+.finale-card .fcard-line.in, .finale-credits .credit.in { opacity: 0; animation: nh-fade-in 0.9s ease forwards; }
+.finale-card .fcard-line:last-of-type { color: #d9c37a; }
+@keyframes nh-fade-in { to { opacity: 1; } }
+.finale-card .finale-next, .finale-credits .finale-next { margin-top: 22px; min-height: 44px; color: #ecebe7; border-color: rgba(236, 235, 231, 0.35); background: transparent; }
+.finale-credits { background: rgba(13, 13, 15, 0.94); color: #ecebe7; }
+.finale-credits .credits-roll { width: min(620px, 100%); font: 14px/1.9 ui-monospace, 'D2Coding', monospace; }
+.finale-credits .credit.head { font-weight: 700; color: #d9c37a; }
+.finale-credits .credit.sign { margin-top: 10px; color: #b5b2aa; }
+.finale-line { background: rgba(13, 13, 15, 0.94); color: #ecebe7; }
+.finale-line .fl-bar { width: min(560px, 100%); height: 4px; background: rgba(236, 235, 231, 0.18); border-radius: 2px; overflow: hidden; margin-bottom: 18px; }
+.finale-line .fl-fill { height: 100%; width: 100%; background: #d9c37a; }
+.finale-line .fl-readme { width: min(560px, 100%); margin: 0 0 10px; white-space: pre-wrap; font: 14px/1.7 ui-monospace, 'D2Coding', monospace; color: #cfcdc6; }
+.finale-line .fl-row { width: min(560px, 100%); }
+.finale-line .fl-input { width: 100%; min-height: 44px; box-sizing: border-box; padding: 8px 10px; border: 1px solid rgba(236, 235, 231, 0.4); border-radius: 6px; background: #17181b; color: #ecebe7; font: 15px/1.4 ui-monospace, 'D2Coding', monospace; }
+.finale-line .fl-sign { width: min(560px, 100%); text-align: right; margin-top: 6px; color: #cfcdc6; font-family: ui-monospace, monospace; }
+.finale-line .fl-hint { color: #8f8c84; font-size: 12.5px; }
+.finale-stats { background: rgba(13, 13, 15, 0.94); color: #ecebe7; }
+.finale-stats h2 { margin: 0 0 10px; }
+.finale-stats ul { list-style: none; padding: 0; margin: 0 0 12px; width: min(420px, 100%); }
+.finale-stats .fs-endings li { padding: 4px 0; color: #8f8c84; }
+.finale-stats .fs-endings li.got { color: #ecebe7; }
+.finale-stats .fs-facts li { padding: 3px 0; color: #cfcdc6; }
+.finale-stats .fs-acts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.finale-stats .fs-acts button { min-height: 44px; }
+.finale-stats .fs-again { color: #ecebe7; border-color: rgba(236, 235, 231, 0.35); background: transparent; }
+.finale-bad { background: #120708; color: #e9dcd8; text-align: center; gap: 14px; }
+.finale-bad h2 { font: 700 34px/1.3 Georgia, 'Noto Serif KR', serif; color: #c8453a; margin: 0; }
+.finale-bad p { max-width: 460px; color: #b9aaa6; margin: 0; }
+.finale-bad .fb-back { min-height: 44px; color: #e9dcd8; border-color: rgba(233, 220, 216, 0.4); background: transparent; }
+html.reduce-motion .finale-card .fcard-line.in, html.reduce-motion .finale-credits .credit.in { animation: none; opacity: 1; }
+.ending-bar .ending-tag, .ending-bar .ending-act { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 900px) {
+  .ending-bar:has(.ending-act:not([hidden])) .ending-tag { display: none; }
+}

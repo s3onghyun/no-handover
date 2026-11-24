@@ -26,6 +26,7 @@ import { flashAnchor, mountTour, toolGuide, tourKey, TOUR_SEEN_KEY } from './ui/
 import { EXPERIENCE_KEY, experienceRules, parseExperience, shouldAskExperience, type Experience } from './engine/experience.ts';
 import { EXPERT_KEY, parseExpert } from './engine/expert.ts';
 import { goalCard } from './ui/goal.ts';
+import { checkpointKey, mountFinale } from './ui/finale.ts';
 import { modal } from './ui/modal.ts';
 import type { ClueDef, TourStep } from './engine/types.ts';
 import type { Message } from './engine/build.ts';
@@ -273,7 +274,7 @@ const ctx: UiCtx = {
   },
   avatar(id, size = 34) {
     const p = game.cs.people[id];
-    const el = h('span.av', { style: { width: `${size}px`, height: `${size}px`, background: p?.color ?? '#888', fontSize: `${Math.round(size * 0.42)}px` }, title: p?.name ?? id });
+    const el = h(`span.av${id === game.cs.owner && game.st.finale?.grey ? '.left' : ''}`, { style: { width: `${size}px`, height: `${size}px`, background: p?.color ?? '#888', fontSize: `${Math.round(size * 0.42)}px` }, title: p?.name ?? id });
     const src = size <= 40 ? p?.avatarSmall ?? p?.avatar : p?.avatar;
     if (src) {
       const img = h('img', { src, alt: p!.name, loading: 'lazy' }) as HTMLImageElement;
@@ -779,7 +780,16 @@ desktop.addEventListener('keydown', (e) => {
 game.on('pinned', () => void audio.play('sfx.pin'));
 game.on('accuse', (sc) => {
   // the debrief opens once the case is finished (solved, or out of submissions): reveal theme
-  if (game.st.finished) {
+  if (game.st.finished && game.cs.finale) {
+    // the season finale: no score here (it comes after the credits); the report window closes, 오미래's mail opens
+    const r = sc as ScoreResult;
+    markSolved();
+    recordGrade(grade(r.total, r.max));
+    syncNextBtn();
+    audio.stopLoop('music.tension', 1500);
+    void audio.play('sfx.done');
+    wm.close('report');
+  } else if (game.st.finished) {
     const r = sc as ScoreResult;
     showMoment({ kind: 'result', title: r.allCorrect ? t('moment.solved') : t('moment.closed'), sub: `${r.total} / ${r.max}`, tone: r.allCorrect ? 'good' : 'plain', holdMs: 2200 });
     markSolved();
@@ -816,20 +826,20 @@ function syncEnding(): void {
   }
   const hint = endingBar.querySelector<HTMLElement>('.ending-act')!;
   hint.hidden = !act;
-  hint.textContent = act ? `⌨️ ${act.prefill} · ${t('ending.act')}` : '';
+  hint.textContent = act ? `⌨️ ${[...act.prefill].length > 22 ? `${[...act.prefill].slice(0, 21).join('')}…` : act.prefill} · ${t('ending.act')}` : '';
 }
 game.on('ending', (what) => {
   syncEnding();
-  if (what === 'done') wm.open('report');
+  if (what === 'done' && !game.cs.finale) wm.open('report');
 });
 game.on('ending-note', (p) => {
   syncEnding();
-  const { id, line, quiet } = p as { id: string; line?: string; quiet: boolean };
+  const { id, line, quiet, sign } = p as { id: string; line?: string; quiet: boolean; sign?: boolean };
   if (quiet) {
     if (wm.isOpen('notes')) wm.instance('notes')?.open?.(id);
     return;
   }
-  wm.open('notes', { id, write: line === undefined ? 'reveal' : 'line' });
+  wm.open('notes', { id, write: sign ? 'sign' : line === undefined ? 'reveal' : 'line' });
 });
 game.on('ending-mail', (p) => {
   const { id, quiet } = p as { id: string; quiet: boolean };
@@ -854,6 +864,36 @@ document.addEventListener('nh-writing', (e) => {
     setTimeout(tick, 90 + Math.random() * 60);
   };
   tick();
+});
+// the sign lit letter by letter in the finale: a tick per letter (notes.ts 'nh-sign-letter'), the last one a chime
+document.addEventListener('nh-sign-letter', (e) => void audio.play(Number((e as CustomEvent).detail) >= 3 ? 'sfx.done' : 'sfx.tick'));
+// the season finale (Case 4): the choice, the cards, 은재's reply, the credits, the line for the next person
+const finaleUi = mountFinale(ctx, audio, () => {
+  // what the season remembers for 은재's reply: 물주기 in Case 3, hint steps over every case played
+  let watered = false;
+  let hints = 0;
+  for (const e of campaign.playable()) {
+    let st: { log?: { type: string; action?: string; line?: string }[] } | null = null;
+    try {
+      st = e.id === CASE.id ? game.st : JSON.parse(storage.get(`no-handover:save:${e.id}`) ?? 'null');
+    } catch {
+      st = null;
+    }
+    for (const ev of st?.log ?? []) {
+      if (e.id === 'friday-1802' && ((ev.type === 'ending' && ev.action === 'act') || (ev.type === 'cmd' && /^물주기\b/.test(ev.line ?? '')))) watered = true;
+      if (ev.type === 'rung3') hints++;
+    }
+  }
+  return { watered, hints };
+});
+// "다른 곳에 넘겨 보기": the save from just before the choice comes back, and nothing writes over it before the reload
+document.addEventListener('nh-finale-again', () => {
+  const back = storage.get(checkpointKey(CASE.id));
+  if (!back) return;
+  resetting = true;
+  clearTimeout(saveTimer);
+  storage.set(SAVE_KEY, back);
+  goCase(CASE.id); // not a plain reload: a ?fresh=1 in the address would wipe the save again
 });
 // Esc skips the scene (not while a dialog, a popover or the result moment has the key)
 window.addEventListener('keydown', (e) => {
@@ -961,6 +1001,8 @@ function start(first: boolean) {
     setCovered(false);
     revealDesktop(first);
   }
+  // the season finale carries on where it stood (or starts, after "다른 곳에 넘겨 보기")
+  finaleUi?.resume();
   save();
 }
 

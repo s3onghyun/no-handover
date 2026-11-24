@@ -70,6 +70,8 @@ export interface ResultCard {
   /** '힌트 단계 0' when solved without a single 💡 방향/정답 step, else null. */
   badge: string | null;
   mode: string | null;
+  /** The season finale's line for the next person, signed (Case 4), else null. */
+  note: string | null;
   footer: string;
 }
 
@@ -89,6 +91,7 @@ export function resultCard(g: GameLike & Pick<Game, 'cs'>, caseLabel: string): R
     ],
     badge: r.solved && r.hints === 0 ? '힌트 단계 0' : null,
     mode: r.senior ? '숙련자 모드' : null,
+    note: g.st.finale?.line ? `다음 사람에게: “${g.st.finale.line}” — 한도윤` : null,
     footer: '정답은 직접 찾아보세요 — 스포일러 없는 기록 카드',
   };
 }

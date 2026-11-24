@@ -37,7 +37,11 @@ export const messengerApp: AppDef = {
       clear(side);
       const section = (account: 'pc' | 'me', title: string) => {
         side.appendChild(h('h4', null, title));
-        if (account === 'pc') side.appendChild(h('div', { style: 'padding:0 14px 6px;font-size:11.5px;color:var(--ink-3)' }, t('boot.status')));
+        if (account === 'pc') {
+          // the season finale: the departed senior's session finally shows her as gone (Case 4)
+          const left = !!g.st.finale?.grey;
+          side.appendChild(h(`div.pc-status${left ? '.left' : ''}`, { style: 'padding:0 14px 6px;font-size:11.5px;color:var(--ink-3)' }, left ? h('span', null, ctx.avatar(g.cs.owner, 18), ` ${ctx.name(g.cs.owner)} (퇴사)`) : t('boot.status')));
+        }
         for (const c of g.cs.channels.filter((x) => x.account === account)) {
           const n = c.id === sel ? 0 : g.unread(c.id);
           side.appendChild(
@@ -168,6 +172,11 @@ export const messengerApp: AppDef = {
           const top = list.scrollTop;
           renderList();
           list.scrollTop = top;
+          return;
+        }
+        if (type === 'finale') {
+          renderSide();
+          renderList();
           return;
         }
         if (type !== 'message' && type !== 'save') return;

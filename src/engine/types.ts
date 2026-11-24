@@ -140,6 +140,15 @@ export interface HostDef {
   /** Users whose home dirs require sudo to read. */
   sudoRead?: boolean;
   /**
+   * The player's own machine (Case 4's PC): `crontab -r` really removes the session user's crontab,
+   * as cron does, without asking. Elsewhere crontab stays read-only.
+   */
+  own?: boolean;
+  /** Path prefixes a command's output may be appended to with `>>` (the handover file on the player's PC). */
+  appendable?: string[];
+  /** `sudo -l [-U user]`: the rules each user has on this host (default: the session's read-only audit rule). */
+  sudoers?: Record<string, string[]>;
+  /**
    * Login-shell environment of the session user on this host, merged over the defaults
    * (PATH=/usr/local/bin:/usr/bin:/bin …). E.g. a PATH that ~/.bashrc extends: `echo $PATH`,
    * `which`, `env` and command lookup use it; cron does not (Case 1).
@@ -226,6 +235,10 @@ export interface MailDef {
   subject: string;
   body: string;
   locked?: string;
+  /** A locked draft opens with one of these (case-insensitive); every draft with the same answers opens with it (Case 4: 은재's nine drafts). */
+  password?: string[];
+  /** One picture under the body (the season finale's 공방.jpg). */
+  attachment?: { name: string; src: string; alt: string };
   /** Delivered later (see triggers); hidden until then. */
   later?: boolean;
 }
@@ -238,6 +251,11 @@ export interface NoteDef {
   highlight?: number;
   /** Line appended under the highlighted line when the trigger fires (Doyun's afterthought). */
   reveal?: string;
+  /**
+   * Opening this page once clue `after` is found finds clue `clue` (Case 4: the page of 은재's one-line
+   * messages, read again after the crontab said "첫 글자만": the hidden sign).
+   */
+  unlock?: { after: string; clue: string };
 }
 
 export interface Sticky {
@@ -426,14 +444,18 @@ export interface EndingDef {
   beats: EndingBeat[];
 }
 
-export type EndingBeat = { wait: number } & (
+export type EndingBeat = {
+  wait: number;
+  /** Skip this beat when that trigger has fired (Case 4: the sign beats, when the sign was found during the case). */
+  unless?: string;
+} & (
   /** A colleague's message, seen typing first (voiced like any other line: src/engine/voices.ts). */
   | { message: { channel: string; from: string; text: string } }
   /**
    * 도윤's notebook opens on this page and `line` is written in under the last line, letter by
    * letter (`{hm}` = the game clock). Without `line` the page's `reveal` line is written again.
    */
-  | { note: string; line?: string }
+  | { note: string; line?: string; sign?: boolean }
   /** This mail arrives (if it has not yet) and opens. */
   | { mail: string }
   /**
@@ -443,6 +465,43 @@ export type EndingBeat = { wait: number } & (
    */
   | { act: { tab: number; prefill: string; until: string; timeoutSec?: number; sticky?: number; note?: { id: string; line: string } } }
 );
+
+/**
+ * The season finale (Case 4, src/ui/finale.ts; data/nh-ending-research/report.md §4-6): after the
+ * last scene (`ending`), the player hands 인수인계서 v5 to someone; that choice is the ending.
+ */
+export interface FinaleDef {
+  /** Trigger id: the hidden sign found during the case (the "#인프라" choice shows only then). */
+  signTrigger: string;
+  /** Where the handover file lives and the 24th line the last scene pre-types (appended if the player never pressed Enter). */
+  handover: { host: string; path: string; line: string };
+  choice: { question: string; note: string; confirm: string; ok: string; back: string; options: { id: string; label: string; needsSign?: boolean }[] };
+  /** Black-screen card per choice: a title and 3–4 lines; the last line is always the price. */
+  cards: Record<string, { title: string; lines: string[] }>;
+  /** 은재's reply (mail id): its first line per choice (a choice without one gets no reply), then the shared body. */
+  reply: {
+    mail: string;
+    first: Record<string, string>;
+    signFound: string;
+    signMissed: string;
+    body: string[];
+    /** Optional lines when the season shows it: 물주기 in Case 3, a draft forwarded to 서진, no hint steps at all. */
+    watered: string;
+    forwarded: string;
+    noHints: string;
+    sign: string;
+  };
+  /** "내가 살려 둔 것": the player's crontab afterwards (per choice; `default` for the rest) and the next run line. */
+  crontab: { host: string; user: string; byChoice: Record<string, { text: string; next: string }> };
+  /** Credits: 인수인계서 v5, ticked line by line. */
+  credits: string[];
+  /** The line for the next person: the file it is written under, how long, the signature. */
+  nextLine: { host: string; path: string; seconds: number; sign: string; prompt: string; empty: string };
+  /** The hidden bad ending: the player's own `crontab -r` takes the plant's reminder with it. */
+  bad: { host: string; user: string; title: string; sub: string; back: string };
+  /** Endings counted on the stats screen (the five choices and the hidden one). */
+  endings: { id: string; title: string }[];
+}
 
 export interface CommandCard {
   title: string;
@@ -519,6 +578,8 @@ export interface CaseFile {
   debrief: DebriefDef;
   /** The last scene between the final report and the debrief (optional). */
   ending?: EndingDef;
+  /** The season finale after the last scene (Case 4 only). */
+  finale?: FinaleDef;
   /** First minutes: briefing scene + "오늘 할 일" objectives (optional; see docs/case-format.md §12). */
   opening?: OpeningDef;
   /** Tutorial shell: only these commands run; other real commands answer in-world (docs/case-format.md §13). */
@@ -620,10 +681,10 @@ export interface RailDef {
 }
 
 export interface ShellDef {
-  /** Command names that run. Anything else that exists answers with `refuse`. */
-  allow: string[];
+  /** Command names that run. Anything else that exists answers with `refuse`. Absent = every tool (only `help` is replaced). */
+  allow?: string[];
   /** In-world refusal for a real command outside `allow`; `{cmd}` is replaced by its name. */
-  refuse: string;
+  refuse?: string;
   /** Lines printed by `help` instead of the full tool list. */
   help?: string[];
 }

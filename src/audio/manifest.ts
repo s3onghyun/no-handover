@@ -58,6 +58,7 @@ export const MANIFEST = {
   // ---------------------------------------------------------------- music / ambience (files only)
   'amb.office': { class: 'ambience', file: true, loop: true, gain: 0.7, synth: 'roomtone', where: '데스크톱 내내 (브리핑 뒤 시작). 파일이 없으면 합성 방 톤 (갈색 잡음 + 저역 필터 + 느린 패드)' },
   'music.briefing': { class: 'music', file: true, where: '오프닝 브리핑 시작 (잠금 화면 → 음성 메시지)' },
+  'music.finale': { class: 'music', file: true, where: 'Case 4 피날레: 인수인계서 v5를 넘기는 순간부터 크레디트 끝까지 (Case 4만)' },
   'music.reveal': { class: 'music', file: true, where: '보고서 끝 (정답 또는 제출 소진) → 마지막 장면 → 해설 화면 (Case 0~3)' },
   'music.tension': { class: 'music', loop: true, gain: 0.5, where: '게임 시계 18:00 이후 또는 첫 오답 뒤 (선택, ?music=loop 일 때만 루프)' },
   // voice.*: one entry per colleague line, generated per case by src/engine/voices.ts (voiceManifest)
@@ -95,6 +96,8 @@ export const MANIFEST = {
     where: '창 열기' },
   'sfx.window-close': { class: 'ui', zzfx: [0.22, .02, 560, .004, .01, .09, 0, 1, -2, 0, 0, 0, 0, 0, 0, 0, 0, .6, .02, 0, -4000],
     where: '창 닫기' },
+  'sfx.wilt': { class: 'sfx', zzfx: [0.2, 0, 220, .02, .25, .6, 0, 1.6, -0.6, 0, 0, 0, 0, 0, 0, 0, 0, .5, .1, 0, -900],
+    where: 'Case 4 숨은 배드 엔딩: crontab -r 뒤 "몬스테라가 시들었습니다" (낮게 가라앉는 한 음)' },
   'sfx.pulse': { class: 'ui', zzfx: [0.25, 0, 196, .18, .12, .5, 0, 1, 0, 0, 0, 0, .25, 0, 0, 0, 0, .8, 0, .15, -1200], hits: [[0, 1, 0], [0, .5, 12]],
     where: '첫 클릭 유도: 터미널 펄스와 함께 한 번' },
 } satisfies Record<string, CueDef>;

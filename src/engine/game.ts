@@ -108,6 +108,13 @@ export interface SaveState {
   ending?: { step: number; due: number; waitUntil?: number; done: boolean; skipped?: boolean };
   /** Lines the last scene wrote into 도윤's notebook, per page id. */
   noteLines?: Record<string, string[]>;
+  /** Locked drafts opened with their password (mail ids), and drafts the player forwarded to 서진. */
+  draftsOpen?: string[];
+  forwarded?: string[];
+  /** Mail bodies written at play time (the finale's reply). */
+  mailBodies?: Record<string, string>;
+  /** The season finale (case `finale`, src/ui/finale.ts): where it stands, the choice, the line for the next person. */
+  finale?: { step: string; choice?: string; signFound: boolean; line?: string; grey?: boolean; done?: boolean };
 }
 
 type Listener = (payload?: unknown) => void;
@@ -171,6 +178,10 @@ export class Game {
     // Re-apply live terminal side effects that live in the world (sudo lines in auth.log).
     for (const e of this.st.log) {
       if (e.type === 'sudo-auth') this.world.hosts.get(e.host as string)?.vfs.appendLine('/var/log/auth.log', e.line as string);
+      // the player's own changes on their own machine (Case 4): appended lines, a removed or restored or rewritten crontab
+      if (e.type === 'append') for (const l of e.lines as string[]) this.world.hosts.get(e.host as string)?.vfs.appendLine(e.path as string, l);
+      if (e.type === 'crontab-removed') this.world.hosts.get(e.host as string)?.vfs.remove(`/var/spool/cron/crontabs/${e.user}`);
+      if (e.type === 'crontab-set') this.setCrontabNow(e.host as string, e.user as string, e.text as string);
     }
   }
 
@@ -406,6 +417,12 @@ export class Game {
       this.log('open', { key });
     }
     for (const c of this.cs.clues) if (!(c.id in this.st.clues) && c.match.some((m) => 'open' in m && m.open === key)) this.discover(c, key);
+    // a notebook page read again after a clue changed how it reads (Case 4's hidden sign)
+    const page = key.startsWith('note:') ? this.cs.notes.find((n) => `note:${n.id}` === key) : undefined;
+    if (page?.unlock && page.unlock.after in this.st.clues) {
+      const c = this.clue(page.unlock.clue);
+      if (c) this.discover(c, key);
+    }
     this.observe({ type: 'open', key });
     this.emit('save');
   }
@@ -608,6 +625,11 @@ export class Game {
       this.emit('friction', type);
     }
     else if (type === 'private') this.log('private', rest);
+    else if (type === 'append') this.log('append', rest);
+    else if (type === 'crontab-removed') {
+      this.log('crontab-removed', rest);
+      this.emit('crontab-removed', rest);
+    }
     else if (type === 'hint') {
       this.log('hint-cmd');
       this.emit('hint-panel');
@@ -789,6 +811,10 @@ export class Game {
         return;
       }
       const b = beats[e.step];
+      if (b.unless && (this.st.triggersFired.includes(b.unless) || b.unless in this.st.clues)) {
+        this.nextBeat(t, 0);
+        continue;
+      }
       // an act waits for the player: mark the wait before it is announced (the UI asks endingAwaits())
       if ('act' in b) e.waitUntil = t + (b.act.timeoutSec ?? ACT_TIMEOUT_S) * 1000;
       const lands = this.applyBeat(b, false);
@@ -821,10 +847,14 @@ export class Game {
     if ('note' in b) {
       const n = this.cs.notes.find((x) => x.id === b.note);
       if (n?.highlight !== undefined && !this.st.notesRevealed.includes(n.id)) this.st.notesRevealed.push(n.id);
+      // the sign shown by the scene (not found by the player): the page reads lit from now on, the trigger does not fire
+      if (b.sign && n?.unlock && !(n.unlock.clue in this.st.clues)) this.st.clues[n.unlock.clue] = { at: this.st.playMs, via: 'ending' };
       const line = b.line === undefined ? undefined : this.addNoteLine(b.note, b.line);
       this.log('ending', { action: 'note', note: b.note });
-      this.emit('ending-note', { id: b.note, line, quiet });
+      this.emit('ending-note', { id: b.note, line, quiet, sign: !!b.sign });
       const written = line ?? (b.line === undefined ? n?.reveal : undefined) ?? '';
+      // the sign beat lights a page's first letters one by one (src/ui/apps/notes.ts)
+      if (b.sign) return quiet ? 0 : 500 + n!.lines.length * 550;
       return quiet ? 0 : [...written].length * NOTE_CHAR_MS;
     }
     if ('mail' in b) {
@@ -871,7 +901,10 @@ export class Game {
     const typing = this.st.queue.filter((q) => q.trigger === 'ending');
     this.st.queue = this.st.queue.filter((q) => q.trigger !== 'ending');
     for (const q of typing) if ('message' in q.action) this.pushLive(q.action.message, 'ending-skip');
-    for (let i = e.waitUntil !== undefined ? e.step + 1 : e.step; i < beats.length; i++) this.applyBeat(beats[i], true);
+    for (let i = e.waitUntil !== undefined ? e.step + 1 : e.step; i < beats.length; i++) {
+      const b = beats[i];
+      if (!(b.unless && (this.st.triggersFired.includes(b.unless) || b.unless in this.st.clues))) this.applyBeat(b, true);
+    }
     this.finishEnding(true);
   }
 
@@ -884,6 +917,86 @@ export class Game {
     this.log('ending', { action: skipped ? 'skip' : 'done' });
     this.checkTyping();
     this.emit('ending', 'done');
+    this.emit('save');
+  }
+
+  // ---------------------------------------------------------------- drafts, crontabs, the season finale (Case 4)
+
+  /** A locked draft's password: every draft that takes it opens (Case 4: 'namu'). False when wrong. */
+  unlockDrafts(pw: string): boolean {
+    const p = pw.trim().toLowerCase();
+    const ids = this.cs.mails.filter((m) => m.password?.some((x) => x.toLowerCase() === p)).map((m) => m.id);
+    this.log('locked-draft', { ok: ids.length > 0 });
+    if (!ids.length) return false;
+    this.st.draftsOpen = [...new Set([...(this.st.draftsOpen ?? []), ...ids])];
+    this.emit('drafts');
+    this.emit('save');
+    return true;
+  }
+
+  draftOpen(id: string): boolean {
+    return !!this.st.draftsOpen?.includes(id);
+  }
+
+  /** The player sends one of 은재's drafts on to 서진 (Case 4; the finale's reply remembers it). */
+  forwardDraft(id: string): void {
+    const f = (this.st.forwarded ??= []);
+    if (f.includes(id)) return;
+    f.push(id);
+    this.log('forward-draft', { mail: id });
+    this.emit('drafts');
+    this.emit('save');
+  }
+
+  /** A mail's body as the player reads it (the finale writes its reply at play time). */
+  mailBody(m: MailDef): string {
+    return this.st.mailBodies?.[m.id] ?? m.body;
+  }
+
+  setMailBody(id: string, body: string): void {
+    (this.st.mailBodies ??= {})[id] = body;
+    this.emit('save');
+  }
+
+  /** Write a user's crontab on a host (the finale's "내가 살려 둔 것"); kept across reloads. */
+  setCrontab(host: string, user: string, text: string): void {
+    this.setCrontabNow(host, user, text);
+    this.log('crontab-set', { host, user, text });
+    this.emit('save');
+  }
+
+  private setCrontabNow(host: string, user: string, text: string): void {
+    this.world.hosts.get(host)?.vfs.writeFile(`/var/spool/cron/crontabs/${user}`, text, { owner: user, group: 'crontab', mode: 0o600, mtime: this.now() });
+  }
+
+  /** "지우기 직전으로 돌아가기": the crontab as the case file wrote it (after the player's `crontab -r`). */
+  restoreCrontab(host: string, user: string): boolean {
+    const hd = this.cs.hosts.find((x) => x.name === host);
+    const file = hd?.files.find((f) => f.path === `/var/spool/cron/crontabs/${user}`)?.content ?? hd?.crontabs?.[user];
+    if (file === undefined) return false;
+    this.setCrontab(host, user, file);
+    this.log('crontab-restored', { host, user });
+    this.emit('crontab-restored', { host, user });
+    return true;
+  }
+
+  /** Append a line to a file on a host, kept across reloads (the finale's 24th handover line, the line for the next person). */
+  appendTo(host: string, path: string, lines: string[]): void {
+    for (const l of lines) this.world.hosts.get(host)?.vfs.appendLine(path, l);
+    this.log('append', { host, path, lines });
+    this.emit('save');
+  }
+
+  /** Where the season finale stands (null before it starts). */
+  finaleState(): NonNullable<SaveState['finale']> | null {
+    return this.st.finale ?? null;
+  }
+
+  /** Move the season finale on (src/ui/finale.ts drives it; the state survives a reload). */
+  setFinale(patch: Partial<NonNullable<SaveState['finale']>>): void {
+    this.st.finale = { step: 'start', signFound: false, ...this.st.finale, ...patch };
+    this.log('finale', { ...patch });
+    this.emit('finale', this.st.finale);
     this.emit('save');
   }
 

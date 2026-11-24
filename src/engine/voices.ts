@@ -83,10 +83,11 @@ export function voiceManifest(cs: CaseFile): Record<string, CueDef> {
 
 /**
  * The music and ambience cues a case plays. Its page loads only these (and the UI sounds), so a
- * session never downloads another case's music: the reveal theme where a case ends on its debrief.
+ * session never downloads another case's music: the reveal theme where a case ends on its debrief,
+ * the finale theme only in the season finale (a case with `finale`).
  */
 export function musicCues(cs: CaseFile): string[] {
-  const ids = ['amb.office', 'music.tension', 'music.reveal'];
+  const ids = ['amb.office', 'music.tension', cs.finale ? 'music.finale' : 'music.reveal'];
   if (cs.opening?.briefing) ids.push('music.briefing');
   return ids;
 }

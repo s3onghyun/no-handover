@@ -78,19 +78,26 @@ export const notesApp: AppDef = {
       if (!n) return;
       g.open(`note:${n.id}`);
       const revealed = g.st.notesRevealed.includes(n.id);
+      // a page that reads differently once a clue is found (Case 4: the first letters, top to bottom)
+      const sign = !!n.unlock && n.unlock.clue in g.st.clues;
       page.appendChild(h('h3', null, n.title));
       n.lines.forEach((line, i) => {
         const hl = revealed && n.highlight === i;
-        page.appendChild(h(`div.ln${hl ? '.hl' : ''}`, null, line || '​', line ? ctx.pinBtn({ kind: 'note', text: `도윤 메모 ${n.title}: ${line}`, source: t('app.notes'), sourceKey: `note:${n.id}` }) : null));
+        const text = sign && line ? [h('span.sign-letter.lit', null, [...line][0]), [...line].slice(1).join('')] : [line || '​'];
+        page.appendChild(h(`div.ln${hl ? '.hl' : ''}${sign ? '.signed' : ''}`, null, ...text, line ? ctx.pinBtn({ kind: 'note', text: `도윤 메모 ${n.title}: ${line}`, source: t('app.notes'), sourceKey: `note:${n.id}` }) : null));
         if (hl && n.reveal) page.appendChild(h('div.ln.reveal', null, h('span.ln-text', null, n.reveal)));
       });
       // lines the last scene wrote in (src/engine/game.ts)
       for (const line of g.st.noteLines?.[n.id] ?? []) page.appendChild(h('div.ln.added', null, h('span.ln-text', null, line), ctx.pinBtn({ kind: 'note', text: `도윤 메모 ${n.title}: ${line}`, source: t('app.notes'), sourceKey: `note:${n.id}` })));
+      if (sign) {
+        const word = n.lines.map((l) => [...l][0]).join('');
+        page.appendChild(h('div.ln.sign-word', null, h('span.sign-read', null, `↓ ${[...word].join(' · ')}`), ctx.pinBtn({ kind: 'note', text: `숨은 사인: ${[...word].join('·')} — 은재님이 날마다 남긴 한 줄의 첫 글자`, source: t('app.notes'), sourceKey: `note:${n.id}` })));
+      }
     };
     render();
     return {
       refresh: (type?: string) => {
-        if (type === 'note' && sel !== '__mine') render();
+        if ((type === 'note' || type === 'clue') && sel !== '__mine') render();
       },
       open: (arg) => {
         if (typeof arg === 'string') {
@@ -98,9 +105,21 @@ export const notesApp: AppDef = {
           render();
         } else if (arg && typeof arg === 'object' && 'id' in arg) {
           // the last scene: open the page and write its newest line (or the reveal line) in again
-          const a = arg as { id: string; write?: 'line' | 'reveal' };
+          const a = arg as { id: string; write?: 'line' | 'reveal' | 'sign' };
           sel = a.id;
           render();
+          if (a.write === 'sign') {
+            // the sign lit one letter at a time (the finale, when the player had not found it)
+            const letters = [...page.querySelectorAll<HTMLElement>('.sign-letter')];
+            const word = page.querySelector<HTMLElement>('.sign-word');
+            if (!reducedMotion()) {
+              for (const l of letters) l.classList.remove('lit');
+              word?.classList.add('later');
+              letters.forEach((l, i) => setTimeout(() => (l.classList.add('lit'), document.dispatchEvent(new CustomEvent('nh-sign-letter', { detail: i }))), 500 + i * 550));
+              setTimeout(() => word?.classList.remove('later'), 500 + letters.length * 550);
+            }
+            return;
+          }
           const target = a.write === 'reveal' ? page.querySelector<HTMLElement>('.ln.reveal .ln-text') : a.write === 'line' ? [...page.querySelectorAll<HTMLElement>('.ln.added .ln-text')].at(-1) : null;
           writeIn(target);
           target?.scrollIntoView({ block: 'nearest' });
