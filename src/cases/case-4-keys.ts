@@ -1,5 +1,5 @@
 // Case 4 — 「남아 있는 열쇠」 (the season finale). Ladder position: docs/campaign-ladder.md.
-// Design: data/nh-ending-research/report.md §4-0b, §4-3D, §4-6 (the ★ ending 「도망쳐요」).
+// Design: the ending design notes (not in this repo) §4-0b, §4-3D, §4-6 (the ★ ending 「도망쳐요」).
 // All people, hosts, companies, keys and logs are fictional. Read docs/case-format.md before editing.
 //
 // 11/23 (Mon), ten days after 은재 left. The security team's check finds her account alive on the

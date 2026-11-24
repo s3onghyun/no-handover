@@ -1,6 +1,6 @@
 // Browser e2e for sound: the autoplay unlock and the file -> zzfx -> silence resolution, in a
 // real (headless) Chromium. Serves a TEMPORARY copy of dist/ with two throwaway test tones
-// dropped in where main's files will go, so nothing test-only is ever committed:
+// dropped in where the shipped files go, so nothing test-only is ever committed:
 //   audio/music/amb.office.ogg          (proves "drop a file in, it plays", ogg first)
 //   audio/voice/voice.briefing-case0-seojin.mp3 (proves the mp3 fallback when there is no ogg)
 // The tones are WAV bytes under those names; Chromium sniffs the content when decoding.
@@ -51,7 +51,7 @@ for (const [path, hz] of [
 
 const server = await preview({ root, build: { outDir: site }, preview: { port: 0, strictPort: false, open: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
-// Headless Chromium lets audio start without a gesture. Desktop Chrome (the captain's playtest)
+// Headless Chromium lets audio start without a gesture. Desktop Chrome (a real player's)
 // does not: the flag below asks for the real policy, and since the headless shell ignores it,
 // AUTOPLAY_POLICY also emulates the rule in the page: a context created before the page's first
 // user activation starts 'suspended', and resume() is refused until there has been one.

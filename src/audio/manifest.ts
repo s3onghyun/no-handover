@@ -1,5 +1,5 @@
-// Audio cue manifest: cue id -> how to sound it. The ids match data/infra-mystery-game/audio-cues.md
-// (the cue sheet main firstmate produces the music and voice from).
+// Audio cue manifest: cue id -> how to sound it. The ids match the maintainer's cue sheet
+// (design notes, not in this repo), which the music and voice are produced from.
 //
 // Resolution order, per cue, every time it plays (src/audio/audio.ts):
 //   1. a file: `src`, or for a cue marked `file: true` public/audio/<folder>/<id>.ogg and .mp3,

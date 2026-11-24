@@ -1,4 +1,4 @@
-// The season finale (Case 4, case `finale`; data/nh-ending-research/report.md §4-6): after the last
+// The season finale (Case 4, case `finale`; the ending design notes (not in this repo) §4-6): after the last
 // scene (`ending`: 오미래's "네 번째", the hidden sign, the 24th handover line) the player hands
 // 인수인계서 v5 to someone, and that choice is the ending: a black card, 은재's grey profile, her
 // one live reply with the workshop photo (not in the title ending), 도윤's crontab "what I kept
