@@ -76,7 +76,8 @@ test('audio: default file paths per cue folder for cues that ship files; explici
   assert.deepEqual(cueFiles('amb.office', MANIFEST['amb.office']), ['audio/music/amb.office.ogg', 'audio/music/amb.office.mp3']);
   assert.deepEqual(cueFiles('voice.briefing-jihun', { class: 'voice', file: true, where: '' }), ['audio/voice/voice.briefing-jihun.ogg', 'audio/voice/voice.briefing-jihun.mp3']);
   assert.deepEqual(cueFiles('sfx.ding', M['sfx.ding']), ['audio/sfx/sfx.ding.ogg', 'audio/sfx/sfx.ding.mp3']);
-  assert.deepEqual(cueFiles('music.reveal', MANIFEST['music.reveal']), [], 'no file yet: silent without a request');
+  assert.deepEqual(cueFiles('music.reveal', MANIFEST['music.reveal']), ['audio/music/music.reveal.ogg', 'audio/music/music.reveal.mp3']);
+  assert.deepEqual(cueFiles('music.tension', MANIFEST['music.tension']), [], 'no file yet: silent without a request');
   assert.deepEqual(cueFiles('sfx.ring', MANIFEST['sfx.ring']), [], 'zzfx only: no request');
   assert.deepEqual(cueFiles('sfx.custom', M['sfx.custom']), ['x/one.ogg', 'x/one.mp3']);
   assert.equal(cueFolder('amb.x'), 'music');

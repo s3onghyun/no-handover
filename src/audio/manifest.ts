@@ -58,7 +58,7 @@ export const MANIFEST = {
   // ---------------------------------------------------------------- music / ambience (files only)
   'amb.office': { class: 'ambience', file: true, loop: true, gain: 0.7, synth: 'roomtone', where: '데스크톱 내내 (브리핑 뒤 시작). 파일이 없으면 합성 방 톤 (갈색 잡음 + 저역 필터 + 느린 패드)' },
   'music.briefing': { class: 'music', file: true, where: '오프닝 브리핑 시작 (잠금 화면 → 음성 메시지)' },
-  'music.reveal': { class: 'music', where: '보고서 끝 (정답 또는 제출 소진) → 마지막 장면 → 해설 화면 (Case 0~3)' },
+  'music.reveal': { class: 'music', file: true, where: '보고서 끝 (정답 또는 제출 소진) → 마지막 장면 → 해설 화면 (Case 0~3)' },
   'music.tension': { class: 'music', loop: true, gain: 0.5, where: '게임 시계 18:00 이후 또는 첫 오답 뒤 (선택, ?music=loop 일 때만 루프)' },
   // voice.*: one entry per colleague line, generated per case by src/engine/voices.ts (voiceManifest)
   // ---------------------------------------------------------------- physical sfx: CC0 files later, zzfx until then

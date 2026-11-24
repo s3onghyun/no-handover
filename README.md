@@ -91,9 +91,10 @@ public/characters/  캐릭터 아트 (아래 참고)
 | `voice.briefing-jihun` | 23.6 s, 모노 | −16 LUFS | Case 3 브리핑의 지훈 음성 메시지 (Gemini TTS, Puck) |
 | `voice.briefing-case1-seojin` · `voice.briefing-case2-seojin` | 35.1 s · 30.9 s, 모노 | −16 LUFS | Case 1·2 브리핑의 서진 음성 메시지 (Gemini TTS, Aoede) |
 | `voice.nudge-*` (20개) | 3–12 s, 모노 | −16 LUFS | Case 0–3 동료 넛지, 서진 = Aoede, 지훈 = Puck (Gemini TTS) |
-| `voice.briefing-case0-seojin`, `voice.<화자>-*` (133개) | 0.6–23 s, 모노 | −16 LUFS | Case 0 브리핑과 나머지 동료 대사 전부(오답 넛지, 트리거, Case 0 레일, 보고서 오답 회신), 서진 = Aoede, 지훈 = Puck, 오미래 = Kore (Gemini TTS) |
+| `music.reveal` | 28.5 s | −18 LUFS | 해설 테마, Case 0–3 마지막 장면 (Gemini API, Lyria 3 Clip) |
+| `voice.briefing-case0-seojin`, `voice.<화자>-*` (133개 + 마지막 장면 7개) | 0.6–23 s, 모노 | −16 LUFS | Case 0 브리핑과 나머지 동료 대사 전부(오답 넛지, 트리거, Case 0 레일, 보고서 오답 회신), 서진 = Aoede, 지훈 = Puck, 오미래 = Kore (Gemini TTS) |
 
-`music.reveal`은 아직 비어 있다(무음). **출처·처리 명령·측정값은 [`public/audio/audio-credits.md`](public/audio/audio-credits.md).** 음악·음성은 캡틴의 Gemini 계정으로 만든 **프로토타입용**이며, Gemini 앱 음악·TTS의 상업적 이용 조건은 판매 전에 확인해야 한다. 원본(저장소 밖 `data/infra-mystery-game/audio-in/`)에서 다시 만들기: `scripts/audio-prepare.sh <원본 폴더>`. 루프 이음매 검사: `scripts/audio-check-seam.sh`. 20초 미리듣기: `scripts/audio-preview.sh /tmp/nh-preview.wav`.
+`music.reveal`(28.5 s, −18 LUFS, Gemini API Lyria 3 Clip)은 Case 0–3에서 보고서가 끝날 때 마지막 장면과 함께 한 번 울린다. **출처·처리 명령·측정값은 [`public/audio/audio-credits.md`](public/audio/audio-credits.md).** 음악·음성은 캡틴의 Gemini 계정으로 만든 **프로토타입용**이며, Gemini 앱 음악·TTS의 상업적 이용 조건은 판매 전에 확인해야 한다. 원본(저장소 밖 `data/infra-mystery-game/audio-in/`)에서 다시 만들기: `scripts/audio-prepare.sh <원본 폴더>`. 루프 이음매 검사: `scripts/audio-check-seam.sh`. 20초 미리듣기: `scripts/audio-preview.sh /tmp/nh-preview.wav`.
 
 **ZzFX 효과음** (파일 0, [ZzFX](https://github.com/KilledByAPixel/ZzFX) 1.4.0 MIT를 `src/audio/vendor/zzfx.ts`에 옮겨 넣음): `sfx.ding` `sfx.mail` `sfx.error` `sfx.tick` `sfx.done` `sfx.pin` `sfx.pulse` `sfx.key` `sfx.window-open` `sfx.window-close`, 터미널에서 글자를 칠 때마다 셋 중 하나가 무작위로 좌우 ±0.25 패닝되어 나는 키 클릭 `sfx.key-1` `sfx.key-2` `sfx.key-3`(−34…−22 dBFS), 그리고 파일이 올 때까지 `sfx.ring`(진동 두 번) `sfx.typing`(1.6초 루프). 한 가족으로 맞췄다: 사인 기반, 2–6 ms 어택, 짧은 감쇠, 저역 통과 필터. 최대 음량 100 %에서 피크 −18…−12 dBFS(`sfx.key`는 −24, `sfx.typing`은 −22로 더 작게). 소리를 바꾸려면 `manifest.ts`의 숫자 배열만 고친다. 배열은 [ZzFX 디자이너](https://killedbyapixel.github.io/ZzFX/)에 그대로 붙여 넣고 다시 꺼낼 수 있다. `hits`는 같은 소리를 여러 번(시각, 음량, 반음) 울린다. 범위는 `tests/zzfx.test.ts`가 지킨다.
 
