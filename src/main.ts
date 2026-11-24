@@ -22,7 +22,7 @@ import { runBriefing } from './ui/briefing.ts';
 import { renderHintPanel } from './ui/hintpanel.ts';
 import { mountObjectives } from './ui/objectives.ts';
 import { applyMotionPref, showMoment } from './ui/motion.ts';
-import { flashAnchor, mountTour, toolGuide, tourKey, TOUR_SEEN_KEY } from './ui/tour.ts';
+import { flashAnchor, mountTour, toolGuide, tourKey, TOUR_MISSED_KEY, TOUR_SEEN_KEY } from './ui/tour.ts';
 import { EXPERIENCE_KEY, experienceRules, parseExperience, shouldAskExperience, type Experience } from './engine/experience.ts';
 import { EXPERT_KEY, parseExpert } from './engine/expert.ts';
 import { goalCard } from './ui/goal.ts';
@@ -51,6 +51,7 @@ if (params.has('fresh')) {
     storage.remove(tourKey(e.id));
   }
   storage.remove(TOUR_SEEN_KEY);
+  storage.remove(TOUR_MISSED_KEY);
   storage.remove(PIN_TIP_KEY);
   storage.remove(EXPERIENCE_KEY); // asked again on the lock screen
   storage.remove(EXPERT_KEY);
@@ -1000,7 +1001,12 @@ function revealDesktop(first: boolean) {
   if (rules().autoWindows) wm.open('terminal');
   else game.log('auto-window-held', { app: 'terminal' });
   objectivesUi.refresh();
-  tourUi ??= mountTour(game, { blocked: () => briefingActive || !game.st.unlocked || game.st.finished || !!document.querySelector('.moment, #briefing'), collapsed: () => !rules().coachMarks });
+  tourUi ??= mountTour(game, {
+    blocked: () => briefingActive || !game.st.unlocked || game.st.finished || !!document.querySelector('.moment, #briefing'),
+    collapsed: () => !rules().coachMarks,
+    // a mark that hid on its timer is not lost: say where it went (the toast opens the guide)
+    onMissed: (s) => ctx.toast(h('div.toast-missed', null, h('b', null, '🧭 '), t('guide.missed', { title: s.title })), () => openGuide()),
+  });
   setTimeout(() => tourUi?.refresh(), 1200);
   if (first) {
     void audio.play('sfx.pulse');

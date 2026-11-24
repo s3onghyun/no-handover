@@ -255,7 +255,7 @@ export interface NoteDef {
    * Opening this page once clue `after` is found finds clue `clue` (Case 4: the page of 은재's one-line
    * messages, read again after the crontab said "첫 글자만": the hidden sign).
    */
-  unlock?: { after: string; clue: string };
+  unlock?: { after: string; clue: string; /** 도윤's reading, under the lit word. */ read?: string };
 }
 
 export interface Sticky {
@@ -490,8 +490,10 @@ export interface FinaleDef {
     forwarded: string;
     noHints: string;
     sign: string;
+    /** A colleague's DM just before the reply (who told 은재); voiced like any colleague line. */
+    before?: { channel: string; from: string; text: string };
   };
-  /** "내가 살려 둔 것": the player's crontab afterwards (per choice; `default` for the rest) and the next run line. */
+  /** "이 자리에 두고 가는 것": the player's crontab afterwards (per choice; `default` for the rest) and the next run line. */
   crontab: { host: string; user: string; byChoice: Record<string, { text: string; next: string }> };
   /** Credits: 인수인계서 v5, ticked line by line. */
   credits: string[];

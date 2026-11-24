@@ -27,6 +27,22 @@ export interface TourEnv {
   visible(app: string): boolean;
 }
 
+/** Ids of marks that hid on their own timer before the player read them (no-handover:tour-missed). */
+export function parseMissed(raw: string | null | undefined): string[] {
+  try {
+    const v = JSON.parse(raw ?? '[]');
+    return Array.isArray(v) ? [...new Set(v.map(String))] : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The tool guide's order: marks the player missed first (in the order they hid), then the rest in data order. */
+export function guideOrder<T extends { id: string }>(steps: T[], missed: string[]): T[] {
+  const m = missed.filter((id) => steps.some((s) => s.id === id));
+  return [...m.map((id) => steps.find((s) => s.id === id)!), ...steps.filter((s) => !m.includes(s.id))];
+}
+
 /** The first unseen step whose conditions hold, in data order; null when none is due. */
 export function nextTourStep(steps: TourStep[], st: TourState, env: TourEnv): TourStep | null {
   if (st.skipped) return null;

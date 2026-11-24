@@ -92,6 +92,8 @@ export const notesApp: AppDef = {
       if (sign) {
         const word = n.lines.map((l) => [...l][0]).join('');
         page.appendChild(h('div.ln.sign-word', null, h('span.sign-read', null, `↓ ${[...word].join(' · ')}`), ctx.pinBtn({ kind: 'note', text: `숨은 사인: ${[...word].join('·')} — 은재님이 날마다 남긴 한 줄의 첫 글자`, source: t('app.notes'), sourceKey: `note:${n.id}` })));
+        // 도윤's reading of it (Case 4: "혼자 들고 있지 말라는 뜻?", so #인프라 reads as the answer)
+        if (n.unlock?.read) page.appendChild(h('div.ln.reveal.sign-note', null, h('span.ln-text', null, n.unlock.read)));
       }
     };
     render();

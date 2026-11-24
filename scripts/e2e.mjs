@@ -1138,6 +1138,30 @@ try {
   step('1280x800, clicked like the playtester: "알겠어요" returns focus to the prompt; one click on the 📌 icon opens the board with a coach mark up, the taskbar minimizes/restores it, Enter opens it; the memo turns over the older lines only (newest output, 📌 column and prompt clear), two quick 📌 clicks both land with no toolbar, box 5 ticks, and 📝 보고서 쓰기 waits past 13 s until clicked');
   await p5.close();
 
+  // ---- a coach mark left alone hides after 15 s; it is not lost: a toast says where, and ❓ 도구 안내 lists it first as "놓친 안내"
+  {
+    const pm = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    pm.on('pageerror', (e) => errors.push(String(e)));
+    await pm.goto(`${url}?fresh=1&briefing=0`);
+    await pm.locator('#boot .exp-new').click();
+    const tm = pm.locator('.tour[data-step="terminal"]');
+    await tm.waitFor({ timeout: 6000 });
+    await tm.waitFor({ state: 'detached', timeout: 17000 });
+    const toastM = pm.locator('.toast', { hasText: '「터미널」 안내가 지나갔어요' });
+    await toastM.waitFor({ timeout: 2000 });
+    assert.deepEqual(JSON.parse(await pm.evaluate(() => localStorage.getItem('no-handover:tour-missed'))), ['terminal']);
+    await toastM.click();
+    const gp = pm.locator('.popover.guidepop');
+    await gp.waitFor();
+    assert.equal(await gp.locator('.toolguide li').first().getAttribute('data-step'), 'terminal', 'the missed mark comes first');
+    assert.equal(await gp.locator('.toolguide li.missed .tg-missed').innerText(), '놓친 안내');
+    await gp.locator('.toolguide li[data-step="terminal"] button').click();
+    assert.equal(await gp.locator('.toolguide li.missed').count(), 0, 'picking it takes the tag off');
+    assert.deepEqual(JSON.parse(await pm.evaluate(() => localStorage.getItem('no-handover:tour-missed'))), []);
+    await pm.close();
+    step('a coach mark left alone hides after 15 s and goes to ❓ 도구 안내: a toast says so and opens the guide, where it comes first as "놓친 안내" until picked');
+  }
+
   // ---- sixth page: "터미널이 익숙해요" by keyboard — no coach marks, a 도구 안내 entry, no window opens by itself
   const p6 = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
   p6.on('pageerror', (e) => errors.push(String(e)));
@@ -2308,6 +2332,8 @@ try {
     await p14.locator('.window[data-app="notes"] .item', { hasText: '은재님이 나한테 남긴 한 줄들' }).click();
     await p14.locator('.window[data-app="notes"] .sign-letter.lit').nth(3).waitFor();
     assert.equal((await p14.locator('.window[data-app="notes"] .sign-letter').allInnerTexts()).join(''), '도망쳐요');
+    // 도윤's reading under the word: #인프라 later reads as its answer
+    assert.equal(await p14.locator('.window[data-app="notes"] .sign-note').innerText(), '도망쳐요 → 혼자 들고 있지 말라는 뜻?');
     await p14.locator('.toast', { hasText: '튀래요' }).waitFor({ timeout: 15000 });
     await p14.locator('.toast', { hasText: '선배답네요' }).waitFor({ timeout: 20000 });
     await shot14('case4-03-sign.png');
@@ -2354,6 +2380,7 @@ try {
     const bad14 = p14.locator('.finale-bad');
     await bad14.waitFor({ timeout: 4000 });
     assert.equal(await bad14.locator('h2').innerText(), '몬스테라가 시들었습니다');
+    assert.match(await bad14.innerText(), /빈자리의 화분에 물 줄 때를 알려 줄 것은 그 한 줄뿐이었다/);
     await shot14('case4-04-bad.png');
     await bad14.locator('.fb-back').click();
     await bad14.waitFor({ state: 'detached' });
@@ -2415,6 +2442,9 @@ try {
     await p14.locator('.pc-status.left', { hasText: '남은재 (퇴사)' }).waitFor({ timeout: 4000 });
     await shot14('case4-08-grey.png');
     await p14.locator('.finale-bar .finale-next').click();
+    // who told her: 지훈's DM lands (voiced) just before her reply
+    await p14.locator('.toast', { hasText: '은재 선배한테 v5 얘기 다 했어요' }).waitFor({ timeout: 4000 });
+    await p14.waitForFunction(() => window.__audio.history.some((x) => x.id === 'voice.jihoon-5e4ed3ea'), null, { timeout: 4000 });
     await mail14.locator('.mail-read h2', { hasText: '도윤님께' }).waitFor({ timeout: 5000 });
     const reply14 = await mail14.locator('.mail-read pre').innerText();
     assert.match(reply14, /^도윤님,\n다 같이 읽었다면서요\. 그게 제가 8년 동안 못 한 거예요\.\n첫 글자 찾았다면서요 :\)/);
@@ -2427,7 +2457,7 @@ try {
     await shot14('case4-09-reply.png');
     await p14.keyboard.press('Escape');
     await p14.locator('.finale-bar .finale-next').click();
-    // 내가 살려 둔 것, the credits, the line for the next person, the stats
+    // 이 자리에 두고 가는 것, the credits, the line for the next person, the stats
     await term14.locator('.tline', { hasText: '다음 실행: 11/27 (금) 18:00' }).waitFor({ timeout: 4000 });
     assert.ok(await term14.locator('.tline', { hasText: '# 왜: 밤에 도는 것 목록을 매주 팀에' }).count());
     // season report B11: the crontab's last line and the prompt stay above the bar
@@ -2436,6 +2466,9 @@ try {
       const tb = await term14.boundingBox();
       assert.ok(tb.y + tb.height <= barTop, `the terminal (bottom ${tb.y + tb.height}) ends above the bar (${barTop})`);
     }
+    // 도윤 leaves the seat tomorrow: what he leaves there, for the next person
+    assert.match(await p14.locator('.finale-bar .ending-tag').innerText(), /이 자리에 두고 가는 것/);
+    assert.ok(await term14.locator('.tline', { hasText: '# 다음 사람: 지우지 말아 주세요' }).count());
     await shot14('case4-10-crontab.png');
     await p14.locator('.finale-bar .finale-next').click();
     const cr14 = p14.locator('.finale-credits');
@@ -2461,9 +2494,11 @@ try {
     assert.equal(await stats14.count(), 1, 'a stray Enter leaves the record on screen');
     assert.equal(await stats14.locator('h2').innerText(), '엔딩 2 / 6', 'the hidden one counts too: 몬스테라 and 다 같이');
     assert.match(await stats14.innerText(), /숨은 사인 ✓ 직접 찾음[\s\S]*은재의 초안 \d \/ 9 읽음[\s\S]*다음 사람에게: “밤에 도는 거, 적어 두세요\.” — 한도윤/);
+    // where the rest of 은재's drafts are (some are still unread)
+    assert.match(await stats14.locator('.fs-drafts').innerText(), /메일 → 「은재 메일 · 이 PC」 → 임시보관함/);
     assert.equal(await p14.evaluate(() => localStorage.getItem('no-handover:next-line')), '밤에 도는 거, 적어 두세요.');
     await shot14('case4-13-stats.png');
-    step('Case 4 finale (#인프라): the 24th line, the choice with #인프라 (sign found), the confirm, music.finale, 「다 같이」, 은재 grey, her reply (sign, forwarded draft) with the 600 px workshop photo, 내가 살려 둔 것 (다음 실행 11/27 18:00), v5 credits, the 15 s line kept locally, the stats');
+    step('Case 4 finale (#인프라): the 24th line, the choice with #인프라 (sign found), the confirm, music.finale, 「다 같이」, 은재 grey, her reply (sign, forwarded draft) with the 600 px workshop photo, 이 자리에 두고 가는 것 (다음 실행 11/27 18:00), v5 credits, the 15 s line kept locally, the stats');
     // 다른 곳에 넘겨 보기: back to just before the choice, each time: 아무에게도 = the title ending (no reply), then
     // 미래님 and 보안팀; every card ends on its price, every reply opens on its own first line
     const ENDINGS14 = [
@@ -2490,7 +2525,10 @@ try {
         await mail14.locator('.mail-read h2', { hasText: '도윤님께' }).waitFor({ timeout: 5000 });
         assert.match(await mail14.locator('.mail-read pre').innerText(), reply, `${id}: 은재's reply`);
         await p14.locator('.finale-bar .finale-next').click();
-      } else assert.equal(await p14.evaluate(() => window.__game.st.mailsDelivered.includes('reply')), false, 'the title ending gets no reply');
+      } else {
+        assert.equal(await p14.evaluate(() => window.__game.st.mailsDelivered.includes('reply')), false, 'the title ending gets no reply');
+        assert.equal(await p14.evaluate(() => window.__game.st.live.some((m) => m.text === '은재 선배한테 v5 얘기 다 했어요 ㅋㅋ 🙏')), false, '…and no DM about telling her');
+      }
       await term14.locator('.tline', { hasText: next }).waitFor({ timeout: 4000 });
       await p14.locator('.finale-bar .finale-next').click();
       assert.match(await cr14.innerText(), credits);
@@ -2561,7 +2599,7 @@ try {
       await p.locator('.window[data-app="mail"] .mail-read h2', { hasText: '도윤님께' }).waitFor();
       assert.match(await p.locator('.window[data-app="mail"] .mail-read pre').innerText(), /서진님한테 넘겼다고요[\s\S]*메모장을 세로로 읽어 봐요/);
       if (engine === 'chromium' && shots) await p.screenshot({ path: join(shots, 'case4-16-narrow-reply.png') });
-      // season report B11: on a phone too, "내가 살려 둔 것" keeps the terminal (its last crontab line, its prompt) above the bar
+      // season report B11: on a phone too, "이 자리에 두고 가는 것" keeps the terminal (its last crontab line, its prompt) above the bar
       await p.locator('.finale-bar .finale-next').tap();
       await term.locator('.tline', { hasText: '다음 실행' }).last().waitFor({ timeout: 4000 });
       {
@@ -2576,6 +2614,7 @@ try {
       // season report B10: the record says how the sign turns ✓ (the playtester read the four lines but never opened the page)
       const facts = await p.locator('.finale-stats .fs-facts').innerText();
       assert.match(facts, /숨은 사인 ✗ 피날레에서 봄\s*직접 찾았다면: 넘기기 전에 도윤 메모장의 「은재님이 나한테 남긴 한 줄들」을 열면 ✓ 로 남아요\./, `${engine}: ${facts}`);
+      assert.match(facts, /은재의 초안 0 \/ 9 읽음\s*어디 있냐면: 메일 → 「은재 메일 · 이 PC」 → 임시보관함/, `${engine}: the record points at the drafts`);
       await ctx.close();
     } finally {
       if (engine === 'webkit') await b14.close();

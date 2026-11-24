@@ -8,19 +8,22 @@
 // A player who chose "터미널이 익숙해요" (src/engine/experience.ts) gets no coach marks: the tour
 // collapses into a small "도구 안내 보기" entry (toolGuide below) that lists the same lines on demand.
 
-import { nextTourStep, parseTourState, tourNumber, type TourState } from '../engine/tour.ts';
+import { guideOrder, nextTourStep, parseMissed, parseTourState, tourNumber, type TourState } from '../engine/tour.ts';
 import type { TourStep } from '../engine/types.ts';
 import type { Game } from '../engine/game.ts';
 import { canRestoreFocus, h, storage } from './dom.ts';
 import { t } from '../i18n.ts';
 
 export const TOUR_SEEN_KEY = 'no-handover:tour';
+/** Marks that hid on their 15 s timer: kept for the ❓ 도구 안내 list ("놓친 안내") until picked there. */
+export const TOUR_MISSED_KEY = 'no-handover:tour-missed';
+export const missedMarks = (): string[] => parseMissed(storage.get(TOUR_MISSED_KEY));
 export const tourKey = (caseId: string) => `no-handover:tour:${caseId}`;
 const AUTO_HIDE_MS = 15000;
 /** The terminal's newest output a mark must not cover (px above the prompt). */
 const NEWEST_PX = 170;
 
-export function mountTour(game: Game, opts: { blocked: () => boolean; collapsed?: () => boolean }): { refresh(): void } | null {
+export function mountTour(game: Game, opts: { blocked: () => boolean; collapsed?: () => boolean; /** A mark hid on its timer (it went to 도구 안내). */ onMissed?: (step: TourStep) => void }): { refresh(): void } | null {
   const steps = game.cs.tour?.steps;
   if (!steps?.length) return null;
   const key = tourKey(game.cs.id);
@@ -82,6 +85,11 @@ export function mountTour(game: Game, opts: { blocked: () => boolean; collapsed?
     if (!st.seen.includes(step.id)) st.seen.push(step.id);
     if (how === 'skip') st.skipped = true;
     save();
+    // hidden by its timer, unread: not lost — it waits in ❓ 도구 안내
+    if (how === 'auto') {
+      storage.set(TOUR_MISSED_KEY, JSON.stringify([...missedMarks().filter((id) => id !== step.id), step.id]));
+      opts.onMissed?.(step);
+    }
     game.log(how === 'skip' ? 'tour-skip' : 'tour-step', { step: step.id, how });
     setTimeout(refresh, 400);
   };
@@ -142,15 +150,24 @@ export function anchor(app: string): HTMLElement | null {
  * on screen come first and flash their anchor when picked; tools still locked are listed as such.
  */
 export function toolGuide(steps: TourStep[], onPick: (step: TourStep) => void): HTMLElement {
-  const shown = steps.filter((s) => anchor(s.app));
-  const later = steps.filter((s) => !anchor(s.app));
+  // marks that hid on their timer come first, tagged "놓친 안내"; picking one takes the tag off
+  const missed = missedMarks();
+  const ordered = guideOrder(steps, missed);
+  const shown = ordered.filter((s) => anchor(s.app));
+  const later = ordered.filter((s) => !anchor(s.app));
+  const pick = (s: TourStep) => {
+    storage.set(TOUR_MISSED_KEY, JSON.stringify(missedMarks().filter((id) => id !== s.id)));
+    document.querySelector(`.toolguide li[data-step="${s.id}"]`)?.classList.remove('missed');
+    onPick(s);
+  };
+  const tag = (s: TourStep) => (missed.includes(s.id) ? h('span.tg-missed', null, t('guide.missedTag')) : null);
   const item = (s: TourStep, on: boolean) =>
     h(
-      `li${on ? '' : '.later'}`,
+      `li${on ? '' : '.later'}${missed.includes(s.id) ? '.missed' : ''}`,
       { dataset: { step: s.id } },
       on
-        ? h('button.tg-pick', { type: 'button', onclick: () => onPick(s) }, h('b', null, s.title), h('span', null, s.text))
-        : h('div.tg-pick', null, h('b', null, s.title), h('span', null, `${t('guide.later')} · ${s.text}`)),
+        ? h('button.tg-pick', { type: 'button', onclick: () => pick(s) }, h('b', null, tag(s), s.title), h('span', null, s.text))
+        : h('div.tg-pick', null, h('b', null, tag(s), s.title), h('span', null, `${t('guide.later')} · ${s.text}`)),
     );
   return h('ul.toolguide', null, ...shown.map((s) => item(s, true)), ...later.map((s) => item(s, false)));
 }

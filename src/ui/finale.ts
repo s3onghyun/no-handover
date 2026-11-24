@@ -62,6 +62,9 @@ export function creditLines(f: FinaleDef, choice: string, v4: string): string[] 
 /** How the record's "숨은 사인" turns ✓ (it only counts what the game saw: the notebook page opened before the choice). */
 export const SIGN_HOW = '직접 찾았다면: 넘기기 전에 도윤 메모장의 「은재님이 나한테 남긴 한 줄들」을 열면 ✓ 로 남아요.';
 
+/** Where 은재's drafts are, on the record once an ending has been seen (nothing else on screen pointed there). */
+export const DRAFTS_HOW = '어디 있냐면: 메일 → 「은재 메일 · 이 PC」 → 임시보관함. 잠긴 초안이 비밀번호 힌트를 줘요.';
+
 export function mountFinale(ctx: UiCtx, audio: AudioManager, season: () => SeasonInfo): { refresh(): void; resume(): void } | null {
   const g = ctx.game;
   const f = g.cs.finale;
@@ -84,7 +87,7 @@ export function mountFinale(ctx: UiCtx, audio: AudioManager, season: () => Seaso
     }
     bar = h('div.ending-bar.finale-bar', { role: 'region', 'aria-label': label }, h('span.ending-tag', null, `🎬 ${label}`), next ? h('button.ending-skip.finale-next', { type: 'button', onclick: next }, '계속 ▸') : null);
     document.body.appendChild(bar);
-    // "내가 살려 둔 것": the crontab's last lines stay above the bar (they were cut off behind it)
+    // "이 자리에 두고 가는 것": the crontab's last lines stay above the bar (they were cut off behind it)
     ctx.wm.keepAbove(bar);
   };
   const go = (step: string, patch: Record<string, unknown> = {}) => g.setFinale({ step, ...patch });
@@ -137,6 +140,8 @@ export function mountFinale(ctx: UiCtx, audio: AudioManager, season: () => Seaso
     const st = g.finaleState()!;
     const s = season();
     const body = replyBody(f!, st.choice!, { signFound: st.signFound, watered: s.watered, forwarded: (g.st.forwarded ?? []).length > 0, noHints: s.hints === 0 });
+    // who told her: a colleague's DM lands first (once; a reload does not repeat it)
+    if (body && f!.reply.before) g.finaleMessage(f!.reply.before);
     if (body && !g.st.mailsDelivered.includes(f!.reply.mail)) {
       g.setMailBody(f!.reply.mail, body);
       g.deliverMail(f!.reply.mail);
@@ -155,7 +160,7 @@ export function mountFinale(ctx: UiCtx, audio: AudioManager, season: () => Seaso
       g.st.tabs[tab].lines.push({ text: ct.next, cls: 'dim' });
     }
     ctx.wm.open('terminal', tab);
-    setBar('내가 살려 둔 것', () => go('credits'));
+    setBar('이 자리에 두고 가는 것', () => go('credits'));
   }
 
   function credits(): void {
@@ -216,7 +221,7 @@ export function mountFinale(ctx: UiCtx, audio: AudioManager, season: () => Seaso
       { role: 'dialog', 'aria-modal': 'true', 'aria-label': '시즌 기록', tabindex: '-1' },
       h('h2', null, `엔딩 ${found.length} / ${f!.endings.length}`),
       h('ul.fs-endings', null, ...f!.endings.map((e) => h(`li${found.includes(e.id) ? '.got' : ''}`, { dataset: { ending: e.id } }, found.includes(e.id) ? `✓ 「${e.title}」` : '· ???'))),
-      h('ul.fs-facts', null, h('li', null, `숨은 사인 ${st.signFound ? '✓ 직접 찾음' : '✗ 피날레에서 봄'}`, st.signFound ? null : h('div.fs-how', null, SIGN_HOW)), h('li', null, `은재의 초안 ${read} / ${drafts} 읽음`), h('li', null, `힌트 단계 ${season().hints}개 (시즌)`), st.line ? h('li.fs-line', null, `다음 사람에게: “${st.line}” — 한도윤`) : null),
+      h('ul.fs-facts', null, h('li', null, `숨은 사인 ${st.signFound ? '✓ 직접 찾음' : '✗ 피날레에서 봄'}`, st.signFound ? null : h('div.fs-how', null, SIGN_HOW)), h('li', null, `은재의 초안 ${read} / ${drafts} 읽음`, read < drafts ? h('div.fs-how.fs-drafts', null, DRAFTS_HOW) : null), h('li', null, `힌트 단계 ${season().hints}개 (시즌)`), st.line ? h('li.fs-line', null, `다음 사람에게: “${st.line}” — 한도윤`) : null),
       h(
         'div.fs-acts',
         null,

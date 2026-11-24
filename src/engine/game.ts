@@ -482,6 +482,13 @@ export class Game {
     return msg;
   }
 
+  /** The finale's colleague line before 은재's reply: lands once (a reload or a replay of the step does not repeat it). */
+  finaleMessage(m: { channel: string; from: string; text: string }): void {
+    if (this.st.live.some((x) => x.from === m.from && x.text === m.text)) return;
+    this.pushLive(m, 'finale');
+    this.emit('save');
+  }
+
   /** The sender deletes a live message: it stays in the channel as "삭제된 메시지입니다". */
   private unsend(id: string): void {
     const m = this.st.live.find((x) => x.id === id);
@@ -960,7 +967,7 @@ export class Game {
     this.emit('save');
   }
 
-  /** Write a user's crontab on a host (the finale's "내가 살려 둔 것"); kept across reloads. */
+  /** Write a user's crontab on a host (the finale's "이 자리에 두고 가는 것"); kept across reloads. */
   setCrontab(host: string, user: string, text: string): void {
     this.setCrontabNow(host, user, text);
     this.log('crontab-set', { host, user, text });
