@@ -2,14 +2,17 @@
 // (the cue sheet main firstmate produces the music and voice from).
 //
 // Resolution order, per cue, every time it plays (src/audio/audio.ts):
-//   1. a file: `src`, or for a cue marked `file: true` public/audio/<folder>/<id>.ogg then .mp3,
+//   1. a file: `src`, or for a cue marked `file: true` public/audio/<folder>/<id>.ogg and .mp3,
 //      where <folder> is music (amb.*, music.*), voice (voice.*) or sfx (sfx.*). Only shipped files
 //      are requested (no 404s): drop the .ogg and .mp3 in and mark the cue `file: true`;
 //      tests/audio.test.ts fails when a marked file is missing or a file is dropped without the mark.
-//      ogg is tried first, mp3 is the fallback for browsers without ogg.
+//      A session fetches one of the two: .ogg (Opus) when the browser plays it, else .mp3 (audio.ts).
 //   2. `zzfx`: a sound synthesised in the browser with ZzFX (src/audio/vendor/zzfx.ts, MIT).
 //   3. `synth`: a longer procedural sound (amb.office → src/audio/roomtone.ts, seamless loop).
 //   4. silence.
+//
+// A case's page loads only the music it plays and its own voices (src/engine/voices.ts caseManifest):
+// music.reveal where a case ends on its debrief.
 //
 // Music never loops by default (stings are one-shots, web-escape analysis §9 item 8): a `music.*`
 // cue marked `loop` only loops with `?music=loop`; ambience is the only bed under the desktop.
@@ -55,7 +58,7 @@ export const MANIFEST = {
   // ---------------------------------------------------------------- music / ambience (files only)
   'amb.office': { class: 'ambience', file: true, loop: true, gain: 0.7, synth: 'roomtone', where: '데스크톱 내내 (브리핑 뒤 시작). 파일이 없으면 합성 방 톤 (갈색 잡음 + 저역 필터 + 느린 패드)' },
   'music.briefing': { class: 'music', file: true, where: '오프닝 브리핑 시작 (잠금 화면 → 음성 메시지)' },
-  'music.reveal': { class: 'music', where: '보고서 정답 → 해설 화면' },
+  'music.reveal': { class: 'music', where: '보고서 끝 (정답 또는 제출 소진) → 마지막 장면 → 해설 화면 (Case 0~3)' },
   'music.tension': { class: 'music', loop: true, gain: 0.5, where: '게임 시계 18:00 이후 또는 첫 오답 뒤 (선택, ?music=loop 일 때만 루프)' },
   // voice.*: one entry per colleague line, generated per case by src/engine/voices.ts (voiceManifest)
   // ---------------------------------------------------------------- physical sfx: CC0 files later, zzfx until then

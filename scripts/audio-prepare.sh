@@ -8,8 +8,9 @@
 #
 # Needs ffmpeg (tested with 6.1, libopus + libmp3lame) and python3 (stdlib only, to read loudnorm's JSON).
 # Targets (data/infra-mystery-game/audio-cues.md §d): voice -16 LUFS, music -18, ambience -24,
-# true peak <= -1 dBTP, 48 kHz, Opus in .ogg + MP3 fallback. Budget: 4 MB per case (the music plus that case's
-# voices, both formats; a session loads only its own case's voices, src/engine/voices.ts), checked by
+# true peak <= -1 dBTP, 48 kHz, Opus in .ogg + MP3 fallback. Budget: 4 MB per case, what one session downloads
+# (the music that case plays plus its voices, in the larger of the two formats: a session fetches one format
+# and only its own case's sounds, src/audio/audio.ts + src/engine/voices.ts caseManifest), checked by
 # tests/voices.test.ts; all files together <= 8 MB.
 set -euo pipefail
 

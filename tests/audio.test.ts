@@ -2,10 +2,10 @@
 // Uses a fake WebAudio context (node has none).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AudioManager, PENDING_MS, defaultFetch, type CtxLike, type StorageLike } from '../src/audio/audio.ts';
+import { AudioManager, PENDING_MS, defaultFetch, defaultFormat, type CtxLike, type StorageLike } from '../src/audio/audio.ts';
 import { MANIFEST, cueFiles, cueFolder, type CueDef } from '../src/audio/manifest.ts';
 import { CAMPAIGN } from '../src/cases/index.ts';
-import { voiceManifest } from '../src/engine/voices.ts';
+import { caseManifest, voiceManifest } from '../src/engine/voices.ts';
 import { applyExpert } from '../src/engine/expert.ts';
 import { existsSync, readdirSync } from 'node:fs';
 
@@ -115,6 +115,38 @@ test('audio: resolution order is file (ogg, then mp3) -> zzfx -> silence', async
   assert.equal((await b.play('voice.v')).status, 'file', 'undecodable ogg falls through to mp3');
   assert.equal(await b.hasFile('voice.v'), true);
   assert.equal(await b.hasFile('sfx.quiet'), false);
+});
+
+test('audio: a session fetches one format (the browser\'s pick); the other only for a missing file or after an undecodable one', async () => {
+  const files = new Map<string, Uint8Array>();
+  for (const id of ['sfx/sfx.ding', 'voice/voice.v', 'sfx/sfx.quiet']) for (const x of ['ogg', 'mp3']) files.set(`/b/audio/${id}.${x}`, new Uint8Array([1]));
+  const run = async (format: 'ogg' | 'mp3', ids: string[]) => {
+    const fetched: string[] = [];
+    const a = new AudioManager(M, { createContext: () => fakeCtx(), base: '/b/', format, fetchBytes: async (u) => (fetched.push(u), files.get(u)?.buffer ?? null) });
+    a.unlock();
+    for (const id of ids) await a.load(id);
+    return { a, fetched: fetched.filter((u) => ids.some((id) => u.includes(id))) };
+  };
+  assert.deepEqual((await run('ogg', ['sfx.ding', 'voice.v'])).fetched.sort(), ['/b/audio/sfx/sfx.ding.ogg', '/b/audio/voice/voice.v.ogg'], 'Opus browsers never download the mp3 copies');
+  assert.deepEqual((await run('mp3', ['sfx.ding', 'voice.v'])).fetched.sort(), ['/b/audio/sfx/sfx.ding.mp3', '/b/audio/voice/voice.v.mp3'], 'the others never download the ogg copies');
+  // a missing file in the session's format: that cue falls back, the session keeps its format
+  // (unlock preloads every cue at once, so compare what was fetched, not the order)
+  files.delete('/b/audio/sfx/sfx.ding.ogg');
+  const miss = await run('ogg', ['sfx.ding', 'voice.v']);
+  assert.deepEqual(miss.fetched.sort(), ['/b/audio/sfx/sfx.ding.mp3', '/b/audio/sfx/sfx.ding.ogg', '/b/audio/voice/voice.v.ogg']);
+  assert.equal(miss.a.format, 'ogg');
+  // canPlayType said yes but decoding fails: that cue tries mp3, and the session asks for mp3 first from then on
+  files.set('/b/audio/sfx/sfx.ding.ogg', new Uint8Array([0]));
+  const bad = await run('ogg', ['sfx.ding']);
+  assert.deepEqual(bad.fetched, ['/b/audio/sfx/sfx.ding.ogg', '/b/audio/sfx/sfx.ding.mp3']);
+  assert.equal(bad.a.format, 'mp3');
+  const later: string[] = [];
+  files.set('/b/audio/voice/voice.w.mp3', new Uint8Array([1]));
+  const c = new AudioManager({ 'voice.w': { class: 'voice', file: true, where: '' } }, { createContext: () => fakeCtx(), base: '/b/', format: bad.a.format, fetchBytes: async (u) => (later.push(u), files.get(u)?.buffer ?? null) });
+  c.unlock();
+  await c.load('voice.w');
+  assert.deepEqual(later, ['/b/audio/voice/voice.w.mp3']);
+  assert.equal(defaultFormat(), 'ogg', 'no DOM (node): the manifest order, ogg first');
 });
 
 test('audio: decoded files are cached; stop() fades and stops', async () => {
@@ -272,6 +304,13 @@ test('audio: music/voice asked for just before the unlock play on unlock; UI cue
 
 test('audio manifest: ids, classes, files and fallbacks', () => {
   assert.equal(Object.keys(MANIFEST).length, 19);
+  // a case's page loads the UI set, only the music it plays and only its own voices
+  for (const e of CAMPAIGN) {
+    if (!e.cs) continue;
+    const m = caseManifest(e.cs);
+    assert.ok('sfx.ding' in m && 'amb.office' in m && 'music.reveal' in m, e.id);
+    assert.deepEqual(Object.keys(m).filter((id) => id.startsWith('voice.')).sort(), Object.keys(voiceManifest(e.cs)).sort(), e.id);
+  }
   assert.ok(Object.keys(MANIFEST).every((id) => !id.startsWith('voice.')), 'voices come from src/engine/voices.ts');
   const all: Record<string, CueDef> = Object.assign({ ...MANIFEST }, ...CAMPAIGN.filter((e) => e.cs).map((e) => voiceManifest(e.cs!)));
   for (const [id, c] of Object.entries(all)) {

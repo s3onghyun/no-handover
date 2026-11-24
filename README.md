@@ -80,9 +80,9 @@ public/characters/  캐릭터 아트 (아래 참고)
 | `public/audio/voice/` | 동료가 플레이어에게 하는 말마다 하나. 목록과 이름은 `src/engine/voices.ts`가 사건 데이터에서 만든다: 브리핑은 `opening.briefing.voiceCue`(`voice.briefing-case0-seojin` …), 넛지는 `voice.nudge-<사건 id>-idle-N`(`…-ask`), 나머지(오답 넛지, 트리거 메시지, 레일, 보고서 회신)는 `voice.<화자>-<자막의 FNV-1a 8자리>`. 줄을 고치거나 더하면 `npm test`(`tests/voices.test.ts`)가 파일이 없는 줄을 알려 준다 |
 | `public/audio/sfx/` | `sfx.ring`, `sfx.typing` (CC0 파일이 오면 ZzFX 대체음을 덮어씀), 그 밖의 `sfx.*`도 같은 이름이면 ZzFX보다 먼저 쓰인다 |
 
-예: `public/audio/music/amb.office.ogg`와 `public/audio/music/amb.office.mp3`. `file: true`는 두 형식을 다 요청한다. 하나만 넣거나 다른 경로를 쓰려면 그 큐에 `src: [...]`를 적는다. `npm test`(`tests/audio.test.ts`)는 요청하는 파일이 없거나, 넣은 파일을 아무 큐도 요청하지 않으면 실패한다.
+예: `public/audio/music/amb.office.ogg`와 `public/audio/music/amb.office.mp3`. `file: true`는 두 형식을 다 싣는다. 한 세션은 그중 하나만 받는다: 브라우저가 Opus를 튼다고 하면(`canPlayType`) `.ogg`, 아니면 `.mp3`(파일이 없거나 끝내 디코드하지 못할 때만 다른 쪽). 하나만 넣거나 다른 경로를 쓰려면 그 큐에 `src: [...]`를 적는다. `npm test`(`tests/audio.test.ts`)는 요청하는 파일이 없거나, 넣은 파일을 아무 큐도 요청하지 않으면 실패한다.
 
-**들어 있는 음원 파일** (2026-11-17·11-20·11-21, 합계 7.13 MB, 각각 Opus `.ogg` + `.mp3`; 예산은 사건마다 4 MB(음악 + 그 사건 목소리) — 페이지는 지금 사건의 목소리만 받는다):
+**들어 있는 음원 파일** (2026-11-17·11-20·11-21, 합계 7.13 MB, 각각 Opus `.ogg` + `.mp3`; 예산은 사건마다 4 MB — 한 세션이 실제로 받는 양, 곧 그 사건이 트는 음악 + 그 사건 목소리를 두 형식 중 큰 쪽으로 잰다. 페이지는 지금 사건의 음악과 목소리만 받는다(`src/engine/voices.ts` `caseManifest`)):
 
 | 큐 | 길이 | 라우드니스 | 내용 |
 |---|---|---|---|

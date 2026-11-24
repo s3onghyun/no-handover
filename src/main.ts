@@ -16,8 +16,7 @@ import { boardApp } from './ui/apps/board.ts';
 import { reportApp } from './ui/apps/report.ts';
 import { dashboardApp, playtestApp } from './ui/apps/misc.ts';
 import { AudioManager } from './audio/audio.ts';
-import { MANIFEST } from './audio/manifest.ts';
-import { cueFor, replyCues, voiceManifest } from './engine/voices.ts';
+import { caseManifest, cueFor, replyCues } from './engine/voices.ts';
 import { installAudioUnlock } from './audio/unlock.ts';
 import { runBriefing } from './ui/briefing.ts';
 import { renderHintPanel } from './ui/hintpanel.ts';
@@ -132,8 +131,8 @@ if (game.st.finished) {
   if (!grades[CASE.id]) recordGrade(saveInfo(game.serialize())?.grade);
 }
 // music is one-shot stings by default; `?music=loop` lets a music.* cue loop (ambience always loops)
-// only this case's voices: a session fetches (and preloads) one case's lines, not the season's
-const audio = new AudioManager({ ...MANIFEST, ...voiceManifest(game.cs) }, { storage, musicLoops: params.get('music') === 'loop' });
+// only this case's music and voices: a session fetches (and preloads) one case's sounds, in one format
+const audio = new AudioManager(caseManifest(game.cs), { storage, musicLoops: params.get('music') === 'loop' });
 (window as unknown as { __game: Game; __audio: AudioManager }).__game = game; // e2e and facilitator console access
 (window as unknown as { __audio: AudioManager }).__audio = audio;
 // the first click or key anywhere (lock screen included) starts sound; logged for the playtest

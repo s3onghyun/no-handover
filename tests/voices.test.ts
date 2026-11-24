@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { CAMPAIGN } from '../src/cases/index.ts';
 import { applyExpert } from '../src/engine/expert.ts';
-import { cueFor, replyCues, voiceLines } from '../src/engine/voices.ts';
+import { caseManifest, cueFor, replyCues, voiceLines } from '../src/engine/voices.ts';
+import { cueFiles } from '../src/audio/manifest.ts';
 import { wrongReply, type ScoreResult } from '../src/engine/scoring.ts';
 import type { CaseFile } from '../src/engine/types.ts';
 
@@ -72,11 +73,15 @@ test('voices: every wrong-report reply is voiced end to end (hints: per field + 
   }
 });
 
-test('voices: one case at a time stays inside the 4 MB audio budget (music + that case\'s voices, both formats)', () => {
-  const size = (f: string) => statSync(f).size;
-  const music = readdirSync(`${ROOT}music`).reduce((a, f) => a + size(`${ROOT}music/${f}`), 0);
-  for (const cs of CASES) {
-    const voices = voiceLines(cs).reduce((a, l) => a + size(`${ROOT}voice/${l.cue}.ogg`) + size(`${ROOT}voice/${l.cue}.mp3`), 0);
-    assert.ok(music + voices <= 4_000_000, `${cs.id}: ${music + voices} B`);
+test('voices: one case at a time stays inside the 4 MB audio budget (what a session downloads: its music + its voices, in the larger format)', () => {
+  // a session fetches one format (src/audio/audio.ts: .ogg when the browser plays Opus, else .mp3)
+  // and only its own case's music and voices (caseManifest): count that, for the bigger of the two
+  const PUB = new URL('../public/', import.meta.url).pathname;
+  const size = (f: string) => statSync(`${PUB}${f}`).size;
+  for (const base of CASES) for (const cs of [base, applyExpert(base)]) {
+    const files = Object.entries(caseManifest(cs)).flatMap(([id, c]) => cueFiles(id, c));
+    const ogg = files.filter((f) => f.endsWith('.ogg')).reduce((a, f) => a + size(f), 0);
+    const mp3 = files.filter((f) => f.endsWith('.mp3')).reduce((a, f) => a + size(f), 0);
+    assert.ok(Math.max(ogg, mp3) <= 4_000_000, `${cs.id}: ogg ${ogg} B, mp3 ${mp3} B`);
   }
 });
