@@ -4,7 +4,8 @@
 // report — and the debrief's "다음 사건" button opens Case 1 「밤에만 실패하는 스크립트」 (full
 // briefing, only the 🎯 goal coach mark, the goal card, the aha moment, wrong replies with per-field ✓/✗,
 // the result moment), then Case 2 「지웠는데 안 비워지는 디스크」 (two hosts, the deleted open file,
-// three slots), then Case 3 「금요일 18:02」. There it watches
+// three slots), then Case 3 「금요일 18:02」. Each case ends on its last scene before the debrief (Cases 0–2:
+// the bar's 해설 바로 보기 after the first DM; Case 3: the whole scene, 물주기 in the prompt and all). There it watches
 // the whole opening briefing, ticks the three "오늘 할 일" boxes, solves the case from the
 // departed senior's history line, then checks the skip path, the help-menu replay and the
 // persisted mute toggle in a second page, the board/dashboard once more with reduced motion, and a
@@ -102,6 +103,21 @@ async function submit(rep, copy, pg = page) {
   assert.doesNotMatch(await m.innerText(), /되돌릴 수 없/, 'no "cannot be undone" while it can be resubmitted');
   await m.locator('.modal-ok').click();
   await m.waitFor({ state: 'detached' });
+}
+/**
+ * The last scene after the final report (src/engine/game.ts ending): the report says it was sent,
+ * the bar offers 해설 바로 보기; optionally the scene's first DM lands as a toast; then the bar skips
+ * to the debrief, whose folded 점수와 기록 is opened for the checks that follow.
+ */
+async function lastScene(rep, pg = page, { first, open = true } = {}) {
+  await pg.locator('.ending-bar').waitFor({ timeout: 5000 });
+  assert.match(await rep.locator('.ending-wait').innerText(), /보고서를 보냈어요/);
+  if (first) await pg.locator('.toast', { hasText: first }).waitFor({ timeout: 15000 });
+  await pg.locator('.moment').waitFor({ state: 'detached', timeout: 5000 });
+  await pg.locator('.ending-bar .ending-skip').click();
+  await pg.locator('.ending-bar').waitFor({ state: 'detached' });
+  await rep.locator('.debrief h2').waitFor();
+  if (open) await rep.locator('details.score-fold > summary').click();
 }
 /** Report: pick an option by id; cite the pin whose line matches `re` for a slot. */
 const pick = (rep, slot, id) => rep.locator(`input[name="slot-${slot}"][value="${id}"]`).check();
@@ -398,7 +414,8 @@ try {
   await shot('case0-r3-reply.png');
   await pick(rep0, 'cause', 'disk');
   await submit(rep0, /몇 번이든/);
-  await rep0.locator('.debrief h2').waitFor();
+  await lastScene(rep0, page, { first: '봤어요. 맞아요. 위키 살아났어요.' });
+  assert.equal(await page.evaluate(() => window.__game.st.live.some((m) => m.from === 'jihoon' && /점심 제가 쏩니다/.test(m.text))), true, 'the skipped lines are in the channel');
   const total0 = await rep0.locator('.scorebox .s').nth(1).innerText();
   assert.match(total0, /\/ 230/);
   await page.evaluate(() => document.querySelector('.window[data-app="report"]').classList.add('max'));
@@ -549,7 +566,7 @@ try {
   await pick(rep1, 'cause', 'cron-path');
   await submit(rep1, /3번째 제출이에요 \(남은 제출 3\/5\)/);
   await page.locator('.moment.moment-result.good').waitFor({ timeout: 3000 });
-  await rep1.locator('.debrief h2').waitFor();
+  await lastScene(rep1, page, { first: 'cron의 PATH' });
   assert.match(await rep1.locator('.scorebox .s').nth(1).innerText(), /\/ 230/);
   await page.locator('.moment').waitFor({ state: 'detached', timeout: 4000 });
   assert.match(await rep1.locator('.nextcase').innerText(), /다음 사건 → Case 2 「지웠는데 안 비워지는 디스크」/);
@@ -641,7 +658,7 @@ try {
   await cite(rep2, 'responsibility', /max_source_bytes = 0/);
   await submit(rep2, /1번째 제출이에요 \(남은 제출 4\/4\)/);
   await page.locator('.moment.moment-result.good').waitFor({ timeout: 3000 });
-  await rep2.locator('.debrief h2').waitFor();
+  await lastScene(rep2);
   assert.match(await rep2.locator('.scorebox .s').nth(1).innerText(), /\/ 330/);
   await page.locator('.moment').waitFor({ state: 'detached', timeout: 4000 });
   assert.match(await rep2.locator('.nextcase').innerText(), /다음 사건 → Case 3 「금요일 18:02의 작은 변경」/);
@@ -842,7 +859,27 @@ try {
   await cite(report, 'sequence', /AuthorDate: Fri Nov 13 18:02:11/);
   await cite(report, 'responsibility', /git-admins:x:1050/);
   await submit(report, /1번째 제출이에요 \(남은 제출 3\/3\)/);
-  await report.locator('.debrief h2').waitFor();
+  // the whole last scene: the farewell memo written again, 오미래's reply, 서진's thanks, then 물주기 waits in 은재's tab
+  await page.locator('.ending-bar').waitFor({ timeout: 5000 });
+  await page.locator('.window[data-app="notes"] .ln.reveal', { hasText: '→ 알았음. 늦었음.' }).waitFor({ timeout: 8000 });
+  await page.locator('.window[data-app="mail"] h2', { hasText: 'RE: [긴급] 토요일 결제 장애 원인 보고' }).waitFor({ timeout: 10000 });
+  await page.locator('.toast', { hasText: '도윤님. 오늘 고마웠어요.' }).waitFor({ timeout: 15000 });
+  await page.locator('.ending-bar .ending-act', { hasText: '물주기' }).waitFor({ timeout: 10000 });
+  await page.locator('.window[data-app="terminal"].act').waitFor();
+  assert.equal(await page.locator('.tin input').inputValue(), '물주기', 'the alias waits in the prompt');
+  await shot('ending-03-water.png');
+  await page.locator('.tin input').press('Enter');
+  await page.locator('.window[data-app="notes"] .ln.added', { hasText: /^\d\d:\d\d 몬스테라 물 줌 🌱/ }).waitFor({ timeout: 8000 });
+  await page.locator('.toast', { hasText: '[보안] 퇴사자 계정 회수 완료' }).waitFor({ timeout: 10000 });
+  await report.locator('.debrief h2').waitFor({ timeout: 15000 });
+  await page.locator('.ending-bar').waitFor({ state: 'detached' });
+  // the debrief opens on the memo and the people; the numbers wait, folded, below them
+  const order = await report.evaluate((r) => [...r.querySelectorAll('.memo-scene, .cast, details.score-fold, ul.story')].map((e) => e.className.split(' ')[0] || e.tagName.toLowerCase()));
+  assert.deepEqual(order, ['memo-scene', 'cast', 'score-fold', 'story']);
+  assert.equal(await report.locator('details.score-fold').evaluate((d) => d.open), false, 'the score is folded');
+  assert.match(await report.locator('details.score-fold > summary').innerText(), /점수와 기록 · 점수 S · 330 \/ 330/);
+  await report.locator('details.score-fold > summary').click();
+  step('Case 3 last scene: memo → 오미래\'s reply → 서진 → 물주기 in the prompt (Enter writes the time in the notebook) → the security mail → the debrief, memo and people first, the score folded');
   const total = await report.locator('.scorebox .s').nth(1).innerText();
   assert.match(total, /330 \/ 330/);
   step(`first submission solves the case (${total.replace(/\s+/g, ' ')})`);
@@ -1457,7 +1494,7 @@ try {
   const solvedFirst9 = async () => assert.equal(await p9.evaluate(() => window.__game.st.submissions.length === 1 && window.__game.st.submissions[0].score.allCorrect), true, 'solved on the first submission');
   const solved9 = async (rep, next, copy = /남은 제출 2\/2/) => {
     await submit(rep, copy, p9);
-    await rep.locator('.debrief h2').waitFor({ timeout: 5000 });
+    await lastScene(rep, p9);
     await solvedFirst9();
     await rep.locator('.record .rec-senior', { hasText: '숙련자 모드' }).waitFor();
     await p9.locator('.moment').waitFor({ state: 'detached', timeout: 5000 });
@@ -1550,7 +1587,7 @@ try {
   assert.match(await last90.locator('.modal-body').innerText(), /^마지막 제출이에요\. /);
   assert.doesNotMatch(await last90.locator('.modal-body').innerText(), /남은 제출/, 'one remaining-count message');
   await last90.locator('.modal-ok').click();
-  await rep90.locator('.debrief h2').waitFor({ timeout: 5000 });
+  await lastScene(rep90, p9);
   await rep90.locator('.scorebox .s.time').waitFor();
   assert.equal(await p9.evaluate(() => window.__game.st.submissions.length === 2 && window.__game.st.submissions[1].score.allCorrect), true, 'solved on the second (last) submission');
   await p9.locator('.moment').waitFor({ state: 'detached', timeout: 5000 });
