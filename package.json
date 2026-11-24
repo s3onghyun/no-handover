@@ -2,9 +2,9 @@
   "name": "no-handover",
   "private": true,
   "version": "0.1.0",
-  "description": "No Handover (인수인계 없음) — private prototype: browser desktop outage-mystery game (Case 0 tutorial 위키가 안 열려요, Case 1 밤에만 실패하는 스크립트, Case 2 지웠는데 안 비워지는 디스크, Case 3 금요일 18:02의 작은 변경)",
+  "description": "No Handover (인수인계 없음): a browser outage-mystery game. Take over a departed senior's PC and find the cause through chat, mail and a simulated terminal.",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Rebuild the shipped music/ambience/voice files in public/audio/ from main's originals.
+# Rebuild the shipped music/ambience/voice files in public/audio/ from the maintainer's originals.
 # The originals are never committed (see public/audio/audio-credits.md for what they are).
 #
-#   scripts/audio-prepare.sh [ORIGINALS_DIR] [OUT_DIR]
-#     ORIGINALS_DIR  default: ../../data/infra-mystery-game/audio-in (relative to the project)
+#   scripts/audio-prepare.sh ORIGINALS_DIR [OUT_DIR]
+#     ORIGINALS_DIR  the folder with the originals (required; not in this repository)
 #     OUT_DIR        default: <project>/public/audio
 #
 # Needs ffmpeg (tested with 6.1, libopus + libmp3lame) and python3 (stdlib only, to read loudnorm's JSON).
-# Targets (data/infra-mystery-game/audio-cues.md §d): voice -16 LUFS, music -18, ambience -24,
+# Targets (the cue sheet in the design notes, §d): voice -16 LUFS, music -18, ambience -24,
 # true peak <= -1 dBTP, 48 kHz, Opus in .ogg + MP3 fallback. Budget: 4 MB per case, what one session downloads
 # (the music that case plays plus its voices, in the larger of the two formats: a session fetches one format
 # and only its own case's sounds, src/audio/audio.ts + src/engine/voices.ts caseManifest), checked by
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-IN="${1:-$ROOT/../../data/infra-mystery-game/audio-in}"
+IN="${1:?usage: scripts/audio-prepare.sh ORIGINALS_DIR [OUT_DIR]}"
 OUT="${2:-$ROOT/public/audio}"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/nh-audio-prepare.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT

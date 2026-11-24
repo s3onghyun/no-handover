@@ -1,0 +1,48 @@
+name: 🐞 버그 / Bug
+description: 게임이 이상하게 동작해요 · Something in the game is broken
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        제목에 사건의 정답(원인)을 쓰지 말아 주세요. 정답이 필요하면 본문에서 `<details>`로 접어 주세요.
+        Please keep case answers (causes) out of the title. Fold spoilers in the body with `<details>`.
+  - type: dropdown
+    id: case
+    attributes:
+      label: 사건 / Case
+      options:
+        - Case 0 「위키가 안 열려요」
+        - Case 1 「밤에만 실패하는 스크립트」
+        - Case 2 「지웠는데 안 비워지는 디스크」
+        - Case 3 「금요일 18:02의 작은 변경」
+        - Case 4 「남아 있는 열쇠」
+        - 사건과 상관없음 / Not case-specific
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 무슨 일이 있었나요? / What happened?
+      description: 어디서(터미널, 메신저, 보고서, 증거 보드 …), 무엇을 했고, 무엇을 기대했고, 실제로 무엇이 됐나요 · Where, what you did, what you expected, what happened
+      placeholder: |
+        1. 터미널에서 `df -h` 입력 / typed `df -h` in the terminal
+        2. 기대: … / expected: …
+        3. 실제: … / actual: …
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 브라우저·OS·화면 / Browser, OS, screen
+      placeholder: Chrome 131 · macOS 15 · 1440×900
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 스크린샷·플레이 로그 / Screenshots, play log
+      description: 📋 → "플레이 로그 JSON 저장"으로 받은 파일을 붙일 수 있어요. 붙이기 전에 열어 확인해 주세요. · You can attach the play log from 📋 (it stays on your device until you attach it; check it first).
+    validations:
+      required: false

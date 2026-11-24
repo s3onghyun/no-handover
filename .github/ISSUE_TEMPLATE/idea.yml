@@ -1,0 +1,55 @@
+name: 💡 다음 사건 아이디어 / Next incident idea
+description: 새 장애 사건을 제안해요 · Propose a new incident (case)
+title: "[idea] "
+labels: [idea]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        회사·사람·서버·도메인은 **가상의 이름만** 써 주세요. 실제 로그나 사내 정보는 넣지 마세요. 원인은 제목에 쓰지 말고 아래 칸에 적어 주세요.
+        Use **fictional names only** for companies, people, hosts and domains; no real logs or internal data. Keep the cause out of the title.
+        자세한 기준 / Details: [CONTRIBUTING.md](https://github.com/s3onghyun/no-handover/blob/main/CONTRIBUTING.md)
+  - type: textarea
+    id: symptom
+    attributes:
+      label: 증상 / Symptom
+      description: 누가 무엇을 보고 알았나요? · Who noticed what?
+      placeholder: "\"결제 API가 금요일 저녁부터 가끔 500을 내요\" / \"the payment API returns 500 now and then since Friday evening\""
+    validations:
+      required: true
+  - type: textarea
+    id: cause
+    attributes:
+      label: 진짜 원인 / Real root cause
+      description: 실제 시스템에서 일어날 수 있는 원인 하나와 그 원리 · One cause that can happen on a real system, and the principle behind it
+    validations:
+      required: true
+  - type: textarea
+    id: clues
+    attributes:
+      label: 단서의 길 / Clue trail
+      description: 증상에서 원인까지 플레이어가 따라갈 흔적(로그 줄, history, crontab, 메신저, 메일 …). 단서만으로 풀 수 있어야 해요. · The traces from symptom to cause; solvable from the clues alone.
+    validations:
+      required: true
+  - type: textarea
+    id: commands
+    attributes:
+      label: 현실의 확인 명령 / Real-world check commands
+      description: 실제 서버에서 이 원인을 확인하는 명령과 출력 모양 · Commands that confirm the cause on a real server, and what their output looks like
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 그 밖에 / Anything else
+      description: 난이도(주니어/시니어), 붉은 청어, 등장인물 아이디어 … · Difficulty, red herrings, characters …
+    validations:
+      required: false
+  - type: checkboxes
+    id: fictional
+    attributes:
+      label: 확인 / Check
+      options:
+        - label: 실제 회사·고객·개인 정보가 없어요 · No real company, customer or personal data
+          required: true

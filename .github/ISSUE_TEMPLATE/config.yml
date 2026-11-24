@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: ▶ Play / 게임 하기
+    url: https://no-handover.vercel.app/
+    about: 브라우저에서 바로 플레이 · Play in the browser
+  - name: 📖 기여 안내 / Contributing guide
+    url: https://github.com/s3onghyun/no-handover/blob/main/CONTRIBUTING.md
+    about: 사건 제안 방법, PR 흐름, 스포일러 예절 · How to propose a case, PR flow, spoiler etiquette

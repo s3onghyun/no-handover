@@ -1,5 +1,5 @@
 // Case 1 — 「밤에만 실패하는 스크립트」
-// Ladder and framing: docs/campaign-ladder.md. Characters and voices: data/infra-mystery-game/characters.md.
+// Ladder and framing: docs/campaign-ladder.md. Characters and voices: the character sheet in the design notes (not in this repo).
 // All people, hosts, companies and logs are fictional. Read docs/case-format.md before editing.
 //
 // Framing: Wednesday 2026-11-11, the day after Case 0, same host (wiki-01). The wiki's TLS
