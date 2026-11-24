@@ -409,7 +409,7 @@ export const caseFourKeys: CaseFile = {
   notes: [
     { id: 'today', title: '11/23 (월) 보안팀 경보', lines: ['보안팀: 은재님 계정 아직 살아 있음 (ledger-01?)', '11/13 17:20 crontab 수정 = 퇴사 40분 전 (?!)', '1. 누가 들어왔나  2. 언제  3. 왜 남았나', '할 일: PC 예약 작업 정리 (보안팀)', '은재님 자리: 오늘까지 (2주 끝. 11/24부터 다시 내 자리)', '월요일: 몬스테라 물 🌱'] },
     // the hidden sign: once the ledger-01 crontab has said "첫 글자만", opening this page shows it (clue k_sign)
-    { id: 'signs', title: '은재님이 나한테 남긴 한 줄들 (모아 둠)', lines: SIGN_LINES, unlock: { after: 'k_crontab_comment', clue: 'k_sign' } },
+    { id: 'signs', title: '은재님이 나한테 남긴 한 줄들 (모아 둠)', lines: SIGN_LINES, unlock: { after: 'k_crontab_comment', clue: 'k_sign', read: '도망쳐요 → 혼자 들고 있지 말라는 뜻?' } },
     { id: 'farewell', title: '11/13 (금) 송별회', lines: ['은재님 송별회. 정든집 19시. 지훈님이 쏘심 🍕', '은재님: 밤에 도는 거 서진님께 꼭. (뭐였지)'], highlight: 1, reveal: '→ 알았음. 늦었음.' },
     { id: 'ot', title: '11/02 (월) 입사 OT', lines: ['온콜 = 밤에 전화 받는 사람(?)', '퇴사하면 계정은 보안팀이 지움 (인사팀 양식)'] },
   ],
@@ -713,13 +713,15 @@ export const caseFourKeys: CaseFile = {
       forwarded: '서진님한테 제 초안을 전해 줬다면서요. …고마워요.',
       noHints: '로그부터 보셨겠죠. 그럼 됐어요.',
       sign: '남은재',
+      // who told her: 지훈, just before her reply (every reply opens on something she heard)
+      before: { channel: 'me-dm-jihoon', from: 'jihoon', text: '은재 선배한테 v5 얘기 다 했어요 ㅋㅋ 🙏' },
     },
     crontab: {
       host: 'nuri-pc',
       user: 'dyhan',
       byChoice: {
         default: {
-          text: '# 왜: 월요일은 몬스테라. 은재님 crontab에서 옮김.\n0 9 * * 1   notify-send "🌱 몬스테라 물 주는 날"\n# 왜: 퇴사자 키가 남았는지 매주 확인. RB-049. 결과는 팀으로.\n0 9 * * 1   /home/dyhan/bin/키점검.sh | mail -s "[주간] 퇴사자 키 점검" infra@\n# 왜: 밤에 도는 것 목록을 매주 팀에. 혼자 기억하지 않으려고.\n0 18 * * 5  /home/dyhan/bin/밤.sh | mail -s "[주간] 밤에 도는 것" infra@',
+          text: '# 다음 사람: 지우지 말아 주세요\n# 왜: 월요일은 몬스테라. 은재님 crontab에서 옮김.\n0 9 * * 1   notify-send "🌱 몬스테라 물 주는 날"\n# 왜: 퇴사자 키가 남았는지 매주 확인. RB-049. 결과는 팀으로.\n0 9 * * 1   /home/dyhan/bin/키점검.sh | mail -s "[주간] 퇴사자 키 점검" infra@\n# 왜: 밤에 도는 것 목록을 매주 팀에. 혼자 기억하지 않으려고.\n0 18 * * 5  /home/dyhan/bin/밤.sh | mail -s "[주간] 밤에 도는 것" infra@',
           next: '다음 실행: 11/27 (금) 18:00',
         },
         nobody: { text: '0 9 * * 1   notify-send "🌱"\n15 3 * * 6  /home/dyhan/bin/키점검.sh', next: '다음 실행: 11/28 (토) 03:15' },
@@ -739,7 +741,7 @@ export const caseFourKeys: CaseFile = {
       '작성: 남은재 (v1–v4) · 한도윤, 강서진, 박지훈, 오미래 (v5)',
     ],
     nextLine: { host: 'nuri-pc', path: '/home/dyhan/README_다음사람에게.txt', seconds: 15, sign: '— 한도윤', prompt: '이 자리의 다음 사람에게 한 줄', empty: '…' },
-    bad: { host: 'nuri-pc', user: 'dyhan', title: '몬스테라가 시들었습니다', sub: '3주 뒤. crontab -r 은 묻지 않고 전부 지운다. e 바로 옆에 r 이 있다.', back: '지우기 직전으로 돌아가기' },
+    bad: { host: 'nuri-pc', user: 'dyhan', title: '몬스테라가 시들었습니다', sub: '3주 뒤. 빈자리의 화분에 물 줄 때를 알려 줄 것은 그 한 줄뿐이었다. crontab -r 은 묻지 않고 전부 지운다.', back: '지우기 직전으로 돌아가기' },
     endings: [
       { id: 'infra', title: '다 같이' },
       { id: 'seojin', title: 'RB-049' },

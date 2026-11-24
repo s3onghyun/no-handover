@@ -50,6 +50,8 @@ export function voiceLines(cs: CaseFile): VoiceLine[] {
   if (ask) add(ask.none.from, ask.none.text, '"뭐부터 봐요?" — 남은 넛지 없음');
   for (const tr of cs.triggers) for (const a of tr.actions) if ('message' in a) add(a.message.from, a.message.text, `트리거 ${tr.id}`);
   for (const b of cs.ending?.beats ?? []) if ('message' in b) add(b.message.from, b.message.text, '마지막 장면');
+  const before = cs.finale?.reply.before;
+  if (before) add(before.from, before.text, '피날레: 은재의 답장 앞');
   const rail = cs.rail;
   if (rail) {
     for (const o of cs.opening?.objectives.items ?? []) {
