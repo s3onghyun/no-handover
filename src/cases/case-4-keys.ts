@@ -140,7 +140,7 @@ export const caseFourKeys: CaseFile = {
 
   people: {
     doyun: { name: '한도윤', role: '인프라팀 · 입사 4주차 (나)', initial: '도', color: '#2F3E5C', login: 'dyhan', avatar: 'characters/doyun-avatar.webp', avatarSmall: 'characters/doyun-avatar-64.webp', portrait: 'characters/doyun-full.webp' },
-    seojin: { name: '강서진', role: '시니어 SRE', initial: '서', color: '#3A3D42', login: 'sjkang', avatar: 'characters/seojin-avatar.webp', avatarSmall: 'characters/seojin-avatar-64.webp', portrait: 'characters/seojin-full.webp' },
+    seojin: { name: '강서진', role: '시니어 SRE · 도윤의 사수', initial: '서', color: '#3A3D42', login: 'sjkang', avatar: 'characters/seojin-avatar.webp', avatarSmall: 'characters/seojin-avatar-64.webp', portrait: 'characters/seojin-full.webp' },
     jihoon: { name: '박지훈', role: '결제개발팀 리드', initial: '지', color: '#F08A3C', login: 'jhpark', avatar: 'characters/jihun-avatar.webp', avatarSmall: 'characters/jihun-avatar-64.webp', portrait: 'characters/jihun-full.webp' },
     eunjae: { name: '남은재', role: '수석 엔지니어 · 11/13 퇴사', initial: '은', color: '#6B7350', login: 'eunjae', avatar: 'characters/eunjae-avatar.webp', avatarSmall: 'characters/eunjae-avatar-64.webp', portrait: 'characters/eunjae-full.webp' },
     // the finale's one live mail comes from 은재's own address, not the company's
@@ -160,11 +160,11 @@ export const caseFourKeys: CaseFile = {
       ip: '10.20.4.17',
       own: true,
       appendable: ['/home/dyhan/handover/'],
-      motd: ['nuri-pc — 한도윤 (11/20부터. 전 사용자: 남은재)', '이 PC는 도윤님 PC예요. 서버들은 보안팀 감사 세션으로 봐요 (다른 탭).'],
+      motd: ['nuri-pc — 한도윤 (11/20–11/23 임시. 전 사용자: 남은재)', '이 PC는 오늘까지 도윤님 계정이에요. 서버들은 보안팀 감사 세션으로 봐요 (다른 탭).'],
       files: [
         { path: '/home/dyhan/README_다음사람에게.txt', owner: 'dyhan', mtime: '2026-11-13T16:10', content: '이 PC를 받는 분께.\n미안해요, 다 못 치웠어요. 화분은 두고 가요.\n서버들은 생각보다 착해요. 밤에만 조금 예민해요.\n\n— 은재 🌱' },
         { path: '/home/dyhan/handover/인수인계서_v4.md', owner: 'dyhan', mtime: '2026-11-13T15:39', content: HANDOVER },
-        { path: '/home/dyhan/handover/README.txt', owner: 'dyhan', mtime: '2026-11-20T10:02', content: '(11/20 IT) 남은재님 PC 이관: ~/handover 는 그대로 옮겼습니다. 예약 작업(crontab)도 그대로 옮겼습니다.' },
+        { path: '/home/dyhan/handover/README.txt', owner: 'dyhan', mtime: '2026-11-20T10:02', content: '(11/20 IT) 남은재님 PC 이관 (한도윤님 임시 사용, ~11/23): ~/handover 는 그대로 옮겼습니다. 예약 작업(crontab)도 그대로 옮겼습니다.' },
         { path: '/home/dyhan/.ssh/id_ed25519.pub', owner: 'dyhan', mtime: '2026-11-02T10:31', content: `ssh-ed25519 ${KEY.dyhan} dyhan@nuri-pc` },
         { path: '/home/dyhan/.ssh/id_ed25519', owner: 'dyhan', mode: '600', mtime: '2026-11-02T10:31', binary: '개인 키 — 열어 보지 않아요.', content: '-----BEGIN OPENSSH PRIVATE KEY-----' },
         { path: '/home/dyhan/.bashrc', owner: 'dyhan', content: "# ~/.bashrc — dyhan\n[ -z \"$PS1\" ] && return\nexport HISTTIMEFORMAT='%F %T '\nPS1='\\u@\\h:\\w\\$ '\nalias ll='ls -alh'\n# 은재님 .bashrc 에서 옮김 (11/20)\nalias 물주기='echo 🌱'\nalias 왜='history | grep \"  # \"'" },
@@ -407,7 +407,7 @@ export const caseFourKeys: CaseFile = {
   ],
 
   notes: [
-    { id: 'today', title: '11/23 (월) 보안팀 경보', lines: ['보안팀: 은재님 계정 아직 살아 있음 (ledger-01?)', '11/13 17:20 crontab 수정 = 퇴사 40분 전 (?!)', '1. 누가 들어왔나  2. 언제  3. 왜 남았나', '할 일: PC 예약 작업 정리 (보안팀)', '월요일: 몬스테라 물 🌱'] },
+    { id: 'today', title: '11/23 (월) 보안팀 경보', lines: ['보안팀: 은재님 계정 아직 살아 있음 (ledger-01?)', '11/13 17:20 crontab 수정 = 퇴사 40분 전 (?!)', '1. 누가 들어왔나  2. 언제  3. 왜 남았나', '할 일: PC 예약 작업 정리 (보안팀)', '은재님 자리: 오늘까지 (2주 끝. 11/24부터 다시 내 자리)', '월요일: 몬스테라 물 🌱'] },
     // the hidden sign: once the ledger-01 crontab has said "첫 글자만", opening this page shows it (clue k_sign)
     { id: 'signs', title: '은재님이 나한테 남긴 한 줄들 (모아 둠)', lines: SIGN_LINES, unlock: { after: 'k_crontab_comment', clue: 'k_sign' } },
     { id: 'farewell', title: '11/13 (금) 송별회', lines: ['은재님 송별회. 정든집 19시. 지훈님이 쏘심 🍕', '은재님: 밤에 도는 거 서진님께 꼭. (뭐였지)'], highlight: 1, reveal: '→ 알았음. 늦었음.' },
@@ -426,7 +426,7 @@ export const caseFourKeys: CaseFile = {
   ],
 
   terminalTabs: [
-    { label: 'nuri-pc', host: 'nuri-pc', cwd: '/home/dyhan', scrollback: ['nuri-pc — 한도윤 (11/20부터. 전 사용자: 남은재)'] },
+    { label: 'nuri-pc', host: 'nuri-pc', cwd: '/home/dyhan', scrollback: ['nuri-pc — 한도윤 (11/20–11/23 임시. 전 사용자: 남은재)'] },
     { label: 'handover', host: 'nuri-pc', cwd: '/home/dyhan/handover', scrollback: ['[은재님 PC에서 옮겨 온 인수인계서 v4 — 23항목 중 19개 체크]'] },
     { label: 'bastion', host: 'bastion', cwd: '/home/dyhan' },
     { label: 'pay-api-02', host: 'pay-api-02', cwd: '/home/dyhan' },
@@ -657,7 +657,12 @@ export const caseFourKeys: CaseFile = {
       { wait: 9, unless: 'sign-found', note: 'signs', sign: true },
       { wait: 1, unless: 'sign-found', message: { channel: 'me-dm-jihoon', from: 'jihoon', text: 'ㅋㅋㅋㅋㅋ 도윤님 튀래요' } },
       { wait: 2.5, unless: 'sign-found', message: { channel: 'me-dm-seojin', from: 'seojin', text: '음. 선배답네요.' } },
-      { wait: 3, act: { tab: 1, prefill: HANDOVER_LINE, until: '^echo "- \\[x\\] 서버 키 회수', timeoutSec: 90 } },
+      // why hand it over at all: 도윤's two weeks in 은재's seat end today (Case 0: 11/10–11/23) and the seat stays empty
+      { wait: 2.5, message: { channel: 'me-dm-seojin', from: 'seojin', text: '도윤님, 내일부터 원래 자리예요. 2주 고마웠어요.' } },
+      { wait: 1.2, message: { channel: 'me-dm-seojin', from: 'seojin', text: '후임은 다음 달이래요. 선배 자리는 내일부터 비어요.' } },
+      { wait: 1.2, message: { channel: 'me-dm-seojin', from: 'seojin', text: '인수인계서는 오늘 남기고 가요. 누구한테 넘길지는 도윤님이 정해요.' } },
+      { wait: 1.5, note: 'today', line: '{hm} 서진님: 내일부터 원래 자리. 인수인계서는 오늘. → 은재님 마지막 날도 이랬겠지. 이번엔 적고 간다.' },
+      { wait: 2, act: { tab: 1, prefill: HANDOVER_LINE, until: '^echo "- \\[x\\] 서버 키 회수', timeoutSec: 90 } },
     ],
   },
 
@@ -665,8 +670,8 @@ export const caseFourKeys: CaseFile = {
     signTrigger: 'sign-found',
     handover: { host: 'nuri-pc', path: '/home/dyhan/handover/인수인계서_v4.md', line: '- [x] 서버 키 회수 (공용 계정·LDAP 밖 로컬 계정 포함) — 한도윤 11/23' },
     choice: {
-      question: '인수인계서 v5를 누구에게 넘길까요?',
-      note: '23항목 + 24번째 줄: 서버 키 회수',
+      question: '내일이면 이 자리는 비어요. 인수인계서 v5를 누구에게 넘길까요?',
+      note: '도윤은 내일 원래 자리로 · 23항목 + 24번째 줄: 서버 키 회수',
       confirm: '넘기면 되돌릴 수 없어요. 넘기기 직전 저장은 남아요.',
       ok: '넘기기',
       back: '다시 고르기',
@@ -679,11 +684,11 @@ export const caseFourKeys: CaseFile = {
       ],
     },
     cards: {
-      infra: { title: '다 같이', lines: ['도윤이 인수인계서 v5를 #인프라에 올린다.', '다음 날 11:20, 지훈이 첫 댓글을 단다. "제 개인 cron도 하나 있어요. 지금 적을게요."', '금요일부터 \'밤에 도는 것\' 목록이 매주 팀 메일로 나간다.', '읽는 사람은 열한 명, 고치는 사람은 아직 셋이다.'] },
+      infra: { title: '다 같이', lines: ['자리를 비우기 전, 도윤이 인수인계서 v5를 #인프라에 올린다.', '다음 날 11:20, 지훈이 첫 댓글을 단다. "제 개인 cron도 하나 있어요. 지금 적을게요."', '금요일부터 \'밤에 도는 것\' 목록이 매주 팀 메일로 나간다.', '읽는 사람은 열한 명, 고치는 사람은 아직 셋이다.'] },
       seojin: { title: 'RB-049', lines: ['서진이 그날 밤 RB-049 「퇴사자 키 회수」와 RB-050 「밤에 도는 것」을 쓴다.', '문서는 정확하고, 링크는 빠짐없다. 서진의 런북은 쉰 개가 됐다.', '서진은 그날 밤에도 \'결제\' 알림을 끄지 못했다.'] },
       mirae: { title: '네 번째', lines: ['금요일, 퇴사 체크리스트에 \'서버 키\', \'공용 계정\', \'LDAP 밖 서버\'가 들어간다.', '2년 전 포스트모템의 원인란이 \'남은재\'에서 \'백업 검증 절차 없음\'으로 고쳐진다.', '체크리스트는 생겼다. 체크하는 사람은 여전히 바쁘다.'] },
       security: { title: '하루 만에', lines: ['보안팀이 18:00까지 전 서버의 키를 회수한다. 퇴사자 키 0개.', '그날 저녁 지훈의 배포 키도, 서진의 비상 키도 같이 막혔다.', '다음 날 아침 배포가 멈췄다.'] },
-      nobody: { title: '인수인계 없음', lines: ['도윤은 아무에게도 넘기지 않았다. 다 기억했으니까.', '3년 뒤, 도윤의 PC를 받은 사람의 메모장 첫 장에는 이렇게 적혀 있었다.', '"도윤님: 밤에 도는 거 꼭. (뭐였지)"'] },
+      nobody: { title: '인수인계 없음', lines: ['도윤은 아무에게도 넘기지 않고 원래 자리로 돌아갔다. 다 기억했으니까.', '3년 뒤, 그 자리에 앉은 사람의 메모장 첫 장에는 이렇게 적혀 있었다.', '"도윤님: 밤에 도는 거 꼭. (뭐였지)"'] },
     },
     reply: {
       mail: 'reply',
@@ -732,7 +737,7 @@ export const caseFourKeys: CaseFile = {
       '- [x] 적어 두기. 그래야 도망칠 수 있어요.  — 한도윤',
       '작성: 남은재 (v1–v4) · 한도윤, 강서진, 박지훈, 오미래 (v5)',
     ],
-    nextLine: { host: 'nuri-pc', path: '/home/dyhan/README_다음사람에게.txt', seconds: 15, sign: '— 한도윤', prompt: '다음 사람에게 한 줄', empty: '…' },
+    nextLine: { host: 'nuri-pc', path: '/home/dyhan/README_다음사람에게.txt', seconds: 15, sign: '— 한도윤', prompt: '이 자리의 다음 사람에게 한 줄', empty: '…' },
     bad: { host: 'nuri-pc', user: 'dyhan', title: '몬스테라가 시들었습니다', sub: '3주 뒤. crontab -r 은 묻지 않고 전부 지운다. e 바로 옆에 r 이 있다.', back: '지우기 직전으로 돌아가기' },
     endings: [
       { id: 'infra', title: '다 같이' },
@@ -796,7 +801,7 @@ export const caseFourKeys: CaseFile = {
         { text: '은재 선배 계정, 11/16에 회수했는데 아직 남은 게 있대요.', pauseMs: 1100 },
         { text: 'ledger-01에 선배 계정이 살아 있고, 11/13 17:20에 선배가 거기 crontab을 고쳤대요. 퇴사 40분 전.', pauseMs: 1400 },
         { text: '누가 그 계정이랑 키로 들어왔는지. 왜 남아 있었는지. 그것만 찾아요. 지우는 건 같이 해요.', pauseMs: 1300 },
-        { text: '보고서는 보안팀이랑 미래님께, 17시까지. 이제 그 자리는 도윤님 자리예요.', pauseMs: 1500 },
+        { text: '보고서는 보안팀이랑 미래님께, 17시까지. 도윤님 그 자리, 오늘까지죠.', pauseMs: 1500 },
       ],
       mail: 'alert',
       mailPreview: '11/16 계정 회수 뒤 자동 점검에서 아래가 나왔습니다. 1. ledger-01: 계정 eunjae 아직 활성.',
@@ -812,11 +817,11 @@ export const caseFourKeys: CaseFile = {
     },
   },
 
-  boot: { status: '은재님이 쓰던 PC — 11/20부터 도윤님 PC', unlock: 'PC 켜기', note: '보안팀 감사 세션 (SEC-2240) · 서버는 읽기 전용' },
+  boot: { status: '은재님이 쓰던 PC — 11/20부터 도윤님 계정 (11/23까지)', unlock: 'PC 켜기', note: '보안팀 감사 세션 (SEC-2240) · 서버는 읽기 전용' },
 
   shell: {
     help: [
-      '누리클라우드 — 보안팀 감사 세션 (SEC-2240). 서버는 읽기 전용, 이 PC(nuri-pc)는 도윤님 것.',
+      '누리클라우드 — 보안팀 감사 세션 (SEC-2240). 서버는 읽기 전용, 이 PC(nuri-pc)는 오늘까지 도윤님 계정.',
       '  파일    ls  cd  pwd  cat  less  head  tail  grep  wc  sort  uniq  find',
       '  계정    getent passwd|group   id   last   sudo -l [-U 사용자]',
       '  키      ssh-keygen -lf <파일>   (지문 보기만)',
