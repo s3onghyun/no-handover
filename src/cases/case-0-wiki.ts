@@ -336,7 +336,7 @@ export const caseZeroWiki: CaseFile = {
     { at: '2026-11-10T09:18:04', emits: [{ kind: 'message', channel: 'pc-infra', from: 'seojin', text: '도윤님 연습으로 보게 할게요. 원인만. 고치는 건 제가.' }] },
     { at: '2026-11-10T09:19:40', emits: [{ kind: 'message', channel: 'pc-infra', from: 'eunjae', text: '네, 제 자리 PC 열어 둘게요. 저는 10시 반까지 회의예요… 🌱' }] },
     { at: '2026-11-10T09:20:12', emits: [{ kind: 'message', channel: 'pc-dm-seojin', from: 'seojin', text: '선배 PC 써도 돼요?' }] },
-    { at: '2026-11-10T09:21:03', emits: [{ kind: 'message', channel: 'pc-dm-seojin', from: 'eunjae', text: '그럼요. 다음 주부터 도윤님 자리인걸요. 조사 세션으로 열어 둘게요. 읽기 전용이라 아무것도 안 망가져요 :)' }] },
+    { at: '2026-11-10T09:21:03', emits: [{ kind: 'message', channel: 'pc-dm-seojin', from: 'eunjae', text: '그럼요. 오늘부터 2주는 도윤님 자리인걸요. 조사 세션으로 열어 둘게요. 읽기 전용이라 아무것도 안 망가져요 :)' }] },
     { at: '2026-11-10T09:21:20', emits: [{ kind: 'message', channel: 'pc-dm-seojin', from: 'seojin', text: '고마워요.' }] },
     { at: '2026-11-10T09:25:41', emits: [{ kind: 'message', channel: 'me-dm-seojin', from: 'seojin', text: '오른쪽 위 할 일부터. 막히면 저한테.' }] },
     { at: '2026-11-10T09:27:10', emits: [{ kind: 'message', channel: 'me-dm-jihoon', from: 'jihoon', text: '도윤님!! 서진님 바쁘셔서 제가 옆에서 봐 드릴게요 ㅋㅋ 저도 위키 써야 돼서요 🙏' }] },
@@ -357,7 +357,7 @@ export const caseZeroWiki: CaseFile = {
     {
       id: 'brief', account: 'me', folder: 'inbox', from: 'eunjae', to: '한도윤', cc: '강서진', at: '2026-11-10T09:24',
       subject: '[연습] 위키 502 — 제 자리 PC 쓰세요',
-      body: '도윤님,\n저 10시 반까지 인수인계 회의예요… 서진님이 위키 원인 찾기를 도윤님 연습으로 맡기셨대요.\n\n- 제 자리 PC에 조사 세션(읽기 전용) 열어 뒀어요. 다음 주부터 도윤님 자리니까 미리 익혀 두면 좋겠어요.\n- 아무것도 안 망가져요. 지우거나 재시작하는 명령은 막혀 있어요.\n- 막히면 history 보세요. 제가 장애 볼 때 치는 순서가 거기 그대로 있어요. ~/README.txt 에도요.\n\n로그는 봤어요? 를 먼저 물어보세요. 자기한테요 :)\n\n남은재 🌱',
+      body: '도윤님,\n저 10시 반까지 인수인계 회의예요… 서진님이 위키 원인 찾기를 도윤님 연습으로 맡기셨대요.\n\n- 제 자리 PC에 조사 세션(읽기 전용) 열어 뒀어요. 오늘부터 2주(11/23까지)는 도윤님이 이 자리를 맡아요. 후임 오실 때까지 임시로요. 미리 익혀 두면 좋겠어요.\n- 아무것도 안 망가져요. 지우거나 재시작하는 명령은 막혀 있어요.\n- 막히면 history 보세요. 제가 장애 볼 때 치는 순서가 거기 그대로 있어요. ~/README.txt 에도요.\n\n로그는 봤어요? 를 먼저 물어보세요. 자기한테요 :)\n\n남은재 🌱',
     },
     {
       id: 'closing', account: 'me', folder: 'inbox', from: 'seojin', to: '한도윤', cc: '남은재', at: '2026-11-10T10:31', later: true,
@@ -382,6 +382,7 @@ export const caseZeroWiki: CaseFile = {
       lines: ['서진님: 원인만 찾기. 고치는 건 서진님. 10:30까지.', '은재님 순서 = history 에 있음 (?)', '1. 무슨 일  2. 언제  3. 왜', '점심: 지훈님 (12시?)'],
       highlight: 1, reveal: '→ 디스크 → 제일 큰 파일 → 그 끝 → 서비스. 알았음!',
     },
+    { id: 'seat', title: '11/09 (월) 서진님 1:1', lines: ['내일부터 2주(11/10~11/23) 은재님 자리 맡기. 후임 올 때까지 임시', '이번 주: 은재님 PC로 연습 (은재님 옆) / 다음 주: 혼자 (!!)', '11/24부터 다시 내 자리 + 온콜 교육'] },
     { id: 'runbook', title: '11/05 (목) 서진님 런북 투어', lines: ['런북은 서진님이 다 씀. RB-001부터.', "서진님 말: '문서에 없는 건 없는 거예요.'", '런북은 위키에 있음 → 위키가 죽으면? (?)'] },
     { id: 'ot', title: '11/02 (월) 입사 OT', lines: ['온콜 = 밤에 전화 받는 사람(?)', 'fd = 에프디(?) → 회사 이름 아님'] },
   ],
@@ -667,7 +668,7 @@ export const caseZeroWiki: CaseFile = {
     closingMail: 'closing',
     doyunLine: '은재님 history 다섯 줄을 따라 쳤을 뿐인데 답이 나왔다. 다음엔 내 순서로 쳐 보고 싶다. (메모했습니다)',
     cast: [
-      { who: 'eunjae', text: '오늘은 한마디도 하지 않았다. 대신 2025년의 다섯 줄과 README를 남겨 두었다. 사흘 뒤면 이 PC는 도윤의 것이 된다.' },
+      { who: 'eunjae', text: '오늘은 한마디도 하지 않았다. 대신 2025년의 다섯 줄과 README를 남겨 두었다. 사흘 뒤면 이 자리는 도윤 혼자 맡는다. 후임이 올 때까지, 2주만.' },
       { who: 'jihoon', text: '평소처럼 회의록을 올렸을 뿐이다. 깨진 PDF 하나가 위키를 멈출 수 있다는 건 아무도 몰랐다. 범인이 아니라 방아쇠.' },
       { who: 'seojin', text: '"고치는 건 제가." 도윤에게 원인 찾기만 맡겼다. 런북에 순서를 하나 더 적을 것이다 — 위키가 아닌 곳에도.' },
     ],
@@ -761,7 +762,7 @@ export const caseZeroWiki: CaseFile = {
   boot: {
     status: '회의 중 (~10:30) · 11/13 마지막 출근 🌱',
     unlock: '은재님이 열어 둔 세션으로 들어가기',
-    note: '연습용 조사 세션 — 읽기 전용이라 아무것도 망가지지 않아요.',
+    note: '연습용 조사 세션 — 읽기 전용이라 아무것도 망가지지 않아요. 오늘부터 2주(11/23까지)는 도윤님이 이 자리를 맡아요.',
   },
 
   // ------------------------------------------------------------------ 숙련자 모드 (docs/campaign-ladder.md §숙련자 모드)
@@ -795,7 +796,7 @@ export const caseZeroWiki: CaseFile = {
       {
         id: 'brief', account: 'me', folder: 'inbox', from: 'eunjae', to: '한도윤', cc: '강서진', at: '2026-11-10T09:24',
         subject: '[연습] 위키 502 — 제 자리 PC 쓰세요',
-        body: '도윤님,\n저 10시 반까지 인수인계 회의예요… 서진님이 위키 원인 찾기를 도윤님 연습으로 맡기셨대요.\n\n- 제 자리 PC에 조사 세션(읽기 전용) 열어 뒀어요.\n- 아무것도 안 망가져요. 지우거나 재시작하는 명령은 막혀 있어요.\n\n로그는 봤어요? 를 먼저 물어보세요. 자기한테요 :)\n\n남은재 🌱',
+        body: '도윤님,\n저 10시 반까지 인수인계 회의예요… 서진님이 위키 원인 찾기를 도윤님 연습으로 맡기셨대요.\n\n- 제 자리 PC에 조사 세션(읽기 전용) 열어 뒀어요. 오늘부터 2주(11/23까지)는 도윤님이 이 자리를 맡아요. 후임 오실 때까지 임시로요.\n- 아무것도 안 망가져요. 지우거나 재시작하는 명령은 막혀 있어요.\n\n로그는 봤어요? 를 먼저 물어보세요. 자기한테요 :)\n\n남은재 🌱',
       },
     ],
     terminalTabs: [

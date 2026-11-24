@@ -146,6 +146,8 @@ try {
   // ================================================================ Case 0 (tutorial)
   await page.locator('#boot .caselabel', { hasText: 'Case 0 · 튜토리얼' }).waitFor();
   assert.match(await page.locator('#boot .skip').innerText(), /튜토리얼 건너뛰기 → Case 1 「밤에만 실패하는 스크립트」/);
+  // the seat is 도윤's for two weeks only (Case 4's last scene ends them): said on the lock screen before anything else
+  assert.match(await page.locator('#boot .fine').innerText(), /오늘부터 2주\(11\/23까지\)는 도윤님이 이 자리를 맡아요/);
   await shot('case0-01-boot.png');
   await page.locator('#boot .linkbtn.cases').click();
   assert.equal(await page.locator('#cases li').count(), 5);
@@ -2325,6 +2327,9 @@ try {
     await p14.locator('.window[data-app="mail"] h2', { hasText: 'RE: [보안] ledger-01 퇴사자 계정 — 경위 보고' }).waitFor({ timeout: 8000 });
     assert.match(await p14.locator('.window[data-app="mail"] pre').innerText(), /같은 이야기를 네 번째로 듣습니다/);
     assert.equal(await p14.locator('.moment-result').count(), 0, 'no score moment in the finale');
+    // why hand it over: 서진 says the two weeks in 은재's seat end today (Case 0's mail said 11/10–11/23)
+    await p14.locator('.toast', { hasText: '누구한테 넘길지는 도윤님이 정해요' }).waitFor({ timeout: 30000 });
+    await shot14('case4-05a-teamlead.png');
     await p14.locator('.ending-bar .ending-act', { hasText: '서버 키 회수' }).waitFor({ timeout: 25000 });
     assert.match(await term14.locator('.tin input').inputValue(), /^echo "- \[x\] 서버 키 회수/);
     await shot14('case4-05-handover.png');
@@ -2332,7 +2337,8 @@ try {
     // the choice: five ways, #인프라 among them
     const choice14 = p14.locator('.finale-choice');
     await choice14.waitFor({ timeout: 10000 });
-    assert.equal(await choice14.locator('h2').innerText(), '인수인계서 v5를 누구에게 넘길까요?');
+    assert.equal(await choice14.locator('h2').innerText(), '내일이면 이 자리는 비어요. 인수인계서 v5를 누구에게 넘길까요?');
+    assert.match(await choice14.locator('.fc-note').innerText(), /도윤은 내일 원래 자리로/);
     assert.deepEqual(await choice14.locator('.fc-opt').allInnerTexts(), ['서진님 — 런북으로', '미래님 — 체크리스트로', '보안팀 — 오늘 안에', '#인프라 — 다 같이', '아무에게도 — 제가 기억할게요']);
     await shot14('case4-06-choice.png');
     await choice14.locator('.fc-opt[data-choice="infra"]').click();
@@ -2451,7 +2457,7 @@ try {
       });
       await p.locator('.window[data-app="notes"] .sign-letter').nth(3).waitFor({ timeout: 25000 });
       await p.waitForFunction(() => window.__game.st.live.some((m) => m.text === 'ㅋㅋㅋㅋㅋ 도윤님 튀래요'), null, { timeout: 25000 });
-      await p.locator('.ending-bar .ending-act').waitFor({ timeout: 25000 });
+      await p.locator('.ending-bar .ending-act').waitFor({ timeout: 40000 });
       const term = p.locator('.window[data-app="terminal"]');
       await term.locator('.tin input').press('Enter');
       const choice = p.locator('.finale-choice');

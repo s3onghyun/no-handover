@@ -153,13 +153,15 @@ test('case4: solving the report plays the last scene (sign beats only if the sig
     }
     g.st.finished = true;
     g.startEnding();
-    for (let t = 0; t < 40_000; t += 250) g.tick(250);
+    for (let t = 0; t < 60_000; t += 250) g.tick(250);
     const act = g.endingAwaits();
     assert.ok(act, 'waiting on the handover line');
     assert.equal(g.st.tabs[act!.tab].input, HANDOVER_LINE);
     const laughs = g.st.live.filter((m) => m.text === 'ㅋㅋㅋㅋㅋ 도윤님 튀래요').length;
     assert.equal(laughs, 1, found ? 'once, during the case' : 'once, in the scene');
     assert.ok(g.st.mailsDelivered.includes('fourth'));
+    // the reason to hand it over at all: 서진 says 도윤's two weeks in the seat end today, before the 24th line
+    assert.deepEqual(g.st.live.filter((m) => m.from === 'seojin' && m.channel === 'me-dm-seojin').map((m) => m.text).slice(-3), ['도윤님, 내일부터 원래 자리예요. 2주 고마웠어요.', '후임은 다음 달이래요. 선배 자리는 내일부터 비어요.', '인수인계서는 오늘 남기고 가요. 누구한테 넘길지는 도윤님이 정해요.']);
     g.runCommand(act!.tab, HANDOVER_LINE);
     for (let t = 0; t < 10_000; t += 250) g.tick(250);
     assert.equal(g.endingActive(), false);
