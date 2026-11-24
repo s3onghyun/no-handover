@@ -12,6 +12,7 @@ import { openedFor } from '../hintpanel.ts';
 import { drawResultCard, downloadResultCard } from '../resultcard.ts';
 import { modal, notice } from '../modal.ts';
 import { checkpointKey } from '../finale.ts';
+import { feedbackLine } from '../feedback.ts';
 
 function debrief(root: HTMLElement, ctx: UiCtx): void {
   const g = ctx.game;
@@ -114,6 +115,7 @@ function debrief(root: HTMLElement, ctx: UiCtx): void {
         h('button.ghost-btn', { onclick: () => ctx.wm.open('playtest') }, `📋 ${t('pt.save')}`),
         h('button.ghost-btn', { onclick: () => document.dispatchEvent(new CustomEvent('nh-reset')) }, `↺ ${t('debrief.again')}`),
       ),
+      feedbackLine(),
     ),
   );
 }

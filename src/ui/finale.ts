@@ -8,6 +8,7 @@
 // Every step is a game state (src/engine/game.ts setFinale), so a reload resumes where it stood.
 
 import { h, storage } from './dom.ts';
+import { feedbackLine } from './feedback.ts';
 import { modal } from './modal.ts';
 import { reducedMotion } from './motion.ts';
 import type { UiCtx } from './wm.ts';
@@ -228,6 +229,7 @@ export function mountFinale(ctx: UiCtx, audio: AudioManager, season: () => Seaso
         back ? h('button.ghost-btn.fs-again', { type: 'button', onclick: () => document.dispatchEvent(new CustomEvent('nh-finale-again')) }, '다른 곳에 넘겨 보기') : null,
         h('button.primary-btn.fs-debrief', { type: 'button', onclick: () => (go('done', { done: true }), clearLayer(), ctx.wm.open('report')) }, '해설 보기'),
       ),
+      feedbackLine(),
     );
     document.body.appendChild(layer);
     // focus the record itself, not 해설 보기: an Enter still on its way from the line before (its

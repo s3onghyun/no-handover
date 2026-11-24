@@ -91,6 +91,27 @@ async function pinLine(re) {
   await line.locator('.pinbtn').click();
 }
 
+const FEEDBACK_URL = 'https://github.com/s3onghyun/no-handover/issues/new/choose';
+/**
+ * 💬 의견·기여: the exact chooser URL in a new tab (noopener noreferrer), a label for screen readers, reachable by
+ * Tab, a 44 px tall target inside the screen. Returns the link's box.
+ */
+async function checkFeedback(link, tag) {
+  await link.waitFor();
+  assert.equal(await link.getAttribute('href'), FEEDBACK_URL, `${tag}: feedback href`);
+  assert.equal(await link.getAttribute('target'), '_blank', `${tag}: feedback opens a new tab`);
+  assert.equal(await link.getAttribute('rel'), 'noopener noreferrer', `${tag}: feedback rel`);
+  assert.match(await link.getAttribute('aria-label'), /^의견·기여 — GitHub 이슈 작성 \(새 탭\)$/, `${tag}: feedback label`);
+  assert.match(await link.innerText(), /^💬 의견·기여$/, `${tag}: feedback text`);
+  assert.equal(await link.evaluate((el) => (el.focus(), document.activeElement === el && el.tabIndex >= 0)), true, `${tag}: feedback is keyboard-focusable`);
+  await link.evaluate((el) => el.blur());
+  await link.scrollIntoViewIfNeeded();
+  const bb = await link.boundingBox();
+  const vw = await link.evaluate(() => innerWidth);
+  assert.ok(bb && bb.height >= 44 && bb.x >= 0 && bb.x + bb.width <= vw, `${tag}: feedback is a 44 px target on screen (${JSON.stringify(bb)})`);
+  return bb;
+}
+
 /**
  * Close an open window from its ✕. Typing into the terminal (fill) brings it forward, so a window
  * that opened by itself meanwhile may be behind: its taskbar entry raises it first.
@@ -154,6 +175,8 @@ try {
   // the seat is 도윤's for two weeks only (Case 4's last scene ends them): said on the lock screen before anything else
   assert.match(await page.locator('#boot .fine').innerText(), /오늘부터 2주\(11\/23까지\)는 도윤님이 이 자리를 맡아요/);
   await shot('case0-01-boot.png');
+  await checkFeedback(page.locator('#boot .boot-feedback a.feedback-link'), 'lock screen');
+  step('lock screen: 💬 의견·기여 opens the game repo\'s issue chooser in a new tab');
   await page.locator('#boot .linkbtn.cases').click();
   assert.equal(await page.locator('#cases li').count(), 5);
   for (const id of ['case1-cron-env', 'case2-deleted-open', 'friday-1802', 'case4-keys']) assert.equal(await page.locator(`#cases li[data-id="${id}"].case-locked`).count(), 1, `${id} locked until the case before it is solved`);
@@ -454,6 +477,12 @@ try {
   rmSync(dlDir, { recursive: true, force: true });
   assert.match(await rep0.locator('.cites').innerText(), /✓ 원인[\s\S]*디스크 사용량[\s\S]*✓ 경위[\s\S]*처음 시작된 시각/);
   step('debrief: record "힌트 단계 4개 · 소요 · 명령 수" with panel opens noted as not counted, no penalty; 결과 카드 downloads as a 1200×630 PNG');
+  // one quiet feedback line, last in the debrief: below 다음 사건 and the replay buttons
+  assert.match(await rep0.locator('.debrief .feedback-line').innerText(), /^막힌 곳이나 다음 사건 아이디어를 GitHub 이슈로 남겨 주세요\. 💬 의견·기여$/);
+  await checkFeedback(rep0.locator('.debrief .feedback-line a.feedback-link'), 'Case 0 debrief');
+  assert.equal(await rep0.locator('.debrief').evaluate((d) => d.lastElementChild?.classList.contains('feedback-line')), true, 'the feedback line comes last');
+  if (shots) await page.screenshot({ path: join(shots, 'feedback-debrief-case0.png') });
+  step('debrief: the feedback line comes last, under 다음 사건 and the replay buttons');
   assert.match(await rep0.locator('.nextcase').innerText(), /다음 사건 → Case 1 「밤에만 실패하는 스크립트」/);
   // round 2: the way on stays in the taskbar after the debrief is closed
   assert.match(await page.locator('#taskbar .nextcase-btn').innerText(), /다음 사건 → Case 1/);
@@ -1221,6 +1250,8 @@ try {
   assert.equal(await p6.locator('.todo li').count(), 5, '단계 보기 unfolds the steps');
   // ❓: switch to 처음이에요 — the tour comes back, the entry goes away
   await p6.locator('#taskbar button[data-tour="help"]').click();
+  await checkFeedback(p6.locator('.popover .help-feedback a.feedback-link'), '❓ help');
+  if (shots) await p6.screenshot({ path: join(shots, 'feedback-help.png') });
   await p6.locator('.exp-set button[data-exp="familiar"][aria-pressed="true"]').waitFor();
   await p6.locator('.exp-set button[data-exp="new"]').click();
   await p6.locator('.tour').first().waitFor({ timeout: 5000 });
@@ -2041,6 +2072,8 @@ try {
           p12.on('pageerror', (e) => errors.push(`${tag}: ${e}`));
           p12.on('dialog', (d) => (nativeDialogs.push(`p12 ${d.type()}: ${d.message()}`), d.accept()));
           await p12.goto(`${url}?fresh=1&briefing=0${q}`);
+          await checkFeedback(p12.locator('#boot .boot-feedback a.feedback-link'), `${tag} lock screen`);
+          if (shots && w === 390) await p12.screenshot({ path: join(shots, `feedback-narrow-boot-${engine}-${choice}.png`) });
           await p12.locator(`#boot .${choice}`).click();
           await p12.locator('#boot').waitFor({ state: 'detached' });
           const term12 = p12.locator('.window[data-app="terminal"]');
@@ -2498,6 +2531,8 @@ try {
     assert.match(await stats14.locator('.fs-drafts').innerText(), /메일 → 「은재 메일 · 이 PC」 → 임시보관함/);
     assert.equal(await p14.evaluate(() => localStorage.getItem('no-handover:next-line')), '밤에 도는 거, 적어 두세요.');
     await shot14('case4-13-stats.png');
+    assert.match(await stats14.locator('.feedback-line').innerText(), /^막힌 곳이나 다음 사건 아이디어를 GitHub 이슈로 남겨 주세요\. 💬 의견·기여$/);
+    await checkFeedback(stats14.locator('.feedback-line a.feedback-link'), 'season record');
     step('Case 4 finale (#인프라): the 24th line, the choice with #인프라 (sign found), the confirm, music.finale, 「다 같이」, 은재 grey, her reply (sign, forwarded draft) with the 600 px workshop photo, 이 자리에 두고 가는 것 (다음 실행 11/27 18:00), v5 credits, the 15 s line kept locally, the stats');
     // 다른 곳에 넘겨 보기: back to just before the choice, each time: 아무에게도 = the title ending (no reply), then
     // 미래님 and 보안팀; every card ends on its price, every reply opens on its own first line
@@ -2615,6 +2650,8 @@ try {
       const facts = await p.locator('.finale-stats .fs-facts').innerText();
       assert.match(facts, /숨은 사인 ✗ 피날레에서 봄\s*직접 찾았다면: 넘기기 전에 도윤 메모장의 「은재님이 나한테 남긴 한 줄들」을 열면 ✓ 로 남아요\./, `${engine}: ${facts}`);
       assert.match(facts, /은재의 초안 0 \/ 9 읽음\s*어디 있냐면: 메일 → 「은재 메일 · 이 PC」 → 임시보관함/, `${engine}: the record points at the drafts`);
+      await checkFeedback(p.locator('.finale-stats .feedback-line a.feedback-link'), `${engine} 390 season record`);
+      if (shots) await p.screenshot({ path: join(shots, `feedback-narrow-stats-${engine}.png`) });
       await ctx.close();
     } finally {
       if (engine === 'webkit') await b14.close();

@@ -950,3 +950,16 @@ html.reduce-motion .finale-card .fcard-line.in, html.reduce-motion .finale-credi
 @media (max-width: 900px) {
   .ending-bar:has(.ending-act:not([hidden])) .ending-tag { display: none; }
 }
+
+/* ---- 💬 의견·기여: a quiet link to the game repo's GitHub issue chooser (src/ui/feedback.ts) */
+a.feedback-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 6px; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; font-size: 13px; border-radius: 6px; }
+a.feedback-link:focus-visible { outline: 2px solid #3a6fd8; outline-offset: 1px; }
+#boot .boot-feedback a.feedback-link { color: #f1efe9; opacity: 0.8; }
+#boot .boot-feedback a.feedback-link:hover, #boot .boot-feedback a.feedback-link:focus-visible { opacity: 1; }
+#boot .boot-feedback a.feedback-link:focus-visible { outline-color: #f2d94e; }
+.help-feedback { margin: 0 4px 4px; }
+.help-feedback a.feedback-link { padding-left: 0; }
+.feedback-line { margin: 16px 0 0; font-size: 12.5px; color: var(--ink-2); }
+.finale-stats .feedback-line { margin-top: 14px; color: #9d9a92; text-align: center; }
+.finale-stats a.feedback-link { color: #cfcdc6; }
+.finale-stats a.feedback-link:focus-visible { outline-color: #f2d94e; }

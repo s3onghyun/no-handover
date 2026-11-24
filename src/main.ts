@@ -17,6 +17,7 @@ import { reportApp } from './ui/apps/report.ts';
 import { dashboardApp, playtestApp } from './ui/apps/misc.ts';
 import { AudioManager } from './audio/audio.ts';
 import { caseManifest, cueFor, replyCues } from './engine/voices.ts';
+import { feedbackLink } from './ui/feedback.ts';
 import { installAudioUnlock } from './audio/unlock.ts';
 import { runBriefing } from './ui/briefing.ts';
 import { renderHintPanel } from './ui/hintpanel.ts';
@@ -633,6 +634,7 @@ helpBtn.onclick = () => {
   );
   if (guideSteps.length) pop.appendChild(h('div.help-acts', null, h('button.ghost-btn.guide-open', { type: 'button', onclick: openGuide }, `🧭 ${t('guide.open')}`)));
   pop.appendChild(h('div.help-acts', null, h('button.ghost-btn.cases-open', { type: 'button', onclick: showCaseList }, `☰ ${t('case.list')}`)));
+  pop.appendChild(h('div.help-feedback', null, feedbackLink()));
   document.body.appendChild(pop);
 };
 
@@ -1192,6 +1194,7 @@ const boot = h(
         : h('button.primary', { onclick: () => start(true), autofocus: true }, game.cs.boot?.unlock ?? t('boot.unlock')),
     skipLink,
     h('div', null, h('button.linkbtn.cases', { onclick: showCaseList }, `☰ ${t('case.list')}`)),
+    h('div.boot-feedback', null, feedbackLink()),
     h('div.fine', null, game.cs.boot?.note ?? t('boot.note'), h('br'), `${game.cs.company}(가칭) · 모든 인물·회사·서버는 가상입니다.`),
   ),
 );
